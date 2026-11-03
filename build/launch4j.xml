@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch4jConfig>
+  <dontWrapJar>true</dontWrapJar>
+  <headerType>gui</headerType>
+  <jar>FlashWriteFx.jar</jar>
+  <outfile>D:/WorkBuddyData/2026-10-30-14-40-10/flashwrite-hybrid/闪写.exe</outfile>
+  <errTitle>闪写</errTitle>
+  <cmdLine></cmdLine>
+  <chdir>.</chdir>
+  <priority>normal</priority>
+  <downloadUrl>https://www.java.com/download</downloadUrl>
+  <stayAlive>false</stayAlive>
+  <restartOnCrash>false</restartOnCrash>
+  <icon>D:/WorkBuddyData/2026-10-30-14-40-10/flashwrite-hybrid/build/icon.ico</icon>
+  <classPath>
+    <mainClass>FxMain</mainClass>
+    <cp>FlashWriteFx.jar</cp>
+    <cp>lib/jnativehook-2.2.2.jar</cp>
+    <cp>lib/pdfbox-2.0.31.jar</cp>
+    <cp>lib/fontbox-2.0.31.jar</cp>
+    <cp>lib/commons-logging-1.2.jar</cp>
+  </classPath>
+  <jre>
+    <path>runtime</path>
+    <requiresJdk>false</requiresJdk>
+    <requires64Bit>true</requires64Bit>
+    <minVersion>21</minVersion>
+    <maxVersion></maxVersion>
+    <opt>--add-opens javafx.web/com.sun.javafx.webkit=ALL-UNNAMED</opt>
+  </jre>
+  <versionInfo>
+    <fileVersion>1.6.0.0</fileVersion>
+    <txtFileVersion>1.6.0</txtFileVersion>
+    <fileDescription>SnapWrite</fileDescription>
+    <copyright>Copyright (C) 2026 SnapWrite</copyright>
+    <productVersion>1.6.0.0</productVersion>
+    <txtProductVersion>1.6.0</txtProductVersion>
+    <productName>SnapWrite</productName>
+    <companyName>SnapWrite</companyName>
+    <internalName>SnapWrite</internalName>
+    <originalFilename>SnapWrite.exe</originalFilename>
+    <language>SIMPLIFIED_CHINESE</language>
+  </versionInfo>
+</launch4jConfig>

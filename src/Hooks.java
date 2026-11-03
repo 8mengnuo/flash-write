@@ -1,0 +1,293 @@
+import com.github.kwhat.jnativehook.GlobalScreen;
+import com.github.kwhat.jnativehook.NativeHookException;
+import com.github.kwhat.jnativehook.keyboard.NativeKeyEvent;
+import com.github.kwhat.jnativehook.keyboard.NativeKeyListener;
+import com.github.kwhat.jnativehook.mouse.NativeMouseEvent;
+import com.github.kwhat.jnativehook.mouse.NativeMouseListener;
+
+import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+/**
+ * 全局键鼠钩子（混合版）：系统级监听，任何软件前台时均生效。
+ *
+ * 职责：
+ *  1. 老板键：默认 Ctrl+Shift+Z+X 四键同按触发（低级钩子 + 按下键集合判定，
+ *     系统 API 不支持注册四键热键）
+ *  2. 鼠标手势：默认 LLRRLL（左左右右左左），1.2 秒内连按生效
+ *  3. 快捷键捕获：设置界面"开始捕获"后，用户按下的组合实时回调给上层
+ *
+ * 注意：JNativeHook 2.2.x 的包名是 com.github.kwhat.jnativehook（不是 org.jnativehook，
+ * 2.x 早期版本的旧包名，别踩这个坑）。
+ */
+public final class Hooks {
+
+    /** 捕获回调：返回捕获到的组合可读名（如 "Ctrl+Shift+Z+X"），Esc 取消时传 null */
+    public interface CaptureCb { void on(String combo); }
+
+    /** 老板键触发回调 */
+    private static Runnable bossAction;
+    /** 当前老板键组合（Native 键码数组） */
+    private static int[] bossCodes;
+    /** 当前按下的键集合（四键组合判定用） */
+    private static final Set<Integer> pressed = new HashSet<Integer>();
+    /** 一次性闩锁：按住不放时系统会重复派发 keyPressed，不锁会连续开关窗口 */
+    private static boolean bossLatched = false;
+
+    /* ---------- 捕获状态 ---------- */
+    private static volatile boolean capturing = false;
+    private static CaptureCb captureCb;
+    /** 捕获开始时间：超时自动取消，防止捕获态卡死把老板键全部吞掉（用户点了"修改组合"
+     *  之后又没按任何键就去干别的，老板键就再也无法唤回窗口——经典事故现场） */
+    private static volatile long captureStartAt = 0;
+    private static final long CAPTURE_TIMEOUT_MS = 12000;
+
+    /* ---------- 鼠标手势 ---------- */
+    public static String gesture = "LLRRLL";
+    public static boolean gestureEnabled = true;
+    /** 诊断用：全局鼠标钩子到底收到了几次按下（0 = 钩子没拿到鼠标事件） */
+    public static volatile int mousePressedCount = 0;
+    public static volatile String lastGestureBuf = "";
+    private static final StringBuilder gestureBuf = new StringBuilder();
+    private static long firstGestureAt = 0;
+    private static long lastClickAt = 0;
+    /** 唤回气泡：窗口隐藏时，三连击左键 / 单击右键 直接以气泡模式唤回 */
+    public static Runnable summonBubble;
+    private static long lastLeftAt = 0;
+    private static int leftStreak = 0;
+    private static int lastLeftX = -9999, lastLeftY = -9999;
+
+    /* ---------- 键码 <-> 可读名 映射（反射读取 VC_ 常量表，勿手写推算：
+       JNativeHook 的键码不是 ASCII 排列，Z 不是 'Z'，直接算会错） ---------- */
+    private static final Map<String, Integer> NAME_TO_CODE = new HashMap<String, Integer>();
+    private static final Map<Integer, String> CODE_TO_NAME = new HashMap<Integer, String>();
+
+    static {
+        try {
+            for (Field f : NativeKeyEvent.class.getFields()) {
+                String n = f.getName();
+                if (!n.startsWith("VC_") || f.getType() != int.class) continue;
+                int v = f.getInt(null);
+                String name = null;
+                if (n.equals("VC_CONTROL")) name = "Ctrl";
+                else if (n.equals("VC_SHIFT")) name = "Shift";
+                else if (n.equals("VC_ALT")) name = "Alt";
+                else if (n.equals("VC_META")) name = "Win";
+                else if (n.equals("VC_ESCAPE")) name = "Esc";
+                else if (n.equals("VC_SPACE")) name = "Space";
+                else if (n.equals("VC_TAB")) name = "Tab";
+                else if (n.equals("VC_ENTER")) name = "Enter";
+                else if (n.equals("VC_BACKSPACE")) name = "Backspace";
+                else if (n.matches("VC_[A-Z]")) name = n.substring(3);
+                else if (n.matches("VC_[0-9]")) name = n.substring(3);
+                else if (n.matches("VC_F(1[0-2]?|[1-9])")) name = n.substring(3);
+                if (name != null) {
+                    NAME_TO_CODE.put(name, v);
+                    CODE_TO_NAME.put(v, name);
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    /** 可读组合名 -> Native 键码数组（如 "Ctrl+Shift+Z+X"）；解析失败返回 null */
+    public static int[] parseCombo(String combo) {
+        if (combo == null) return null;
+        String[] parts = combo.split("\\+");
+        int[] codes = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            Integer c = NAME_TO_CODE.get(parts[i].trim());
+            if (c == null) return null;
+            codes[i] = c;
+        }
+        return codes;
+    }
+
+    /** Native 键码 -> 可读名（Ctrl / Shift / Z / F1 ...） */
+    public static String codeName(int code) {
+        String n = CODE_TO_NAME.get(code);
+        return n != null ? n : ("Key" + code);
+    }
+
+    /** 注册全局钩子。bossCombo: 键码数组；onBoss: 老板键/手势触发回调 */
+    public static void register(int[] bossCombo, Runnable onBoss) {
+        bossCodes = bossCombo;
+        bossAction = onBoss;
+        // 关闭 JNativeHook 的日志噪音
+        Logger lg = Logger.getLogger(GlobalScreen.class.getPackage().getName());
+        lg.setLevel(Level.OFF);
+        try {
+            for (java.util.logging.Handler h : lg.getHandlers()) h.setLevel(Level.OFF);
+        } catch (Exception ignored) {}
+
+        try {
+            GlobalScreen.registerNativeHook();
+        } catch (NativeHookException e) {
+            throw new RuntimeException("全局钩子注册失败: " + e.getMessage(), e);
+        }
+        GlobalScreen.addNativeKeyListener(new NativeKeyListener() {
+            public void nativeKeyPressed(NativeKeyEvent e) {
+                if (pressed.size() > 8) pressed.clear();   // 兜底：丢释放事件时防集合无限堆积
+                pressed.add(e.getKeyCode());
+                if (capturing) {
+                    // 捕获超过 12 秒自动作废，恢复老板键/手势的正常判定
+                    if (System.currentTimeMillis() - captureStartAt > CAPTURE_TIMEOUT_MS) {
+                        capturing = false;
+                        CaptureCb cb = captureCb;
+                        captureCb = null;
+                        if (cb != null) cb.on(null);
+                    } else {
+                        handleCapture(e);
+                        return;
+                    }
+                }
+                // 组合命中后闩锁，直到组合被拆散才重新生效（防系统连发触发反复开关）
+                if (matchBoss()) {
+                    if (!bossLatched) {
+                        bossLatched = true;
+                        fireBoss();
+                    }
+                }
+            }
+            public void nativeKeyReleased(NativeKeyEvent e) {
+                pressed.remove(e.getKeyCode());
+                // 只要组合不再完整成立就重新上膛。旧版要求 pressed 全空才解锁，
+                // 万一某个键的释放事件被系统吞掉，pressed 永不清空，老板键就永久失灵
+                if (!matchBoss()) bossLatched = false;
+            }
+            public void nativeKeyTyped(NativeKeyEvent e) { /* 不需要 */ }
+        });
+        GlobalScreen.addNativeMouseListener(new NativeMouseListener() {
+            public void nativeMousePressed(NativeMouseEvent e) {
+                mousePressedCount++;
+                try { handleGesture(e); } catch (Throwable ignored) {}
+            }
+            public void nativeMouseReleased(NativeMouseEvent e) { /* 不需要 */ }
+            public void nativeMouseClicked(NativeMouseEvent e) { /* 不需要 */ }
+        });
+    }
+
+    public static void unregister() {
+        try { GlobalScreen.unregisterNativeHook(); } catch (Exception ignored) {}
+    }
+
+    /** 改老板键后同步给钩子（否则钩子仍持有启动时的旧组合，改键不生效） */
+    public static void setBossCodes(int[] codes) {
+        bossCodes = codes;
+        bossLatched = false;
+        pressed.clear();
+    }
+
+    /** 开始捕获新组合（设置界面调用）；Esc 结束捕获并回调 null */
+    public static void beginCapture(CaptureCb cb) {
+        capturing = true;
+        captureCb = cb;
+        captureStartAt = System.currentTimeMillis();
+        pressed.clear();
+    }
+
+    public static void cancelCapture() {
+        capturing = false;
+        captureCb = null;
+    }
+
+    /** 四键组合判定：按下键集合与老板键组合完全一致 */
+    private static boolean matchBoss() {
+        if (bossCodes == null || pressed.size() != bossCodes.length) return false;
+        for (int c : bossCodes) if (!pressed.contains(c)) return false;
+        return true;
+    }
+
+    /** 捕获中：修饰键只更新等待，按下主键后组装完整组合回调 */
+    private static void handleCapture(NativeKeyEvent e) {
+        int c = e.getKeyCode();
+        if (c == NativeKeyEvent.VC_ESCAPE) {
+            capturing = false;
+            CaptureCb cb = captureCb;
+            captureCb = null;
+            if (cb != null) cb.on(null);
+            return;
+        }
+        boolean isModifier = c == NativeKeyEvent.VC_CONTROL || c == NativeKeyEvent.VC_SHIFT
+                || c == NativeKeyEvent.VC_ALT || c == NativeKeyEvent.VC_META;
+        if (isModifier) return;   // 只按修饰键时不结束捕获
+
+        StringBuilder sb = new StringBuilder();
+        if (pressed.contains(NativeKeyEvent.VC_CONTROL)) sb.append("Ctrl+");
+        if (pressed.contains(NativeKeyEvent.VC_SHIFT))   sb.append("Shift+");
+        if (pressed.contains(NativeKeyEvent.VC_ALT))     sb.append("Alt+");
+        if (pressed.contains(NativeKeyEvent.VC_META))    sb.append("Win+");
+        sb.append(codeName(c));
+
+        capturing = false;
+        CaptureCb cb = captureCb;
+        captureCb = null;
+        if (cb != null) cb.on(sb.toString());
+    }
+
+    /** 手势判定 + 三连击/右键唤回气泡。
+     *
+     *  旧实现用"距第一次点击 1.2 秒"判定，6 连击（LLRRLL）几乎不可能在 1.2 秒内点完，
+     *  所以手势一直不生效——改成"相邻两次点击间隔超过 420ms 才断开"，整串最长 3 秒。
+     *
+     *  ★★ 鼠标手势"完全没反应"的真凶（本轮实锤）：JNativeHook 在 Windows 上报告的
+     *  按钮号是 1=左 / 2=右 / 3=中（跟 AWT 的 BUTTON2=中、BUTTON3=右 正好错位）。
+     *  旧代码只认 BUTTON1 和 BUTTON3，于是真实右键被当成"不认识的中键"，
+     *  直接 `b == 0 → gestureBuf 清空`，LLRRLL 永远凑不齐 → 手势 100% 不触发。
+     *  实测（--gesttest Robot 点击）：左中右 = [1,3,2]。
+     *  现在 2 和 3 都当右键（中键极少用，最多让序列多一个 R，不会误触发长序列）。 */
+    private static void handleGesture(NativeMouseEvent e) {
+        if (capturing) return;
+        int btn = e.getButton();
+        char b = 0;
+        if (btn == 1) b = 'L';
+        else if (btn == 2 || btn == 3) b = 'R';
+        if (lastGestureBuf.length() < 24) lastGestureBuf = lastGestureBuf + btn;
+
+        long now = System.currentTimeMillis();
+
+        /* 右键：窗口隐藏时直接唤回气泡（窗口可见时由上层忽略，不会干扰日常右键） */
+        if (b == 'R' && summonBubble != null) {
+            try { summonBubble.run(); } catch (Exception ignored) {}
+        }
+        /* 左键三连击（同一位置 ±10px、间隔 <700ms）也唤回气泡 */
+        if (b == 'L') {
+            boolean sameSpot = Math.abs(e.getX() - lastLeftX) <= 10 && Math.abs(e.getY() - lastLeftY) <= 10;
+            if (now - lastLeftAt < 700 && sameSpot) leftStreak++;
+            else leftStreak = 1;
+            lastLeftAt = now; lastLeftX = e.getX(); lastLeftY = e.getY();
+            if (leftStreak >= 3) {
+                leftStreak = 0;
+                if (summonBubble != null) {
+                    try { summonBubble.run(); } catch (Exception ignored) {}
+                }
+            }
+        }
+
+        if (!gestureEnabled) return;
+        if (b == 0) { gestureBuf.setLength(0); return; }   // 中键打断手势序列
+
+        if (gestureBuf.length() == 0 || now - lastClickAt > 420) {
+            gestureBuf.setLength(0);                       // 相邻两次间隔过长，重新计
+        }
+        lastClickAt = now;
+        gestureBuf.append(b);
+        if (gestureBuf.length() > gesture.length()) gestureBuf.deleteCharAt(0);  // 只保留最近 N 次
+        if (gestureBuf.toString().equalsIgnoreCase(gesture)) {
+            gestureBuf.setLength(0);
+            fireBoss();
+        }
+    }
+
+    /** 触发回调：异常绝不能抛回钩子线程 —— 一旦抛出，Windows 会认为钩子卡死并静默移除它，
+     *  表现就是"老板键用着用着突然不灵了，重启才好"。 */
+    private static void fireBoss() {
+        Runnable r = bossAction;
+        if (r == null) return;
+        try { r.run(); } catch (Throwable ignored) {}
+    }
+}

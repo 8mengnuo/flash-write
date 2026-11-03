@@ -1,0 +1,4064 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>闪写</title>
+<script src="vue3.min.js"></script>
+<script>/* 全局 JS 错误捕获（供 Java 端诊断） */
+window.__errs = [];
+window.addEventListener('error', function(e) {
+  window.__errs.push((e.message || 'err') + ' @ ' + (e.lineno || '?'));
+});</script>
+<style>
+/* ═══════════════ 设计令牌（主题色由 Java 配置动态注入） ═══════════════ */
+:root{
+  --accent:#6366F1; --accent2:#22D3EE;
+  --header-bg:linear-gradient(135deg,#6366F1,#22D3EE);
+  --bg:#F6F7FB; --panel:#FFFFFF; --ink:#1F2430; --sub:#8A91A5;
+  --line:#E9EBF3; --fs:16px; --font:"Segoe UI","Microsoft YaHei",sans-serif;
+  --hover:#EEF0F8; --soft:#F2F4FB; --field:#FFFFFF; --modal-bg:rgba(255,255,255,.97);
+  --tb-ink:#4A5068; --switch-off:#D6DAE8; --dash:#EEF0F6; --ph:#B9BECD;
+}
+/* 深色皮肤（黑色主题）：整站令牌替换，组件只认变量，不需要逐条改样式 */
+html.dark{
+  --bg:#15161C; --panel:#1E1F27; --ink:#E9EAF2; --sub:#9BA1B6;
+  --line:#2C2E3A; --hover:#2A2C38; --soft:#262832; --field:#20222B;
+  --modal-bg:rgba(30,32,41,.98); --tb-ink:#C3C7D8; --switch-off:#3A3D4C;
+  --dash:#2C2E3A; --ph:#5A5F76;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-user-select:none;user-select:none}
+html,body{height:100%;overflow:hidden;font-family:"Segoe UI","Microsoft YaHei",sans-serif;
+  background:transparent}
+#app{display:flex;flex-direction:column;height:100%;background:var(--bg)}
+.appicon{width:19px;height:19px;margin-right:7px;border-radius:5px;flex:none;display:block}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+::-webkit-scrollbar{width:8px}
+::-webkit-scrollbar-thumb{background:var(--switch-off);border-radius:4px}
+
+/* ═══════════════ 标题栏：单色/渐变由 --header-bg 决定 ═══════════════ */
+.header{display:flex;align-items:center;gap:6px;padding:0 10px;height:46px;flex:none;
+  background:var(--header-bg);cursor:default}
+.logo{color:#fff;font-weight:800;font-size:15px;letter-spacing:1px;margin-right:4px;
+  text-shadow:0 1px 3px rgba(0,0,0,.15)}
+.pill{height:26px;padding:0 12px;border-radius:13px;color:rgba(255,255,255,.92);font-size:12px;
+  transition:all .15s;white-space:nowrap}
+.pill:hover{background:rgba(255,255,255,.18)}
+.pill.on{background:rgba(255,255,255,.92);color:var(--accent);font-weight:700}
+.chip{height:26px;padding:0 12px;border-radius:13px;background:rgba(255,255,255,.16);
+  color:#fff;font-size:12px;white-space:nowrap;
+  display:inline-flex;align-items:center;justify-content:center;line-height:1}
+.chip b{font-weight:800}
+.spacer{flex:1}
+.winbtn{width:34px;height:30px;color:#fff;border-radius:8px;transition:background .15s;
+  display:flex;align-items:center;justify-content:center}
+.winbtn:hover{background:rgba(255,255,255,.22)}
+.winbtn.close:hover{background:#FF5F57}
+
+/* ═══════════════ 写作工具条 ═══════════════ */
+.toolbar{display:flex;align-items:center;gap:3px;padding:7px 12px;background:var(--panel);
+  border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
+.tb{height:26px;padding:0 8px;border-radius:8px;color:var(--tb-ink);font-size:12px;
+  background:transparent;transition:all .12s}
+.tb:hover{background:var(--hover);color:var(--accent)}
+.tb:active{transform:scale(.94)}
+.tb.on{background:var(--accent);color:#fff}
+.tbdiv{width:1px;height:16px;background:var(--line);margin:0 3px;flex:none}
+.tbsel{height:26px;border-radius:8px;border:1px solid var(--line);background:var(--soft);
+  color:var(--ink);font-size:12px;padding:0 5px;max-width:150px}
+.fontsel{max-width:112px}
+
+/* ═══════════════ 主编辑区（背景图垫在文字之下，仅完整模式） ═══════════════ */
+.ed-wrap{position:relative;flex:1;display:flex;min-height:0}
+.edbg{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none}
+.editor{flex:1;overflow-y:auto;padding:22px 30px 40px;background:var(--panel);
+  -webkit-user-select:text;user-select:text;outline:none;
+  font-size:var(--fs);line-height:1.9;color:var(--ink);word-break:break-word;
+  font-family:var(--pff,var(--font));font-weight:var(--pbw,400)}
+.editor.bold{font-weight:700}
+.editor:empty:before{content:attr(data-ph);color:var(--ph)}
+.editor ::selection{background:rgba(99,102,241,.25)}
+.editor::selection{background:rgba(99,102,241,.25)}
+/* 标题分级：各级别字号/字体/加粗都是"样式"，设置里可改（--h*fs / --h*ff / --h*w），
+   改样式 = 改所有该级别段落，和 WPS 的样式一个道理 */
+.editor h1{font-size:var(--h1fs);font-weight:var(--h1w);margin:16px 0 8px;line-height:1.5;
+  font-family:var(--h1ff,inherit)}
+.editor h2{font-size:var(--h2fs);font-weight:var(--h2w);margin:14px 0 6px;line-height:1.5;
+  font-family:var(--h2ff,inherit)}
+.editor h3{font-size:var(--h3fs);font-weight:var(--h3w);margin:12px 0 5px;line-height:1.5;
+  font-family:var(--h3ff,inherit)}
+.editor h1,.editor h2,.editor h3{color:var(--ink)}
+.editor p{margin:0}
+
+/* ═══════════════ 弹层 ═══════════════ */
+.pop{position:absolute;background:var(--panel);border-radius:14px;z-index:50;
+  box-shadow:0 10px 40px rgba(25,35,80,.16);border:1px solid var(--line);
+  animation:popin .14s ease}
+@keyframes popin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.menu{min-width:190px;padding:6px}
+.mitem{display:block;width:100%;text-align:left;padding:9px 14px;border-radius:9px;
+  font-size:13px;color:var(--ink)}
+.mitem:hover{background:var(--soft);color:var(--accent)}
+.msep{height:1px;background:var(--line);margin:5px 8px}
+.ctxmark{color:var(--accent);font-weight:700}
+/* 右键菜单（WPS 式：样式套用 + 字体/字号/格式直改） */
+.ctxmenu{width:252px;padding:7px;max-height:78vh;overflow-y:auto}
+.ctxhd{font-size:10.5px;color:var(--sub);padding:2px 8px 6px;letter-spacing:.04em}
+.ctxhd-tip{font-size:9.5px;opacity:.75;margin-left:4px}
+.ctxtags{display:flex;gap:4px;padding:0 6px 6px;flex-wrap:wrap}
+.ctxtag{padding:4px 9px;border-radius:7px;font-size:11.5px;color:var(--ink);
+  background:var(--soft);border:1px solid transparent;transition:all .1s}
+.ctxtag:hover{color:var(--accent);border-color:var(--accent)}
+.ctxtag.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ctxitem{display:flex;align-items:center;width:100%;text-align:left;gap:8px;
+  padding:7px 10px;border-radius:8px;font-size:12.5px;color:var(--ink)}
+.ctxitem:hover{background:var(--soft);color:var(--accent)}
+.ctxitem .kbd{margin-left:auto;color:var(--sub);font-size:11px;max-width:112px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctxitem.on{color:var(--accent);font-weight:700}
+.ctxgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;padding:4px 6px 8px}
+.ctxgrid button{height:27px;border-radius:7px;font-size:12px;color:var(--ink);background:var(--soft)}
+.ctxgrid button:hover{background:var(--hover);color:var(--accent)}
+.ctxgrid button.on{background:var(--accent);color:#fff}
+.ctxback{display:flex;align-items:center;gap:6px;padding:4px 8px 8px;font-size:11.5px;
+  color:var(--sub);width:100%}
+.ctxback:hover{color:var(--accent)}
+.ctxlist{max-height:216px;overflow-y:auto;padding:0 2px}
+.mrow{display:flex;align-items:center;gap:8px;padding:8px 14px;font-size:13px;color:var(--ink)}
+.mrow input[type=range]{width:100px;accent-color:var(--accent)}
+.chargrid{display:grid;grid-template-columns:repeat(8,36px);gap:4px;padding:10px}
+.chargrid button{height:32px;border-radius:8px;font-size:15px;color:var(--ink)}
+.chargrid button:hover{background:var(--hover);color:var(--accent)}
+
+/* ═══════════════ 词库弹层 ═══════════════ */
+.wpop{width:262px;max-height:380px;overflow-y:auto;padding:8px}
+.wpop-h{display:flex;align-items:center;justify-content:space-between;padding:2px 6px 8px;
+  border-bottom:1px solid var(--line);margin-bottom:6px}
+.wpop-h span{font-weight:700;font-size:13px;color:var(--ink)}
+.wpop-h .add{color:var(--accent);font-size:17px;line-height:1;padding:2px 8px;border-radius:8px}
+.wpop-h .add:hover{background:var(--soft)}
+.wadd{background:var(--soft);border-radius:10px;padding:8px;margin-bottom:8px}
+.wadd input{width:100%;border:1px solid var(--line);border-radius:7px;padding:5px 8px;color:var(--ink);background:var(--field);
+  font-size:12.5px;outline:none;margin-bottom:5px;-webkit-user-select:text;user-select:text;
+  font-family:inherit}
+.wadd input:focus{border-color:var(--accent)}
+.wadd .save{width:100%;height:26px;border-radius:7px;background:var(--accent);color:#fff;
+  font-size:12.5px}
+.witem{padding:8px 46px 8px 10px;border-radius:10px;margin-bottom:6px;cursor:pointer;transition:background .12s;
+  position:relative}
+.witem:hover{background:var(--soft)}
+.wcode{display:inline-block;font-size:11px;color:var(--accent);background:rgba(99,102,241,.1);
+  border-radius:6px;padding:1px 7px;margin-bottom:3px;font-weight:700}
+.wcat{display:inline-block;font-size:10px;color:var(--sub);background:var(--soft);
+  border-radius:6px;padding:1px 6px;margin-left:5px;vertical-align:middle}
+.wcontent{font-size:12.5px;color:var(--ink);line-height:1.5;word-break:break-all}
+.wedit{position:absolute;right:26px;top:6px;color:var(--sub);font-size:12px;padding:0 4px;
+  line-height:1;opacity:.45;cursor:pointer}
+.wedit:hover{color:var(--accent);opacity:1}
+.witem.editing{background:var(--soft);cursor:default}
+.witem .wef{display:flex;gap:4px;margin-top:4px}
+.witem .wef input{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;padding:4px 6px;
+  color:var(--ink);background:var(--field);font-size:11.5px;outline:none;
+  -webkit-user-select:text;user-select:text;font-family:inherit}
+.witem .wef input:focus{border-color:var(--accent)}
+.witem .wef .wk{width:64px;flex:none}
+.wefbtns{display:flex;gap:5px;margin-top:5px}
+.wefbtns button{font-size:11px;padding:2px 9px;border-radius:6px}
+.wefbtns .ws{background:var(--accent);color:#fff}
+.wefbtns .wc{color:var(--sub)}
+.wtabs{display:flex;gap:4px;flex-wrap:wrap;padding:2px 2px 8px}
+.wtab{font-size:11px;padding:3px 10px;border-radius:10px;background:var(--soft);color:var(--sub)}
+.wtab.on{background:var(--accent);color:#fff;font-weight:700}
+.wdel{position:absolute;right:6px;top:6px;color:#C6CAD8;font-size:13px;padding:0 4px;
+  line-height:1;opacity:.45;cursor:pointer}
+.wdel:hover{color:#FF5F57;opacity:1}
+.wtip{font-size:11.5px;color:var(--sub);padding:6px 8px 2px;line-height:1.6}
+
+/* ═══════════════ 文件（多文档）╱常驻词库 ═══════════════ */
+.chip.docname{cursor:pointer;max-width:170px;overflow:hidden;text-overflow:ellipsis}
+.chip.docname:hover{background:rgba(255,255,255,.28)}
+.wpop.pinned{box-shadow:0 8px 28px rgba(25,35,80,.18)}
+.dpop{width:302px}
+.drow{cursor:pointer;position:relative}
+.drow.cur{background:rgba(99,102,241,.09)}
+
+/* ═══════════════ 气泡模式：词库常驻外置悬浮层 ═══════════════
+   以前词库用同一个 .wpop 定位（right/top），气泡窗口很小，面板直接压在输入框上，
+   字和词条叠在一起看不清。改成：窗口右侧留出 214px 空白，词库作为独立悬浮层
+   贴在输入框"外面"，视觉上是一层浮在气泡旁的小抽屉。 */
+#app.mode-bubble.sidewords{padding-right:214px}
+#app.mode-bubble .wpop.sideword{position:absolute;right:6px;top:6px;bottom:6px;
+  width:196px;max-height:none;
+  transform:none;animation:none;z-index:7;background:var(--panel);
+  box-shadow:0 10px 30px rgba(25,35,80,.24);border:1px solid var(--line)}
+#app.mode-bubble .wpop.sideword .wcontent{font-size:12px}
+/* 侧栏让位：拖动条和右上角控制钮挪到词库左边，别压在词库上 */
+#app.mode-bubble.sidewords .dragstrip{right:210px}
+#app.mode-bubble.sidewords .bctrl-wrap{right:206px}
+.dname{font-size:13px;color:var(--ink);font-weight:600;word-break:break-all;line-height:1.4}
+.dcur{font-size:10px;color:#fff;background:var(--accent);border-radius:6px;padding:1px 6px;
+  margin-left:6px;vertical-align:middle;font-weight:400}
+.dmeta{font-size:11px;color:var(--sub);margin-top:2px}
+.dprev{font-size:11.5px;color:var(--sub);margin-top:3px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.dacts{display:none;gap:6px;margin-top:5px}
+.drow:hover .dacts{display:flex}
+.dacts button{font-size:11px;color:var(--accent);padding:2px 7px;border-radius:6px}
+.dacts button:hover{background:var(--soft)}
+/* 文件面板：回收站（已删除文档找回） */
+.dsec{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)}
+.dsec-h{font-size:11.5px;color:var(--sub);font-weight:700;margin:2px 2px 6px}
+.drow.deleted{opacity:.75}
+.drow.deleted:hover{opacity:1}
+.dcur.del{background:#9CA3AF}
+
+/* 冻结窗口：设置 / 退出确认打开时，背后界面定格，只有弹窗可点。
+   ⚠ 千万别用 filter:blur() 做"虚化"——WebView(WebKit) 里带 filter 的祖先会让
+   滚动重栅格化整棵树，设置面板上下滑就一闪一闪。改成只降透明度 + 遮罩，纯合成层。 */
+#app.frozen > *:not(.mask):not(#cloudcv){opacity:.35;pointer-events:none}
+
+/* ═══════════════ 设置 / 弹窗 ═══════════════ */
+.mask{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(20,24,48,.5);z-index:90;display:flex;
+  align-items:center;justify-content:center;animation:fadein .15s ease}
+.prompt-input{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;
+  font-size:13px;outline:none;color:var(--ink);background:var(--field);font-family:inherit;
+  -webkit-user-select:text;user-select:text}
+.prompt-input:focus{border-color:var(--accent)}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+.modal{width:500px;max-height:84vh;overflow-y:auto;background:var(--modal-bg);
+  border-radius:18px;padding:0 24px 22px;box-shadow:0 24px 80px rgba(20,25,60,.25)}
+.modal.small{width:340px}
+/* 查找替换悬浮条：不遮罩、可拖动、开着也能编辑正文 */
+.fbar{position:fixed;top:14px;right:16px;width:330px;z-index:96;background:var(--modal-bg);
+  border-radius:14px;padding:10px 12px;box-shadow:0 18px 60px rgba(20,25,60,.32)}
+.fbar-h{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:8px;cursor:move;
+  display:flex;align-items:center;user-select:none}
+.fbar-h .x{margin-left:auto;color:var(--sub);font-size:15px;cursor:pointer;width:24px;height:24px;
+  line-height:24px;text-align:center;border-radius:7px;cursor:pointer}
+.fbar-h .x:hover{background:var(--hover);color:var(--ink)}
+/* 匹配高亮：黄色底=全部匹配，橙色底=当前定位的那个 */
+.fmark{background:#FFE066;color:#3A3000;border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.08)}
+.fmark.fcur{background:#FF9F43;color:#fff;box-shadow:0 0 0 2px rgba(255,159,67,.55)}
+/* 查找替换弹窗的输入行 */
+.frow{display:flex;gap:6px;margin-top:8px;align-items:center}
+.frow input[type=text]{flex:1;min-width:0;border:1px solid var(--line);border-radius:9px;
+  padding:7px 10px;font-size:13px;color:var(--ink);background:var(--field);outline:none;
+  -webkit-user-select:text;user-select:text;font-family:inherit}
+.frow input[type=text]:focus{border-color:var(--accent)}
+/* 标题栏冻结（sticky）：设置面板往下滚时 ✕ 仍然停在顶部，随时能关；
+   同时它也是拖动这个窗口的把手（见 mounted 里的 modal 拖动逻辑） */
+.modal h3{position:sticky;top:0;z-index:6;background:var(--modal-bg);
+  margin:0 -24px 16px;padding:20px 24px 12px;border-bottom:1px solid var(--line);
+  border-radius:18px 18px 0 0;cursor:move;
+  -webkit-user-select:none;user-select:none;
+  font-size:16px;color:var(--ink);display:flex;justify-content:space-between;align-items:center}
+.modal h3 .x{color:var(--sub);font-size:17px;cursor:pointer;line-height:26px;width:28px;height:26px;
+  text-align:center;border-radius:8px;flex:none;margin:-4px -4px 0 0;cursor:pointer}
+.modal h3 .x:hover{background:var(--hover);color:var(--ink)}
+.sec{margin-bottom:14px;padding:14px;border:1px solid var(--line);border-radius:12px}
+.sec h4{font-size:13px;color:var(--ink);margin-bottom:10px}
+.row{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink);margin-bottom:8px;flex-wrap:wrap}
+.row label{color:var(--sub);min-width:64px}
+.row input[type=text],.row input[type=number]{border:1px solid var(--line);border-radius:8px;color:var(--ink);background:var(--field);
+  padding:5px 10px;font-size:13px;width:130px;outline:none;-webkit-user-select:text;user-select:text;
+  font-family:inherit}
+.row input[type=text]:focus{border-color:var(--accent)}
+.row input[type=number]{width:72px}
+.row select{height:26px;border-radius:8px;border:1px solid var(--line);color:var(--ink);
+  background:var(--field);padding:0 6px;font-size:12px;outline:none}
+.capture-btn{background:var(--accent);color:#fff;border-radius:9px;padding:6px 14px;font-size:13px}
+.capture-btn.ghost{background:var(--hover);color:var(--tb-ink)}
+.capture-btn:hover{filter:brightness(1.08)}
+.hint{font-size:12px;color:var(--sub);line-height:1.6}
+.combo-show{background:rgba(99,102,241,.1);color:var(--accent);border-radius:8px;
+  padding:4px 12px;font-size:13px;font-weight:700}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
+.sw{width:26px;height:26px;border-radius:50%;border:2px solid transparent;transition:transform .12s}
+.sw:hover{transform:scale(1.15)}
+.sw.on{border-color:var(--ink)}
+.switch{position:relative;width:38px;height:21px;border-radius:11px;background:var(--switch-off);
+  transition:background .18s;flex:none}
+.switch.on{background:var(--accent)}
+.switch:after{content:'';position:absolute;top:2.5px;left:2.5px;width:16px;height:16px;
+  border-radius:50%;background:#fff;transition:left .18s}
+.switch.on:after{left:19.5px}
+.icon-prev{width:38px;height:38px;border-radius:9px;border:1px solid var(--line);flex:none}
+input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-radius:7px;
+  background:var(--field);padding:1px;cursor:pointer}
+
+/* 快捷键列表 */
+.keyrow{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--dash)}
+.keyrow:last-child{border-bottom:none}
+.keyrow .kname{flex:1;font-size:12.5px;color:var(--ink)}
+.keyrow .kcombo{background:var(--soft);color:var(--tb-ink);border-radius:7px;padding:2px 9px;
+  font-size:11.5px;font-weight:700;min-width:58px;text-align:center}
+.keyrow .kedit{font-size:11.5px;color:var(--accent);padding:3px 8px;border-radius:7px}
+/* 快捷键冲突警示徽标：红底白字"!"，悬停/点击看原因 */
+.kwarn{min-width:17px;height:17px;line-height:17px;text-align:center;border-radius:50%;
+  background:#FF5F57;color:#fff;font-size:11.5px;font-weight:900;cursor:help;flex:none;
+  margin-left:6px;box-shadow:0 0 0 3px rgba(255,95,87,.18)}
+.keyrow .kedit:hover{background:var(--hover)}
+.keyrow.capturing .kcombo{background:var(--accent);color:#fff}
+
+/* ═══════════════ 导入 / 寻回弹窗 ═══════════════ */
+.doc-preview{width:100%;height:240px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;
+  padding:10px 12px;font-size:13px;line-height:1.7;color:var(--ink);white-space:pre-wrap;
+  word-break:break-all;margin:8px 0;-webkit-user-select:text;user-select:text;background:var(--soft)}
+.hist-item{padding:9px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;
+  border:1px solid var(--line);transition:all .12s}
+.hist-item:hover{border-color:var(--accent);background:var(--hover)}
+.hist-time{font-size:12px;color:var(--accent);font-weight:700}
+.hist-meta{font-size:11.5px;color:var(--sub);margin-left:8px}
+.hist-prev{font-size:12.5px;color:var(--ink);margin-top:3px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.hrow{display:flex;align-items:center;gap:8px;margin-top:8px}
+.hrow select{height:28px;border-radius:8px;border:1px solid var(--line);background:var(--soft);
+  color:var(--ink);font-size:12.5px;padding:0 8px;max-width:280px}
+
+/* ── 导出面板：格式卡片 ── */
+.expgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:12px 0 4px}
+.expcard{position:relative;text-align:left;padding:12px 12px 11px 46px;border-radius:12px;
+  border:1px solid var(--line);background:var(--panel);cursor:pointer;transition:all .13s;
+  display:block;width:100%;font-family:inherit}
+.expcard:hover{border-color:var(--accent);background:var(--hover);transform:translateY(-1px)}
+.expcard:active{transform:none}
+.exico{position:absolute;left:11px;top:12px;width:26px;height:26px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;
+  color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));letter-spacing:0}
+.exname{font-size:13.5px;font-weight:650;color:var(--ink);display:block}
+.exext{position:absolute;right:10px;top:13px;font-size:10.5px;color:var(--sub);
+  border:1px solid var(--line);border-radius:5px;padding:0 4px;line-height:15px}
+.exdesc{display:block;font-size:11.5px;color:var(--sub);margin-top:3px;line-height:1.5}
+.expck{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink);
+  margin-top:12px;cursor:pointer;user-select:none}
+.expck input{width:14px;height:14px;accent-color:var(--accent)}
+
+/* ═══════════════ 气泡悬浮模式（纯输入框 + 角落隐式控制 + 环绕元素） ═══════════════
+   边距 --bpad 由 JS 按设置写入：环绕元素关闭或浓度拉到 0 时归零，
+   气泡瞬间缩成贴边的小胶囊。 */
+#app.mode-bubble{background:transparent;padding:var(--bpad,26px);overflow:visible}
+.mode-bubble .ed-wrap{border-radius:16px;overflow:hidden;
+  box-shadow:0 8px 30px rgba(60,70,120,.26)}
+.mode-bubble .editor{padding:8px 12px 10px;background:var(--panel)}
+/* 气泡模式不放提示文字：小气泡里一行提示比正文还抢眼 */
+#app.mode-bubble .editor:empty:before{content:none}
+.mode-bubble .header,.mode-bubble .toolbar{display:none}
+/* 拖动条：气泡顶部隐形细条（拖动移动窗口，双击还原） */
+.dragstrip{position:absolute;top:2px;left:34px;right:96px;height:18px;z-index:5;cursor:move}
+/* 控制钮：常显（半透明），鼠标靠近变实 —— 往下滑动写稿时关闭钮也能一眼看到，
+   不用再把鼠标挪回最顶部 */
+.bctrl-wrap{position:absolute;top:0;right:2px;z-index:8;display:flex;gap:5px;
+  padding:6px 6px 12px 16px;opacity:.55;transition:opacity .16s}
+.bctrl-wrap:hover,.bctrl-wrap:focus-within{opacity:1}
+/* 小胶囊态：控制钮完全让开（不然 23px 的圆钮比气泡还大，把正文全挡住）。
+   鼠标移进气泡才浮出来 —— 想退出/还原时不需要先猜按钮在哪。 */
+.bctrl-wrap.tiny{opacity:0;pointer-events:none}
+#app:hover .bctrl-wrap.tiny{opacity:.92;pointer-events:auto}
+.bctrl{width:23px;height:23px;border-radius:50%;background:var(--panel);
+  box-shadow:0 2px 8px rgba(60,70,120,.3);display:flex;align-items:center;justify-content:center;
+  color:var(--tb-ink);transition:all .12s}
+.bctrl:hover{background:var(--accent);color:#fff;transform:scale(1.08)}
+.mode-bubble .pop{border-radius:14px;box-shadow:0 8px 28px rgba(60,70,120,.25)}
+#cloudcv{position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none}
+/* 开启"元素侵入"时画布提到文本之上，元素才会飘进输入框里面 */
+#app.mode-bubble.intrude #cloudcv{z-index:6}
+/* 注意：这条得排除 .pop —— 弹层本来就要绝对定位，被改成 relative 后会掉进 flex 流里，
+   词库面板就直接落到输入框下方（用户看到的"词库跑到框里/框下"）。 */
+#app.mode-bubble>*:not(#cloudcv):not(.dragstrip):not(.bctrl-wrap):not(.pop){
+  position:relative;z-index:3}
+
+/* ═══════════════ 轻提示 ═══════════════ */
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:99;
+  background:rgba(30,34,55,.88);color:#fff;font-size:13px;padding:9px 20px;border-radius:20px;
+  animation:toastin .2s ease}
+@keyframes toastin{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+/* 气泡模式里 toast 必须收着点：小胶囊只有一两行高，默认那坨提示会把正文盖死 */
+#app.mode-bubble .toast{bottom:4px;max-width:calc(100vw - 20px);font-size:10.5px;
+  padding:3px 9px;border-radius:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style>
+</head>
+<body>
+<div id="app" style="position:relative">
+  <!-- 气泡环绕元素画布（云朵/星星/自定义字符，跟随节奏律动） -->
+  <canvas id="cloudcv" v-show="mode==='bubble'"></canvas>
+
+  <!-- ═══ 标题栏 ═══ -->
+  <div key="header" class="header" @mousedown="dragStart($event)" v-if="mode==='full'">
+    <img class="appicon" :src="iconUrl" @mousedown.stop>
+    <span class="logo">闪写</span>
+    <button class="pill" :class="{on:showDocs}" @click="toggleDocs" @mousedown.stop
+            :title="'文件（多文档）'">文件</button>
+    <button class="pill" :class="{on:pinned}" @click="togglePin" @mousedown.stop
+            :title="'置顶窗口 ' + keyOf('pin')">置顶</button>
+    <button class="pill" :class="{on:wordsVisible}" @click="toggleWords" @mousedown.stop
+            :title="'词库 ' + keyOf('words')">词库</button>
+    <button class="pill" @click="enterBubble" @mousedown.stop
+            :title="'气泡模式 ' + keyOf('bubble')">气泡</button>
+    <button class="pill" @click="openSettings" @mousedown.stop
+            :title="'设置 ' + keyOf('settings')">设置</button>
+    <div class="spacer"></div>
+    <span class="chip docname" @click="toggleDocs" @mousedown.stop
+          :title="'当前文件：' + cfg.docName + '（点击切换文件）'">
+      {{docTitle}}<b v-if="docUnsaved" style="margin-left:4px">•</b></span>
+    <span class="chip" @mousedown.stop>今日 <b>{{stats.today}}</b> · 全文 <b>{{stats.total}}</b> 字</span>
+    <button class="winbtn" title="最小化" @click="host('minimize')" @mousedown.stop>—</button>
+    <button class="winbtn" title="最大化 / 还原" @click="host('toggleMaximize')" @mousedown.stop>
+      <svg width="12" height="12" viewBox="0 0 12 12">
+        <rect x="3.5" y="1.5" width="7" height="7" rx="1" fill="none"
+              stroke="currentColor" stroke-width="1.2"/>
+        <rect x="1.5" y="3.5" width="7" height="7" rx="1" fill="none"
+              stroke="currentColor" stroke-width="1.2"/>
+      </svg></button>
+    <button class="winbtn close" title="关闭" @click="askClose" @mousedown.stop>✕</button>
+  </div>
+
+  <!-- ═══ 写作工具条 ═══ -->
+  <div key="toolbar" class="toolbar" v-if="mode==='full'">
+    <button class="tb" :title="keyOf('indent')" @click="indent">段首缩进</button>
+    <button class="tb" :title="keyOf('quote')" @click="wrapSel('“','”')">“ ”</button>
+    <button class="tb" :title="keyOf('dash')" @click="insert('——')">——</button>
+    <button class="tb" :title="keyOf('ellipsis')" @click="insert('……')">……</button>
+    <button class="tb" :title="keyOf('book')" @click="wrapSel('《','》')">《 》</button>
+    <button class="tb" :title="keyOf('chars')" @click="showCharsAt($event)">特殊字符</button>
+    <button class="tb" :title="keyOf('import')" @click="importDoc">导入文档</button>
+    <button class="tb" :title="keyOf('history')" @click="showHist">寻回</button>
+    <button class="tb" :title="keyOf('find')" @click="openFind">查找替换</button>
+    <div class="spacer"></div>
+    <select class="tbsel fontsel" v-model="tbFont" title="给选中文字设置字体" @change="applySelFont">
+      <option value="" disabled>字体（选中文字）</option>
+      <option v-if="fontFamily" :value="fontFamily">{{fontFamily}}（导入）</option>
+      <option v-for="f in fontList" :key="f" :value="f">{{f}}</option>
+      <option value="__import__">导入字体…</option>
+    </select>
+    <select class="tbsel" v-model="tbSize" title="给选中文字设置字号" @change="applySelSize">
+      <option value="" disabled>字号</option>
+      <option v-for="n in sizeList" :key="n" :value="n">{{sizeLabel(n)}}</option>
+    </select>
+    <button class="tb" title="加粗选中文字" @click="toggleBold"><b>B</b></button>
+    <span class="tbdiv"></span>
+    <button class="tb" title="一级标题（当前段落）" @click="setBlock('h1')">H1</button>
+    <button class="tb" title="二级标题（当前段落）" @click="setBlock('h2')">H2</button>
+    <button class="tb" title="三级标题（当前段落）" @click="setBlock('h3')">H3</button>
+    <button class="tb" title="正文（当前段落）" @click="setBlock('p')">正文</button>
+  </div>
+
+  <!-- ═══ 主编辑区 ═══ -->
+  <div key="edwrap" class="ed-wrap">
+    <div class="edbg" v-if="mode==='full' && wallpaper" :style="wpStyle()"></div>
+    <div key="editor" ref="editor" id="editor" class="editor" contenteditable="true"
+         :class="{bold:cfg.bold}"
+         :style="mode==='full' && wallpaper ? {background:'transparent'} : {}"
+         data-ph="从这里开始，随心写 —"
+         @input="onInput" @mousedown.stop="edDown"
+         @contextmenu.prevent="ctxOpen($event)"></div>
+  </div>
+
+  <!-- ═══ 右键菜单（WPS 式）：段落样式 + 字体/字号/格式直改 + 改样式模板 ═══ -->
+  <div class="pop menu ctxmenu" v-if="ctxShow" :style="{left:ctxPos.left,top:ctxPos.top}"
+       @mousedown.stop @contextmenu.prevent.stop>
+
+    <!-- 主面板 -->
+    <template v-if="ctxView==='main'">
+      <div class="ctxhd">段落样式 · {{ctxScope}}<span class="ctxhd-tip">（右键标签=改该样式）</span></div>
+      <div class="ctxtags">
+        <button class="ctxtag" :class="{on:ctxCur==='p'}" @click="ctxApply('p')"
+                @contextmenu.prevent.stop="ctxStyleOpen('p')">正文</button>
+        <button class="ctxtag" :class="{on:ctxCur==='h1'}" @click="ctxApply('h1')"
+                @contextmenu.prevent.stop="ctxStyleOpen('h1')">标题 1</button>
+        <button class="ctxtag" :class="{on:ctxCur==='h2'}" @click="ctxApply('h2')"
+                @contextmenu.prevent.stop="ctxStyleOpen('h2')">标题 2</button>
+        <button class="ctxtag" :class="{on:ctxCur==='h3'}" @click="ctxApply('h3')"
+                @contextmenu.prevent.stop="ctxStyleOpen('h3')">标题 3</button>
+      </div>
+      <div class="msep"></div>
+      <button class="ctxitem" @click="ctxView='font'">字体
+        <span class="kbd">{{ctxFontName || '默认'}} ›</span></button>
+      <button class="ctxitem" @click="ctxView='size'">字号
+        <span class="kbd">{{sizeLabel(ctxFontSize)}} ›</span></button>
+      <div class="ctxgrid" style="grid-template-columns:repeat(3,1fr);padding-top:0">
+        <button :class="{on:ctxBold}" @click="ctxToggle('bold')"><b>B</b></button>
+        <button :class="{on:ctxItalic}" @click="ctxToggle('italic')"><i>I</i></button>
+        <button :class="{on:ctxUnder}" @click="ctxToggle('underline')"><u>U</u></button>
+      </div>
+      <div class="msep"></div>
+      <button class="ctxitem" @click="ctxIndent">段首缩进两格</button>
+      <button class="ctxitem" @click="ctxClearFmt">清除格式</button>
+      <div class="msep"></div>
+      <button class="ctxitem" @click="ctxStyleOpen(ctxCur)">修改「{{ctxStyleName}}」样式（全级生效）…</button>
+    </template>
+
+    <!-- 字体面板（只改选中的文字 / 本段） -->
+    <template v-if="ctxView==='font'">
+      <button class="ctxback" @click="ctxView='main'">‹ 返回</button>
+      <div class="ctxhd" style="padding-top:0">字体 · {{ctxScope}}</div>
+      <div class="ctxlist">
+        <button class="ctxitem" @click="ctxSetFont('')">默认（跟随样式）</button>
+        <button class="ctxitem" v-if="fontFamily" @click="ctxSetFont(fontFamily)">
+          {{fontFamily}}（导入）</button>
+        <button class="ctxitem" v-for="f in fontList" :key="f" @click="ctxSetFont(f)">{{f}}</button>
+      </div>
+    </template>
+
+    <!-- 字号面板：中文字号 + 数字字号（只改选中的文字 / 本段） -->
+    <template v-if="ctxView==='size'">
+      <button class="ctxback" @click="ctxView='main'">‹ 返回</button>
+      <div class="ctxhd" style="padding-top:0">中文字号 · {{ctxScope}}</div>
+      <div class="ctxgrid" style="grid-template-columns:repeat(5,1fr)">
+        <button v-for="s in cnSizes" :key="s.n" :class="{on:ctxFontSize===s.p}"
+                :title="s.p + 'px'" @click="ctxSetSize(s.p)">{{s.n}}</button>
+      </div>
+      <div class="ctxhd" style="padding-top:0">数字字号</div>
+      <div class="ctxgrid">
+        <button v-for="n in ctxSizes" :key="n" :class="{on:ctxFontSize===n}"
+                @click="ctxSetSize(n)">{{n}}</button>
+      </div>
+      <div class="ctxgrid" style="grid-template-columns:repeat(3,1fr)">
+        <button @click="ctxStepSize(-1)">A－</button>
+        <button @click="ctxStepSize(1)">A＋</button>
+        <button @click="ctxSetSize(0)">默认</button>
+      </div>
+    </template>
+
+    <!-- 改样式模板：作用于全文该级别，不是这一小段 -->
+    <template v-if="ctxView==='style'">
+      <button class="ctxback" @click="ctxView='main'">‹ 返回</button>
+      <div class="ctxhd" style="padding-top:0">改样式（全文该级别一起变）</div>
+      <div class="ctxtags">
+        <button class="ctxtag" :class="{on:ctxStyleLevel==='p'}"
+                @click="ctxStyleLevel='p'">正文</button>
+        <button class="ctxtag" :class="{on:ctxStyleLevel==='h1'}"
+                @click="ctxStyleLevel='h1'">标题 1</button>
+        <button class="ctxtag" :class="{on:ctxStyleLevel==='h2'}"
+                @click="ctxStyleLevel='h2'">标题 2</button>
+        <button class="ctxtag" :class="{on:ctxStyleLevel==='h3'}"
+                @click="ctxStyleLevel='h3'">标题 3</button>
+      </div>
+      <div class="msep"></div>
+      <div class="ctxhd" style="padding-top:0">字体
+        <span style="color:var(--accent)">{{styleFontOf(ctxStyleLevel) || '默认'}}</span></div>
+      <div class="ctxlist">
+        <button class="ctxitem" @click="ctxStyleSetFont('')">默认（全局字体）</button>
+        <button class="ctxitem" v-if="fontFamily" @click="ctxStyleSetFont(fontFamily)">
+          {{fontFamily}}（导入）</button>
+        <button class="ctxitem" v-for="f in fontList" :key="'sf'+f"
+                @click="ctxStyleSetFont(f)">{{f}}</button>
+      </div>
+      <div class="msep"></div>
+      <div class="ctxhd" style="padding-top:0">字号
+        <span style="color:var(--accent)">{{sizeLabel(styleSizeOf(ctxStyleLevel))}}</span></div>
+      <div class="ctxgrid" style="grid-template-columns:repeat(5,1fr)">
+        <button v-for="s in cnSizes" :key="'ss'+s.n"
+                :class="{on:styleSizeOf(ctxStyleLevel)===s.p}"
+                :title="s.p + 'px'" @click="ctxStyleSetSize(s.p)">{{s.n}}</button>
+      </div>
+      <div class="ctxgrid" style="grid-template-columns:repeat(5,1fr)">
+        <button v-for="n in ctxSizes" :key="'sp'+n"
+                :class="{on:styleSizeOf(ctxStyleLevel)===n}"
+                @click="ctxStyleSetSize(n)">{{n}}</button>
+      </div>
+      <div class="ctxgrid" style="grid-template-columns:repeat(2,1fr)">
+        <button :class="{on:styleBoldOf(ctxStyleLevel)}"
+                @click="ctxStyleToggleBold">加粗：{{styleBoldOf(ctxStyleLevel) ? '开' : '关'}}</button>
+        <button @click="ctxEditStyle">更多设置…</button>
+      </div>
+    </template>
+  </div>
+
+  <!-- ═══ 气泡：拖动条 + 右上角隐式控制钮 ═══ -->
+  <div key="dragstrip" class="dragstrip" v-if="mode==='bubble'"
+       @mousedown="dragStart($event)" @dblclick="onDragStripDbl"></div>
+  <div key="bctrl" class="bctrl-wrap" :class="{tiny:bubbleTiny}" v-if="mode==='bubble'">
+    <button class="bctrl" title="还原完整界面"
+            @mousedown.stop @click="exitBubble">
+      <svg width="11" height="11" viewBox="0 0 12 12">
+        <rect x="4" y="1.5" width="6.5" height="6.5" rx="1" fill="none"
+              stroke="currentColor" stroke-width="1.4"/>
+        <rect x="1.5" y="4" width="6.5" height="6.5" rx="1" fill="none"
+              stroke="currentColor" stroke-width="1.4"/>
+      </svg></button>
+    <button class="bctrl" title="隐藏（老板键 / 托盘可找回）"
+            @mousedown.stop @click="host('hideWindow')">✕</button>
+  </div>
+
+  <!-- ═══ 词库弹层（点击"词库"按钮 / Ctrl+K / 常驻开关才出现） ═══ -->
+  <div class="pop wpop" :class="{pinned:cfg.alwaysWords, sideword: mode==='bubble'}"
+       :style="mode==='full' ? 'right:10px;top:88px' : ''"
+       v-if="wordsVisible" @mousedown.stop>
+    <div class="wpop-h">
+      <span>词库 · {{words.length}} 条</span>
+      <button class="add" @click="toggleAddWord" title="添加词条">{{addingWord ? '×' : '＋'}}</button>
+      <button class="add" @click="closeWords" title="关闭词库（Ctrl+K 可再打开）">✕</button>
+    </div>
+    <div class="wtabs" v-if="catList.length">
+      <button class="wtab" :class="{on:catFilter===''}" @click="catFilter=''">全部</button>
+      <button class="wtab" v-for="c in catList" :key="c" :class="{on:catFilter===c}"
+              @click="catFilter=c">{{c}}</button>
+      <button class="wtab" v-if="hasUncat" :class="{on:catFilter==='__none__'}"
+              @click="catFilter='__none__'">未分类</button>
+    </div>
+    <div class="wadd" v-if="addingWord">
+      <input type="text" v-model="newCode" placeholder="快捷码（可留空，默认 z+序号）"
+             @keydown.enter="saveWord">
+      <input type="text" v-model="newContent" placeholder="词条内容，如：沈砚之"
+             @keydown.enter="saveWord">
+      <input type="text" v-model="newCat" placeholder="分类（可选），如：人物 / 地名"
+             @keydown.enter="saveWord">
+      <button class="save" @click="saveWord">保存词条</button>
+    </div>
+    <div class="witem" v-for="w in shownWords" :key="w.id" :class="{editing:editId===w.id}"
+         @mousedown="wordDown($event, w)">
+      <span class="wedit" @mousedown.stop.prevent="startEdit(w)" title="编辑词条">✎</span>
+      <span class="wdel" @mousedown.stop.prevent="delWord(w.id)">✕</span>
+      <template v-if="editId===w.id">
+        <div class="wef">
+          <input class="wk" type="text" v-model="editCode" placeholder="快捷码">
+          <input type="text" v-model="editCat" placeholder="分类（可空）">
+        </div>
+        <div class="wef">
+          <input type="text" v-model="editContent" placeholder="词条内容">
+        </div>
+        <div class="wefbtns" @mousedown.stop.prevent>
+          <button class="ws" @click="saveEdit(w.id)">保存</button>
+          <button class="wc" @click="editId=-1">取消</button>
+        </div>
+      </template>
+      <template v-else>
+        <div class="wcode">{{w.code || 'z' + (w.id + 1)}}<span class="wcat" v-if="w.cat">{{w.cat}}</span></div>
+        <div class="wcontent">{{w.content}}</div>
+      </template>
+    </div>
+    <div class="wtip" v-if="!shownWords.length">{{words.length ? '该分类下暂无词条' : '还没有词条。点右上 ＋ 添加人名、地名、招式…'}}</div>
+    <div class="wtip" v-else>点词条即插入光标处；打 {{cfg.wordPrefix || 'z'}}1~{{cfg.wordPrefix || 'z'}}9
+      插第 1~9 条，打 {{cfg.wordPrefix || 'z'}}+快捷码（如 {{cfg.wordPrefix || 'z'}}cq）插对应词条，码+Tab 也行</div>
+  </div>
+
+  <!-- ═══ 文件浮层（多文档，Typora 式） ═══ -->
+  <div class="pop wpop dpop" :style="mode==='full' ? 'left:10px;top:88px' : 'left:6px;top:6px'"
+       v-if="showDocs" @mousedown.stop>
+    <div class="wpop-h">
+      <span>文件 · {{docs.length}} 个</span>
+      <button class="add" @click="askNewDoc" title="新建文档">＋</button>
+    </div>
+    <div class="row" style="margin:0 0 8px;gap:6px">
+      <button class="capture-btn ghost" style="flex:1" @click="importFile">打开文件…</button>
+      <button class="capture-btn ghost" style="flex:1" @click="refreshDocs">刷新</button>
+    </div>
+    <div class="witem drow" v-for="d in docs" :key="d.name" :class="{cur:d.current}"
+         @mousedown.prevent="openDoc(d.name)">
+      <div class="dname">{{d.name}}<span class="dcur" v-if="d.current">当前</span></div>
+      <div class="dmeta">{{d.chars}} 字 · {{fmtTime(d.mtime)}} · 寻回 {{d.hist || 0}} 条</div>
+      <div class="dprev" v-if="d.preview">{{d.preview}}</div>
+      <div class="dacts">
+        <button @mousedown.stop.prevent="exportDoc(d.name)">导出</button>
+        <button @mousedown.stop.prevent="showHistFor(d.name)">寻回</button>
+        <button @mousedown.stop.prevent="askRenameDoc(d.name)">重命名</button>
+        <button @mousedown.stop.prevent="askDeleteDoc(d.name)">删除</button>
+      </div>
+    </div>
+    <div class="wtip" v-if="!docs.length">还没有文档，点右上 ＋ 新建一篇。</div>
+    <div class="wtip" v-else>点文件名切换；边写边存并留快照；删除过的文件在
+      <b>设置 → 数据与恢复</b> 里找回</div>
+  </div>
+
+  <!-- ═══ 更多菜单 ═══ -->
+  <div class="pop" style="right:10px;top:50px" v-if="showMore" @mousedown.stop>
+    <div class="menu">
+      <button class="mitem" @click="preset(800,150)">迷你条（800×150）</button>
+      <button class="mitem" @click="preset(500,400)">小窗（500×400）</button>
+      <button class="mitem" @click="preset(880,600)">标准（880×600）</button>
+      <button class="mitem" @click="preset(screenW-40,screenH-80)">全屏大小</button>
+      <div class="msep"></div>
+      <button class="mitem" @click="openSettings();showMore=false">设置 / 快捷键</button>
+      <button class="mitem" @click="openExport">导出…</button>
+      <button class="mitem" @click="importDoc">导入文档…</button>
+      <button class="mitem" @click="showHist">文字寻回…</button>
+      <button class="mitem" @click="askClearAll">清空全部文本</button>
+    </div>
+  </div>
+
+  <!-- ═══ 导出弹窗（多格式） ═══ -->
+  <div class="mask" v-if="showExport" @mousedown.stop>
+    <div class="modal">
+      <h3>导出
+        <span class="x" @click="showExport=false" title="关闭（Esc 同效）">✕</span>
+      </h3>
+      <div class="hint" v-if="expTarget && expTarget !== cfg.docName"
+           style="color:var(--accent)">导出目标：「{{expTarget}}」（文件面板选择）</div>
+      <div class="hint">选一种格式。正文里的<b>粗体 / 斜体 / 下划线</b>会尽量保留；PDF 按 A4 排版并自动加首行缩进和页码。</div>
+      <div class="expgrid">
+        <button class="expcard" v-for="f in exportFormats" :key="f.id"
+                @mousedown.stop.prevent="doExportTo(f.id)" :title="f.desc">
+          <span class="exico">{{f.icon}}</span>
+          <span class="exname">{{f.name}}</span>
+          <span class="exext">{{f.ext}}</span>
+          <span class="exdesc">{{f.desc}}</span>
+        </button>
+      </div>
+      <label class="expck">
+        <input type="checkbox" v-model="expTitle"> 文件里包含标题（用当前文档名）
+      </label>
+      <div class="hint" style="margin-top:6px">导出不会改动当前文档；选好的目录下次会记住。</div>
+    </div>
+  </div>
+
+  <!-- ═══ 特殊字符面板 ═══ -->
+  <div class="pop chargrid" v-if="showChars" :style="charsPos" @mousedown.stop>
+    <button v-for="c in charList" :key="c" @click="insertChar(c)">{{c}}</button>
+  </div>
+
+  <!-- ═══ 设置弹窗（Esc 一键关闭） ═══ -->
+  <div class="mask" v-if="showSettings" @mousedown.stop>
+    <div class="modal">
+      <h3>设置
+        <span class="x" @click="closeSettings" title="关闭设置（Esc 同效）">✕</span>
+      </h3>
+
+      <div class="sec">
+        <h4>写作与文件</h4>
+        <div class="row" style="margin-bottom:8px"><label>自动保存</label>
+          <div class="switch" :class="{on:cfg.autoSave}"
+               @click="cfg.autoSave=!cfg.autoSave;host('setAutoSave', cfg.autoSave)"></div>
+          <span class="hint">{{cfg.autoSave ? '边写边存，忘了保存也不丢稿' : '关闭后请用 Ctrl+S 手动保存（退出时会提醒）'}}</span>
+        </div>
+        <div class="row" style="margin-bottom:8px"><label>词库常驻</label>
+          <div class="switch" :class="{on:cfg.alwaysWords}"
+               @click="cfg.alwaysWords=!cfg.alwaysWords;host('setWordsAlways', cfg.alwaysWords)"></div>
+          <span class="hint">开启后词库固定停在右侧，不在点选后收起</span>
+        </div>
+        <div class="row" style="margin-bottom:8px"><label>快捷输入前缀</label>
+          <input type="text" v-model="cfg.wordPrefix" maxlength="1"
+                 style="width:44px;text-align:center;text-transform:lowercase"
+                 @input="cfg.wordPrefix=(cfg.wordPrefix||'z').charAt(0).toLowerCase()">
+          <span class="hint">打 前缀+数字 = 第 N 条（{{cfg.wordPrefix || 'z'}}1）；
+            前缀+自定义码（{{cfg.wordPrefix || 'z'}}cq）或 码+Tab 也都能展开</span>
+        </div>
+        <div class="row" style="margin:0"><label>当前文件</label>
+          <span class="combo-show" style="font-weight:400">{{cfg.docName}}</span>
+          <button class="capture-btn ghost" @click="showSettings=false;showDocs=true">管理文件</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h4>老板键（全局生效；按一次隐藏，再按一次恢复，无提示）</h4>
+        <div class="row">
+          <label>键盘</label>
+          <span class="combo-show">{{cfg.boss || '未设置'}}</span>
+          <button class="capture-btn" @click="startCapture">
+            {{capturing ? '请按下新组合…' : '修改组合'}}</button>
+        </div>
+        <div class="row" style="margin-top:4px">
+          <label>鼠标</label>
+          <input type="text" v-model="gestureInput" placeholder="如 LLRRLL"
+                 style="width:90px;text-transform:uppercase">
+          <div class="switch" :class="{on:cfg.gestureEnabled}"
+               @click="cfg.gestureEnabled=!cfg.gestureEnabled"></div>
+          <span class="hint">L=左键 R=右键，连点生效（相邻两下间隔 &lt; 0.4 秒）；默认 左左右右左左</span>
+        </div>
+        <div class="hint" style="margin-top:6px">建议用三四个键的组合（如 Ctrl+Shift+Z+X）；
+          别用 Ctrl+C / Ctrl+V 这类常用键，否则复制粘贴会触发隐藏。隐藏后可点托盘图标、
+          再按一次老板键、或双击桌面图标找回。</div>
+      </div>
+
+      <div class="sec">
+        <h4>快捷键（点"改"重新录制；Esc 取消录制）</h4>
+        <div class="keyrow" v-for="a in actions" :key="a.id"
+             :class="{capturing:capturingAction===a.id}">
+          <span class="kname">{{a.name}}</span>
+          <span class="kcombo">{{capturingAction===a.id ? '按下…' : (cfg.keys[a.id] || '未设置')}}</span>
+          <span class="kwarn" v-if="capturingAction!==a.id && keyWarn(a)" :title="keyWarn(a)"
+                @click="startKeyCapture(a.id)">!</span>
+          <button class="kedit" @click="startKeyCapture(a.id)">改</button>
+        </div>
+        <div class="row" style="margin-top:8px;margin-bottom:0">
+          <button class="capture-btn ghost" @click="resetKeys">全部恢复默认</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h4>气泡悬浮模式</h4>
+        <div class="row"><label>每行字数</label>
+          <input type="number" v-model.number="cfg.bubbleCharsPerLine" min="10" max="40"
+                 @change="applyBubbleSize">
+          <span class="hint">起点电子书同款约 20 字/行</span></div>
+        <div class="row"><label>显示行数</label>
+          <input type="number" v-model.number="cfg.bubbleLines" min="1" max="12"
+                 @change="applyBubbleSize">
+          <span class="hint">{{cfg.bubbleAutoSize ? '每行最多字数（宽度到这就换行）' : '气泡高度；向上滚动可翻阅之前的文字'}}</span></div>
+        <div class="row"><label>大小自适应</label>
+          <div class="switch" :class="{on:cfg.bubbleAutoSize && !cfg.bubbleManualSize}"
+               @click="cfg.bubbleAutoSize=!cfg.bubbleAutoSize;cfg.bubbleManualSize=false;applyBubbleSizeNow()"></div>
+          <span class="hint">{{cfg.bubbleAutoSize && !cfg.bubbleManualSize ? '一行没打完 = 这行字的宽度；进入下一行才变宽' : '固定大小，超出就滚动'}}</span></div>
+        <div class="row" style="margin-top:2px"><label>自己定大小</label>
+          <div class="switch" :class="{on:cfg.bubbleManualSize}"
+               @click="cfg.bubbleManualSize=!cfg.bubbleManualSize;applyBubbleSizeNow()"></div>
+          <span class="hint">打开后气泡宽/高完全由下面两条滑杆决定，写多写少都不变</span></div>
+        <div class="row" v-if="cfg.bubbleManualSize"><label>气泡宽度</label>
+          <input type="range" min="160" max="1000" step="10" v-model.number="cfg.bubbleW"
+                 @input="applyBubbleSizeNow" style="width:150px">
+          <span style="min-width:44px">{{cfg.bubbleW}}px</span>
+          <span class="hint">≈ {{Math.round((cfg.bubbleW-44)/(cfg.fontSize||16))}} 字/行</span></div>
+        <div class="row" v-if="cfg.bubbleManualSize"><label>气泡高度</label>
+          <input type="range" min="50" max="600" step="5" v-model.number="cfg.bubbleH"
+                 @input="applyBubbleSizeNow" style="width:150px">
+          <span style="min-width:44px">{{cfg.bubbleH}}px</span>
+          <span class="hint">≈ {{Math.max(1,Math.round((cfg.bubbleH-40)/((cfg.fontSize||16)*1.9)))}} 行</span></div>
+        <div class="row"><label>双击还原</label>
+          <div class="switch" :class="{on:cfg.bubbleDblRestore}"
+               @click="cfg.bubbleDblRestore=!cfg.bubbleDblRestore"></div>
+          <span class="hint">双击气泡顶部拖动条回到完整界面</span></div>
+        <div class="row" style="margin-top:8px"><label>环绕元素</label>
+          <div class="switch" :class="{on:cfg.bubbleCloud}"
+               @click="cfg.bubbleCloud=!cfg.bubbleCloud"></div>
+          <span class="hint">关闭或浓度拉到 0 时，环绕元素不显示、边距也归零</span>
+        </div>
+        <div class="row" style="margin-top:4px"><label>边距</label>
+          <input type="range" min="0" max="60" v-model.number="cfg.cloudMargin"
+                 style="width:110px">
+          <span style="min-width:36px">{{cfg.cloudMargin}}px</span>
+          <span class="hint">环绕元素离输入框的距离</span>
+        </div>
+        <div class="row" style="margin-top:4px"><label>节奏来源</label>
+          <span class="hint" style="margin-right:0">敲击键盘</span>
+          <div class="switch" :class="{on:cfg.bubbleRhythm}"
+               @click="cfg.bubbleRhythm=!cfg.bubbleRhythm"></div>
+          <span class="hint" style="margin:0 2px 0 10px">跟随音乐</span>
+          <div class="switch" :class="{on:cfg.musicFollow}"
+               @click="cfg.musicFollow=!cfg.musicFollow"></div>
+          <span class="hint">两个可同时开：打字和系统里正在播放的音乐都会带动元素律动</span>
+        </div>
+        <div class="row" style="margin-top:4px"><label>元素种类</label>
+          <select v-model="cfg.bubbleCloudKind">
+            <option value="cloud">云朵</option>
+            <option value="star">星星</option>
+            <option value="petal">花瓣</option>
+            <option value="note">音符</option>
+            <option value="custom">自定义字符</option>
+            <option value="img">自定义图片</option>
+          </select>
+          <span class="hint" style="margin-left:8px">浓度</span>
+          <input type="range" min="0" max="100" v-model.number="cfg.cloudOpacity"
+                 style="width:90px">
+          <span style="min-width:34px">{{cfg.cloudOpacity}}%</span>
+        </div>
+        <div class="row" v-if="cfg.bubbleCloudKind==='img'">
+          <label>环绕图片</label>
+          <button class="capture-btn" @click="pickDecorImg">选择图片</button>
+          <button class="capture-btn ghost" v-if="decorImg" @click="clearDecorImg">清除</button>
+          <span class="hint">大小</span>
+          <input type="range" min="30" max="200" v-model.number="decorImgSize" style="width:80px">
+          <span style="min-width:34px">{{decorImgSize}}%</span>
+          <span class="hint">建议 100×100 以内的小图（png/jpg/gif 动图）</span>
+        </div>
+        <div class="row" v-if="cfg.bubbleCloudKind==='custom'">
+          <label>自定义</label>
+          <input type="text" v-model="cfg.bubbleCustomChars" placeholder="如 ☁★❀♪"
+                 style="width:120px" @change="applyBubbleDecor">
+          <button class="capture-btn ghost" v-for="c in decorPresets" :key="c"
+                  @click="addDecor(c)">{{c}}</button>
+        </div>
+        <div class="row" style="margin-top:6px"><label>元素侵入</label>
+          <div class="switch" :class="{on:cfg.bubbleIntrude}"
+               @click="cfg.bubbleIntrude=!cfg.bubbleIntrude"></div>
+          <span class="hint">让元素飘进输入框内部（更灵动，默认关闭）</span></div>
+        <div class="row" v-if="cfg.bubbleIntrude"><label>侵入透明</label>
+          <input type="range" min="5" max="100" v-model.number="cfg.intrudeOpacity"
+                 style="width:90px">
+          <span style="min-width:34px">{{cfg.intrudeOpacity}}%</span>
+          <label style="min-width:auto">侵入大小</label>
+          <input type="range" min="20" max="200" v-model.number="cfg.intrudeSize"
+                 style="width:90px">
+          <span style="min-width:34px">{{cfg.intrudeSize}}%</span>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h4>外观</h4>
+        <div class="row"><label>主题</label>
+          <span class="hint" style="margin-right:2px">浅色</span>
+          <div class="switch" :class="{on:cfg.skin==='dark'}"
+               @click="toggleSkin"></div>
+          <span class="hint" style="margin-left:2px">深色（黑色主题）</span>
+          <span class="hint" style="margin-left:10px">夜间码字、OLED 屏更省电</span>
+        </div>
+        <div class="row"><label>配色</label>
+          <span class="hint" style="margin-right:2px">单色</span>
+          <div class="switch" :class="{on:cfg.themeMode==='gradient'}"
+               @click="toggleThemeMode"></div>
+          <span class="hint" style="margin-left:2px">双拼渐变</span>
+        </div>
+        <div class="row"><label>调色盘</label>
+          <span class="hint" style="min-width:auto">主色</span>
+          <input type="color" v-model="cfg.accent" @change="applyTheme">
+          <label style="min-width:auto" v-if="cfg.themeMode==='gradient'">辅色</label>
+          <input type="color" v-if="cfg.themeMode==='gradient'"
+                 v-model="cfg.accent2" @change="applyTheme">
+          <div class="swatches" style="margin-left:6px">
+            <div class="sw" v-for="(p,pi) in swatchPairs" :key="pi"
+                 :title="p.t || '配色'"
+                 :style="{background:'linear-gradient(135deg,'+p.a+','+p.b+')'}"
+                 :class="{on:cfg.accent===p.a && cfg.accent2===p.b}"
+                 @click="setPair(p)"></div>
+          </div>
+        </div>
+        <div class="row" id="stylesec"><label>样式设置</label>
+          <span class="hint">改样式 = 改所有该级别段落（同 WPS）；在正文里右键可快捷套用样式</span>
+        </div>
+        <div class="row" style="margin-top:4px" v-for="lv in styleLevels" :key="lv.k">
+          <label>{{lv.name}}</label>
+          <select :value="cfg[lv.k+'Font']||''" @change="setStyleFont(lv.k, $event.target.value)"
+                  style="max-width:104px;height:26px">
+            <option value="">默认字体</option>
+            <option v-if="fontFamily" :value="fontFamily">{{fontFamily}}（导入）</option>
+            <option v-for="f in fontList" :key="f" :value="f">{{f}}</option>
+          </select>
+          <input type="range" :min="lv.k==='p' ? 12 : 14" max="60"
+                 :value="lv.k==='p' ? cfg.fontSize : cfg[lv.k+'Size']"
+                 @input="setStyleSize(lv.k, $event.target.value)" style="width:88px">
+          <span style="min-width:86px">{{sizeLabel(lv.k==='p' ? cfg.fontSize : cfg[lv.k+'Size'])}}</span>
+          <div class="switch" :class="{on: lv.k==='p' ? cfg.bold : cfg[lv.k+'Bold']}"
+               @click="toggleStyleBold(lv.k)"></div>
+          <span class="hint">加粗</span>
+        </div>
+        <div class="row" style="margin-top:8px"><label>背景图片</label>
+          <button class="capture-btn" @click="pickWallpaper">选择图片</button>
+          <button class="capture-btn ghost" @click="clearWallpaper">清除</button>
+          <span class="hint">只显示在写作区，仅完整模式</span>
+        </div>
+        <div class="row" style="margin-top:4px" v-if="wallpaper"><label>图片位置</label>
+          <select v-model="cfg.wallpaperFit" @change="applyVars">
+            <option value="cover">拉伸铺满</option>
+            <option value="contain">完整显示</option>
+            <option value="tile">平铺</option>
+            <option value="center">居中原图</option>
+          </select>
+          <span class="hint">浓度</span>
+          <input type="range" min="5" max="100" v-model.number="cfg.wallpaperOpacity"
+                 @change="applyVars" style="width:90px">
+        </div>
+        <div class="row" style="margin-top:4px"><label>窗口透明度</label>
+          <input type="range" min="30" max="100" v-model.number="cfg.winOpacity"
+                 @change="host('setWinOpacityPercent', cfg.winOpacity)" style="width:110px">
+          <span class="hint">{{cfg.winOpacity}}%</span>
+        </div>
+        <div class="row" style="margin-top:4px"><label>导入字体</label>
+          <button class="capture-btn" @click="pickFont">选择字体文件</button>
+          <button class="capture-btn ghost" v-if="fontFamily" @click="clearFont">清除</button>
+          <span class="hint">导入后成为全局默认字体；各级样式可在上方单独指定字体</span>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h4>关闭按钮行为</h4>
+        <div class="row" style="margin:0">
+          <label>点击 ✕ 时</label>
+          <select v-model="cfg.closeAction" @change="host('setCloseAction', cfg.closeAction)">
+            <option value="ask">每次询问我</option>
+            <option value="tray">最小化到托盘</option>
+            <option value="exit">直接退出程序</option>
+          </select>
+          <span class="hint">托盘图标左键可随时唤回</span>
+        </div>
+      </div>
+
+      <div class="sec">
+        <h4>数据与恢复（快照 · 回收站）</h4>
+        <div class="hint" style="margin-bottom:8px;line-height:1.7">
+          快照按时间<b>分层保留</b>：10 分钟内逐次留、1 小时内每 2 分钟、24 小时内每 20 分钟、
+          7 天内每 2 小时、30 天内每天、更早每周一条 —— 半个月前的稿子也找得回来。
+        </div>
+        <div class="row" style="margin-bottom:8px">
+          <label>快照</label>
+          <button class="capture-btn ghost" @click="refreshDataPanel">刷新</button>
+          <button class="capture-btn ghost" @click="closeSettingsSoft();showHist()">打开寻回</button>
+          <button class="capture-btn ghost" style="color:#e5484d"
+                  @click="askPurgeAllHist">清空全部快照</button>
+        </div>
+        <div class="dlist">
+          <div class="witem drow" v-for="d in histDocs" :key="'h' + d.name">
+            <div class="dname">{{d.name}}<span class="dcur" v-if="d.name===cfg.docName">当前</span></div>
+            <div class="dmeta">{{d.hist}} 条快照 · {{d.chars}} 字 · 最近 {{d.time}}</div>
+            <div class="dacts">
+              <button @mousedown.stop.prevent="openHistFromSettings(d.name)">寻回</button>
+              <button @mousedown.stop.prevent="askPurgeDocHist(d.name)">永久删除</button>
+            </div>
+          </div>
+          <div class="hint" v-if="!histDocs.length">还没有任何快照。</div>
+        </div>
+        <div class="dsec-h" style="margin-top:12px">
+          回收站 · 已删除的文档（{{deletedDocs.length}}）</div>
+        <div class="witem drow deleted" v-for="d in deletedDocs" :key="'x' + d.name">
+          <div class="dname">{{d.name}}<span class="dcur del">已删除</span></div>
+          <div class="dmeta">删于 {{d.time}} · 可恢复约 {{d.chars}} 字 · 快照 {{d.snaps}} 条</div>
+          <div class="dacts">
+            <button @mousedown.stop.prevent="restoreDeletedDoc(d.name)">恢复</button>
+            <button @mousedown.stop.prevent="askPurgeDeleted(d.name)">永久删除</button>
+          </div>
+        </div>
+        <div class="hint" v-if="!deletedDocs.length" style="padding:2px 4px 4px">
+          回收站是空的。</div>
+      </div>
+
+      <div class="sec">
+        <h4>应用图标</h4>
+        <div class="row">
+          <img class="icon-prev" :src="customIcon || iconUrl">
+          <button class="capture-btn" @click="pickCustomIcon">用图片替换图标</button>
+          <button class="capture-btn ghost" @click="resetCustomIcon">恢复默认</button>
+        </div>
+        <div class="hint">窗口、任务栏、托盘图标即时生效；桌面 exe 文件图标在重新打包时启用。</div>
+      </div>
+
+      <div class="sec">
+        <h4>插件</h4>
+        <div class="row">
+          <button class="capture-btn" @click="host('importPlugin')">导入插件（.js）</button>
+          <button class="capture-btn ghost" @click="host('openPluginsDir')">打开插件目录</button>
+          <button class="capture-btn ghost" @click="reloadPlugins">刷新列表</button>
+        </div>
+        <div class="hint" v-if="plugins.length">已装插件：{{plugins.join('、')}}（重启后自动加载）</div>
+        <div class="hint" v-else>还没有插件。把 .js 放进插件目录即可。<br>
+          插件 API：snapwrite.insert / getText / setText / toast / host</div>
+      </div>
+
+      <div class="sec">
+        <div class="row" style="margin:0">
+          <label>自启动</label>
+          <div class="switch" :class="{on:autoStart}" @click="toggleAuto"></div>
+          <span class="hint">开机自动运行（写入注册表，仅当前用户）</span>
+        </div>
+      </div>
+
+      <div class="row" style="justify-content:flex-end;margin:0">
+        <span class="hint" style="margin-right:auto">所有改动即时生效，无需保存 · 按 Esc 或右上 ✕ 关闭</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 关闭确认 ═══ -->
+  <div class="mask" v-if="showCloseModal" @mousedown.stop>
+    <div class="modal small">
+      <h3>要关闭闪写吗？ <span class="x" @click="showCloseModal=false">✕</span></h3>
+      <div class="hint" style="margin-bottom:14px">{{cfg.autoSave ? '草稿已自动保存，退出时会再留一份快照。' : '自动保存已关闭——退出前请确认正文已按 Ctrl+S 保存。'}}</div>
+      <div class="row" style="justify-content:center">
+        <button class="capture-btn" @click="confirmClose('tray')">最小化到托盘</button>
+        <button class="capture-btn ghost" @click="confirmClose('exit')">直接退出</button>
+      </div>
+      <div class="row" style="justify-content:center;margin-top:12px;margin-bottom:0">
+        <div class="switch" :class="{on:rememberClose}" @click="rememberClose=!rememberClose"></div>
+        <span class="hint">记住选择（可在设置里改）</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 通用确认框（WebView 不支持 confirm，自己实现）
+       注意 z-index 必须高于其它 mask：它常常是从"寻回/文件"弹窗里二次弹出的，
+       同层级会被后面的弹窗盖住 → 点确定点不到 → 看起来就是"点了没反应" ═══ -->
+  <div class="mask" v-if="confirmMsg" style="z-index:97" @mousedown.stop>
+    <div class="modal small">
+      <h3>请确认 <span class="x" @click="confirmMsg=''">✕</span></h3>
+      <div class="hint" style="margin-bottom:16px;line-height:1.8">{{confirmMsg}}</div>
+      <div class="row" style="justify-content:flex-end;margin:0">
+        <button class="capture-btn ghost" @click="confirmMsg=''">取消</button>
+        <button class="capture-btn" @click="runConfirm">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 文档导入弹窗 ═══ -->
+  <div class="mask" v-if="showImportModal" @mousedown.stop>
+    <div class="modal">
+      <h3>导入文档 <span class="x" @click="showImportModal=false">✕</span></h3>
+      <div class="hint">来自 <b>{{impName}}</b>，共 {{impChars}} 字。可以直接在下面框里<b>选中一段</b>再加到正文。</div>
+      <div class="doc-preview">{{impText}}</div>
+      <div class="row" style="justify-content:flex-end;margin:0;flex-wrap:wrap">
+        <span class="hint" v-if="impSel" style="margin-right:auto;color:var(--accent)">
+          已选中 {{impSel.length}} 字
+          <span class="x" style="cursor:pointer;margin-left:4px"
+                @click="clearImpSel" title="取消选中，改为添加全文">✕</span>
+        </span>
+        <button class="capture-btn ghost" @mousedown="impGrab()"
+                @click="importApply('copy')">复制到剪贴板</button>
+        <button class="capture-btn ghost" @mousedown="impGrab()"
+                @click="importApply('append')">追加到正文末尾</button>
+        <button class="capture-btn" @mousedown="impGrab()" @click="importApply('insert')"
+                title="没有选中时插全文；选中了就只插选中的那段，原有文字全部保留">
+          {{impSel ? '添加选中段落' : '添加到此处'}}</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 文字寻回弹窗（按文件独立，文件面板里也能对任意文件寻回） ═══ -->
+  <div class="mask" v-if="showHistModal" @mousedown.stop>
+    <div class="modal">
+      <h3>文字寻回 · {{histDoc}} <span class="x" @click="showHistModal=false">✕</span></h3>
+      <div class="hint">《{{histDoc}}》的自动快照（每个文件各存一份，按时间分层保留：
+        越近越密、越久越稀，半个月前的稿子也留得住）。
+        点条目恢复到那一刻，当前内容会先另存一条，恢复错了还能再找回来。</div>
+      <div class="hrow">
+        <select v-model="histDoc" @change="loadHistFor(histDoc)" style="max-width:260px">
+          <option v-for="d in docs" :key="d.name" :value="d.name">
+            {{d.name}}{{d.hist ? '（' + d.hist + ' 条快照）' : ''}}</option>
+        </select>
+        <button class="capture-btn ghost" @click="reloadHist">刷新</button>
+      </div>
+      <div style="max-height:320px;overflow-y:auto;margin-top:8px">
+        <div class="hist-item" v-for="h in histList" :key="h.doc + '#' + h.id"
+             @click="restoreHist(h.id)">
+          <div><span class="hist-time">{{h.time}}</span>
+            <span class="hist-meta">{{h.chars}} 字</span></div>
+          <div class="hist-prev">{{h.preview}}</div>
+        </div>
+        <div class="hint" v-if="!histList.length" style="padding:12px">
+          这个文件还没有快照。开始写作（或切回该文件写几句）就会自动记录。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 查找替换：悬浮条（不遮罩！开着也能继续点进正文编辑） ═══ -->
+  <div class="fbar" v-if="showFind" @mousedown.stop>
+    <div class="fbar-h" title="按住可拖动">🔍 查找替换
+      <span class="x" @click="closeFind">✕</span></div>
+    <div class="frow">
+      <input id="findInput" type="text" v-model="findText" @input="onFindInput"
+             placeholder="查找内容" @keydown.enter="gotoMatch(1)">
+      <button class="capture-btn ghost" @click="gotoMatch(-1)" title="上一个">◀</button>
+      <button class="capture-btn ghost" @click="gotoMatch(1)" title="下一个">▶</button>
+    </div>
+    <div class="frow">
+      <input type="text" v-model="replText" placeholder="替换为（留空 = 删除）"
+             @keydown.enter="replaceOne">
+      <button class="capture-btn ghost" @click="replaceOne">替换</button>
+      <button class="capture-btn" @click="replaceAll">全部替换</button>
+    </div>
+    <div class="row" style="margin:8px 0 0;align-items:center">
+      <span class="hint">{{findCount ? '共 ' + findCount + ' 处匹配（当前第 ' + findIdx + ' 处）' : '无匹配'}}</span>
+      <label style="margin-left:auto;display:flex;align-items:center;gap:5px;
+                    font-size:12px;color:var(--sub);cursor:pointer;white-space:nowrap">
+        <input type="checkbox" v-model="matchCase" @change="onFindInput">区分大小写
+      </label>
+    </div>
+  </div>
+
+  <!-- ═══ 通用输入框（WebView 不支持 prompt，自绘） ═══ -->
+  <div class="mask" v-if="promptShow" @mousedown.stop>
+    <div class="modal small">
+      <h3>{{promptTitle}} <span class="x" @click="promptShow=false">✕</span></h3>
+      <input class="prompt-input" type="text" v-model="promptValue"
+             :placeholder="promptPlaceholder" @keydown.enter="promptOk">
+      <div class="row" style="justify-content:flex-end;margin:10px 0 0">
+        <button class="capture-btn ghost" @click="promptShow=false">取消</button>
+        <button class="capture-btn" @click="promptOk">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 轻提示 ═══ -->
+  <div class="toast" v-if="toastMsg">{{toastMsg}}</div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   闪写前端（Vue 3，与 Java 后端通过 window.host 桥接）
+   JS -> Java: host('方法名', 参数...)
+   Java -> JS: 调 window.app 上的公开方法
+   ══════════════════════════════════════════════════════════ */
+var app = Vue.createApp({
+  data() { return {
+    mode: 'full',            // full | bubble
+    words: [],
+    showWords: false,        // 词库弹层：点击"词库"按钮才出现
+    wordsClosed: false,      // 常驻词库被用户手动关掉（X / Esc / 点外部）
+    catFilter: '',           // 词库分类筛选：''=全部 '__none__'=未分类
+    addingWord: false,
+    newCode: '', newContent: '', newCat: '',
+    editId: -1, editCode: '', editContent: '', editCat: '',
+    showSettings: false,
+    showMore: false,
+    showChars: false,
+    showDocs: false,          // 文件（多文档）浮层
+    docs: [],
+    docUnsaved: false,        // 关闭自动保存时，正文有改动未落盘
+    promptShow: false, promptTitle: '', promptValue: '', promptPlaceholder: '',
+    _promptCb: null,
+    charsPos: {},
+    showImportModal: false,
+    impName: '', impText: '', impSel: '',
+    showHistModal: false,
+    histList: [],
+    histDoc: '',
+    showExport: false,
+    expTitle: true,
+    expTarget: '',
+    deletedDocs: [],
+    exportFormats: [
+      {id:'txt',  icon:'T', name:'纯文本',   ext:'.txt',  desc:'最简单，任何设备都能打开'},
+      {id:'md',   icon:'M', name:'Markdown', ext:'.md',   desc:'保留粗斜体，适合笔记 / 博客'},
+      {id:'docx', icon:'W', name:'Word 文档', ext:'.docx', desc:'带样式，可直接投稿、打印'},
+      {id:'pdf',  icon:'P', name:'PDF',      ext:'.pdf',  desc:'A4 排版 + 首行缩进 + 页码'},
+      {id:'html', icon:'H', name:'网页 HTML', ext:'.html', desc:'带排版样式，能直接发网页'},
+      {id:'rtf',  icon:'R', name:'富文本 RTF', ext:'.rtf',  desc:'通用富文本，老 Word 也能开'}
+    ],
+    showCloseModal: false,
+    _ready: false,             // 初始化完成标记（初始化期间不下发设置）
+    _applyTimer: null,         // 设置下发防抖定时器
+    rememberClose: false,
+    confirmMsg: '', _confirmCb: null,
+    plugins: [],
+    pinned: false,
+    autoStart: false,
+    capturing: false,
+    capturingAction: '',
+    opacity: 100,
+    stats: {today: 0, total: 0},
+    cfg: {boss: 'Ctrl+Shift+Z+X', bossEnabled: true, gesture: 'LLRRLL',
+          gestureEnabled: true, bubbleMaxChars: 120, bubbleCharsPerLine: 20,
+          accent: '#6366F1', accent2: '#22D3EE', themeMode: 'gradient',
+          fontSize: 16, bold: false, closeAction: 'ask',
+          wallpaperOpacity: 40, wallpaperFit: 'cover', winOpacity: 100, fontName: '',
+          fontUi: '', h1Size: 28, h2Size: 22, h3Size: 18,
+          pFont: '', h1Font: '', h2Font: '', h3Font: '',
+          h1Bold: true, h2Bold: true, h3Bold: true,
+          bubbleCloud: true, bubbleRhythm: true, bubbleCloudKind: 'cloud',
+          bubbleCustomChars: '', bubbleLines: 3, cloudOpacity: 60, cloudMargin: 26,
+          bubbleW: 420, bubbleH: 132, bubbleManualSize: false,
+          musicFollow: false,
+          skin: 'light', bubbleDblRestore: true, bubbleAutoSize: true,
+          bubbleIntrude: false, intrudeOpacity: 40, intrudeSize: 100,
+          autoSave: true, alwaysWords: false, wordPrefix: 'z', docName: '未命名.txt',
+          keys: {}},
+    /* 查找替换 */
+    showFind: false, findText: '', replText: '', matchCase: false,
+    findCount: 0, findIdx: 0,
+    /* 工具条选中格式化：用完即复位（空 = 显示占位提示） */
+    tbFont: '', tbSize: '',
+    /* 右键样式菜单（WPS 式：段落样式 + 字体/字号/格式直改） */
+    ctxShow: false, ctxPos: {}, ctxCur: 'p', ctxView: 'main',
+    ctxFontName: '', ctxFontSize: 16, ctxBold: false, ctxItalic: false, ctxUnder: false,
+    ctxScope: '整段', ctxStyleName: '正文',
+    ctxSizes: [12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 26, 28, 30, 34, 40, 48, 56, 64],
+    ctxStyleLevel: 'p',
+    /* 气泡很小的时候把 ✕/还原钮藏起来，只在鼠标移进气泡时浮现 */
+    bubbleTiny: false,
+    /* 设置里的数据面板 */
+    histDocs: [],
+    /* 样式分级（设置里编辑，右键里套用） */
+    styleLevels: [
+      { k: 'p',  name: '正文' },
+      { k: 'h1', name: '标题 1' },
+      { k: 'h2', name: '标题 2' },
+      { k: 'h3', name: '标题 3' }
+    ],
+    /* 可在设置里改键的全部功能（id 与 Java 端 DEFAULT_KEYS 对应） */
+    actions: [
+      {id:'undo', name:'撤销', def:'Ctrl+Z'},
+      {id:'redo', name:'重做', def:'Ctrl+Shift+Z'},
+      {id:'deleteLine', name:'删除当前行（IDEA 同款）', def:'Ctrl+Y'},
+      {id:'indent', name:'段首缩进', def:'Ctrl+1'},
+      {id:'quote', name:'中文引号 “ ”', def:'Ctrl+2'},
+      {id:'dash', name:'破折号 ——', def:'Ctrl+3'},
+      {id:'ellipsis', name:'省略号 ……', def:'Ctrl+4'},
+      {id:'book', name:'书名号《》', def:'Ctrl+5'},
+      {id:'chars', name:'特殊字符面板', def:'Ctrl+6'},
+      {id:'find', name:'查找替换', def:'Ctrl+F'},
+      {id:'bold', name:'加粗开关', def:'Ctrl+B'},
+      {id:'import', name:'导入文档', def:'Ctrl+O'},
+      {id:'history', name:'文字寻回', def:'Ctrl+H'},
+      {id:'save', name:'立即保存', def:'Ctrl+S'},
+      {id:'export', name:'导出…', def:'Ctrl+E'},
+      {id:'words', name:'词库面板', def:'Ctrl+K'},
+      {id:'bubble', name:'气泡模式开关', def:'Ctrl+Shift+M'},
+      {id:'settings', name:'打开设置', def:'Ctrl+,'},
+      {id:'pin', name:'窗口置顶', def:'未设置'}
+    ],
+    iconUrl: '',
+    customIcon: '',
+    wallpaper: '',
+    fontFamily: '',
+    decorImg: '',
+    decorImgSize: 100,
+    fontList: ['微软雅黑', '宋体', '黑体', '楷体', '仿宋', '等线', '隶书', '幼圆',
+               'Segoe UI', 'Arial', 'Georgia', 'Times New Roman', 'Courier New'],
+    sizeList: [12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 26, 28, 30],
+    /* 中文字号（WPS/Word 的叫法；px 按 96dpi 换算：1pt = 4/3 px） */
+    cnSizes: [{n:'初号',p:56},{n:'小初',p:48},{n:'一号',p:35},{n:'小一',p:32},
+              {n:'二号',p:29},{n:'小二',p:24},{n:'三号',p:21},{n:'小三',p:20},
+              {n:'四号',p:19},{n:'小四',p:16},{n:'五号',p:14},{n:'小五',p:12},
+              {n:'六号',p:9}],
+    gestureInput: 'LLRRLL',
+    toastMsg: '',
+    charList: '★☆✦✧✓✗→←↑↓※§◎○●◇◆□■△▲·～「」『』《》〈〉？！'.split(''),
+    swatchPairs: [
+      {a:'#6366F1', b:'#22D3EE'}, {a:'#2DD4A7', b:'#22D3EE'},
+      {a:'#F472B6', b:'#FB923C'}, {a:'#A78BFA', b:'#6366F1'},
+      {a:'#0EA5E9', b:'#2DD4A7'}, {a:'#EF4444', b:'#FB923C'},
+      {a:'#000000', b:'#1A1A1A', t:'纯黑'},        /* 纯黑：标题栏/强调色全黑 */
+      /* 深色主题友善配色 */
+      {a:'#8B5CF6', b:'#06B6D4'}, {a:'#F59E0B', b:'#EF4444'},
+      {a:'#10B981', b:'#84CC16'}, {a:'#E879F9', b:'#818CF8'}
+    ],
+    decorPresets: ['☁','★','❀','♪','❤','✦','❄','⚡'],
+    screenW: window.screen ? window.screen.width : 1200,
+    screenH: window.screen ? window.screen.height : 800,
+    _saveTimer: null
+    };
+  },
+
+  computed: {
+    docTitle: function() {
+      return String(this.cfg.docName || '未命名').replace(/\.(txt|md)$/i, '');
+    },
+    /** 词库面板当前应否可见：点了词库按钮，或常驻且没被手动关掉 */
+    wordsVisible: function() {
+      return this.showWords || (this.cfg.alwaysWords && !this.wordsClosed);
+    },
+    /** 已有分类名（去重、保持出现顺序） */
+    catList: function() {
+      var r = [], seen = {};
+      for (var i = 0; i < this.words.length; i++) {
+        var c = (this.words[i].cat || '').trim();
+        if (c && !seen[c]) { seen[c] = 1; r.push(c); }
+      }
+      return r;
+    },
+    hasUncat: function() {
+      for (var i = 0; i < this.words.length; i++)
+        if (!(this.words[i].cat || '').trim()) return true;
+      return false;
+    },
+    /** 按分类筛选后的词条（保留原始 id 供 z1~z9 与编辑定位） */
+    shownWords: function() {
+      if (!this.catFilter) return this.words;
+      if (this.catFilter === '__none__') {
+        return this.words.filter(function(w) { return !(w.cat || '').trim(); });
+      }
+      var f = this.catFilter;
+      return this.words.filter(function(w) { return (w.cat || '').trim() === f; });
+    }
+  },
+
+  watch: {
+    /* Vue3 in-DOM 模板不编译容器 div 的 :class，模式切换手动维护类名 */
+    mode: function(v) {
+      var el = document.getElementById('app');
+      if (el) el.classList.toggle('mode-bubble', v === 'bubble');
+      this.syncSidewords();
+    },
+    /* 冻结窗口：设置 / 退出确认时背后界面定格 */
+    showSettings: function(v) { this.syncFrozen(); },
+    showCloseModal: function(v) { this.syncFrozen(); },
+    /* 查找条关闭（含 Esc）时清掉正文里的全部高亮 */
+    showFind: function(v) {
+      if (!v) { this.clearMarks(); this.findCount = 0; this.findIdx = 0; }
+    },
+    /* 词库面板显隐 -> 气泡模式要重算窗口宽度（词库外置悬浮层占位置） */
+    wordsVisible: function() { this.syncSidewords(); this.applyBubbleSize(); },
+    /* 任何设置项改动 -> 立即生效（140ms 防抖，拖滑块时不狂写磁盘） */
+    cfg: {
+      deep: true,
+      handler: function() { if (this._ready) this.queueApply(); }
+    },
+    gestureInput: function() { if (this._ready) this.queueApply(); }
+  },
+
+  mounted: function() {
+    var self = this;
+    /* 全局快捷键（不依赖焦点，在设置/词库外层也能用） */
+    document.addEventListener('keydown', function(e) { self.onGlobalKey(e); });
+    /* 三连击：气泡 → 完整；完整模式标题栏空白 → 气泡 */
+    document.addEventListener('mousedown', function(e) { self.triClick(e); });
+    /* 记录编辑区最近一次选区：点词库/工具栏后仍能插到原光标处 */
+    document.addEventListener('selectionchange', function() {
+      var sel = window.getSelection();
+      var ed = document.getElementById('editor');
+      if (sel && sel.rangeCount && ed && ed.contains(sel.getRangeAt(0).startContainer)) {
+        self._range = sel.getRangeAt(0).cloneRange();
+      }
+      /* 导入弹窗：预览框里选了字，就只添加选中的那段 */
+      if (self.showImportModal) {
+        var s = self.impSelected();
+        if (s !== self.impSel) self.impSel = s;
+      }
+    });
+    /* 输入法组字状态回报给 Java：组字期间别转发 Esc/Ctrl，免得打断候选框 */
+    document.addEventListener('compositionstart', function() {
+      self._composing = true;
+      self.host('setComposing', 1);
+    });
+    document.addEventListener('compositionend', function() {
+      self._composing = false;
+      self.host('setComposing', 0);
+      if (self.mode === 'bubble') self.applyBubbleSize();   // 组字期间没量尺寸，补一次
+      self._quickWord();   // 组字落下的字不走 keydown 匹配，这里补词库展开
+    });
+    /* 弹窗可拖动：抓标题栏拖动（✕ 除外）—— 小窗口里弹窗跑出屏幕时能拖回来。
+       必须用捕获阶段：.mask 上写了 @mousedown.stop，冒泡到不了 document。 */
+    document.addEventListener('mousedown', function(e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      if (t.closest('.modal h3 .x')) return;
+      var h = t.closest('.modal > h3');
+      if (!h) return;
+      var m = h.parentElement;
+      e.preventDefault();
+      var sx = e.screenX, sy = e.screenY;
+      var tx = m.__tx || 0, ty = m.__ty || 0;
+      function mv(ev) {
+        var nx = tx + (ev.screenX - sx), ny = ty + (ev.screenY - sy);
+        m.__tx = nx; m.__ty = ny;
+        m.style.transform = 'translate(' + nx + 'px,' + ny + 'px)';
+      }
+      function up() {
+        document.removeEventListener('mousemove', mv);
+        document.removeEventListener('mouseup', up);
+      }
+      document.addEventListener('mousemove', mv);
+      document.addEventListener('mouseup', up);
+    }, true);
+    /* 系统音量峰值轮询（10Hz）：跟随音乐用，非气泡模式不取 */
+    setInterval(function() {
+      if (!self.cfg.musicFollow) { self._sysPeak = 0; return; }
+      var v = parseFloat(self.host('getSysPeak'));
+      self._sysPeak = isNaN(v) ? 0 : Math.max(0, Math.min(1, v));
+    }, 100);
+  },
+
+  methods: {
+    /* 空操作（配合 .stop 修饰符，避免把 false 字面量当处理器） */
+    noop: function() {},
+    /** 编辑区按下：右键菜单开时先收掉（编辑区 mousedown 有 .stop，全局收起够不到） */
+    edDown: function() { this.ctxShow = false; },
+
+    /* ---------- 桥 ---------- */
+    host: function(name, a, b, c, d, e, f) {
+      if (!window.host || !window.host.js) return undefined;
+      function s(v) { return (v === undefined || v === null) ? '' : String(v); }
+      return window.host.js(name, s(a), s(b), s(c), s(d), s(e), s(f));
+    },
+    /** 某动作当前绑定的键（给按钮 tooltip 用） */
+    keyOf: function(id) {
+      var k = (this.cfg && this.cfg.keys) ? this.cfg.keys[id] : '';
+      return k || '';
+    },
+
+    initHost: function() {
+      this.cfg = JSON.parse(this.host('getConfig'));
+      if (!this.cfg.keys) this.cfg.keys = {};
+      this.gestureInput = this.cfg.gesture;
+      this.words = JSON.parse(this.host('getWords'));
+      this.autoStart = this.host('isAutoStart') === 'true';
+      this.iconUrl = this.host('getIcon') || '';
+      this.customIcon = this.host('getCustomIcon') || '';
+      this.wallpaper = this.host('getWallpaper') || '';
+      this.fontFamily = this.cfg.fontName || '';
+      this._fontData = this.host('getFontData') || '';
+      this.decorImg = this.host('getDecorImage') || '';
+      if (this.decorImg) this._loadDecorImg(this.decorImg);
+      this.plugins = JSON.parse(this.host('listPlugins') || '[]');
+      this.docs = JSON.parse(this.host('getDocs') || '[]');
+      this.showWords = !!this.cfg.alwaysWords;    // 常驻词库：开机就贴在右侧
+      this.wordsClosed = false;
+      this.applyBubblePad();
+      this.applyVars();
+      this.initClouds();
+      var draft = this.host('getDraft') || '';
+      var ed = document.getElementById('editor');
+      ed.innerText = draft;
+      this.refreshStats();
+      try {
+        var r = document.createRange();
+        r.selectNodeContents(ed); r.collapse(false);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        this._range = r.cloneRange();
+        ed.focus();
+      } catch (e) {}
+      this._ready = true;
+      this.syncSidewords();
+    },
+
+    /* ---------- 统计与保存 ---------- */
+    getText: function() {
+      var ed = document.getElementById('editor');
+      if (!ed) return '';
+      var t = '';
+      try { t = ed.innerText || ''; } catch (e) {}
+      if (t) return t;
+      if (!ed.innerHTML) return '';
+      /* JavaFX WebView 在窗口刚被程序改过尺寸后，innerText 会偶发返回空串
+         （布局还没重算完）—— 直接拿空文当正文会存坏草稿、算错气泡尺寸。
+         用 DOM 兜底：<br> 折行、块级元素之间补换行。 */
+      var out = '';
+      (function walk(n) {
+        for (var c = n.firstChild; c; c = c.nextSibling) {
+          if (c.nodeType === 3) { out += c.nodeValue; continue; }
+          if (c.nodeType !== 1) continue;
+          var tg = c.tagName;
+          if (tg === 'BR') { out += '\n'; continue; }
+          var blk = /^(DIV|P|H1|H2|H3|LI|UL|OL)$/.test(tg);
+          if (blk && out && out.charAt(out.length - 1) !== '\n') out += '\n';
+          walk(c);
+        }
+      })(ed);
+      return out;
+    },
+
+    setStats: function(today, total) { this.stats = {today: today, total: total}; },
+
+    onCleared: function() {
+      document.getElementById('editor').innerText = '';
+      this.refreshStats();
+      this.toast('已清空');
+    },
+
+    setEditorText: function(text) {
+      var ed = document.getElementById('editor');
+      ed.innerText = text || '';
+      this.refreshStats();
+      this.showHistModal = false;
+      this.toast('已恢复该时刻的全文');
+    },
+
+    refreshStats: function() {
+      var t = (this.getText() || '').replace(/\s/g, '');
+      this.stats.total = t.length;
+      if (this.cfg.autoSave) this.host('saveDraft', this.getText());
+    },
+
+    /* ---------- 冻结窗口 / 保存 ---------- */
+    syncFrozen: function() {
+      var el = document.getElementById('app');
+      if (!el) return;
+      el.classList.toggle('frozen', !!(this.showSettings || this.showCloseModal));
+    },
+    /** 手动保存（Ctrl+S）：关掉自动保存后靠它 */
+    saveNow: function() {
+      this.host('saveNow', this.getText());
+      this.docUnsaved = false;
+      this.toast('已保存：' + this.cfg.docName);
+    },
+
+    onInput: function(ev) {
+      var self = this;
+      /* 兜底：keydown 通道没接到（输入法/事件顺序等场景）时，
+         只要光标前恰好是「前缀+数字」也要触发词库一键插入 */
+      if (ev && ev.isTrusted) this._quickWord();
+      this.pulse();
+      this.refreshStats();
+      /* 查找开着时正文变了：防抖重建高亮（refreshFind 会保住光标位置） */
+      if (this.showFind && this.findText) this.onFindInput();
+      if (!this.cfg.autoSave) this.docUnsaved = true;
+      if (this.mode === 'bubble') {
+        /* 气泡跟着字数长高 / 缩回 */
+        if (this.cfg.bubbleAutoSize) this.applyBubbleSize();
+        if (this.caretAtEnd()) {
+          var ed = document.getElementById('editor');
+          ed.scrollTop = ed.scrollHeight;
+        }
+      }
+      clearTimeout(this._saveTimer);
+      this._saveTimer = setTimeout(function() { self.refreshStats(); }, 1200);
+    },
+
+    /** 输入兜底：光标前是「前缀+数字」或「前缀+自定义码」时替换为词条。
+     *  以前这里只认数字 —— 自定义码只走 keydown 路径，而输入法组字时
+     *  keydown 全是 isComposing 被跳过，用户的码就"完全没用"。
+     *  现在输入事件（含组字结束后的落字）也走最长匹配，码和序号都生效。 */
+    _quickWord: function() {
+      if (this._qwLock) return;               // 替换本身触发的 input 不再递归
+      if (this._composing) return;            // 组字中别动正文，等 compositionend 再展开
+      var before = this._caretBefore(24);
+      if (!before || before.length < 2) return;
+      var m = this.prefixMatch(before, '');
+      if (!m || !(m.len > 0)) return;
+      /* 锁只需盖住 replaceBefore 内部同步触发的 onInput（事件是同步派发的） */
+      this._qwLock = true;
+      this.replaceBefore(m.len, m.content);
+      this._qwLock = false;
+    },
+
+    caretAtEnd: function() {
+      var sel = window.getSelection();
+      if (!sel.rangeCount) return false;
+      var ed = document.getElementById('editor');
+      var r = sel.getRangeAt(0).cloneRange();
+      var r2 = document.createRange();
+      r2.selectNodeContents(ed);
+      try { r2.setStart(r.endContainer, r.endOffset); } catch (e) { return false; }
+      return r2.toString().length === 0;
+    },
+
+    /* ---------- 窗口拖动 / 控制 ---------- */
+    dragStart: function(e) {
+      if (e.button !== 0) return;
+      var sx = e.screenX, sy = e.screenY, self = this;
+      function mv(ev) {
+        self.host('moveBy', ev.screenX - sx, ev.screenY - sy);
+        sx = ev.screenX; sy = ev.screenY;
+      }
+      function up() {
+        document.removeEventListener('mousemove', mv);
+        document.removeEventListener('mouseup', up);
+      }
+      document.addEventListener('mousemove', mv);
+      document.addEventListener('mouseup', up);
+    },
+
+    togglePin: function() { this.host('togglePin'); this.pinned = !this.pinned; },
+    preset: function(w, h) { this.showMore = false; this.host('setSize', w, h); },
+
+    /* ---------- 关闭：询问 / 托盘 / 退出 ---------- */
+    askClose: function() {
+      var a = this.cfg.closeAction || 'ask';
+      if (a === 'tray') { this.host('hideWindow'); return; }
+      if (a === 'exit') { this.host('closeApp'); return; }
+      this.rememberClose = false;
+      this.showCloseModal = true;
+    },
+    confirmClose: function(how) {
+      if (this.rememberClose) {
+        this.cfg.closeAction = how;
+        this.host('setCloseAction', how);
+      }
+      this.showCloseModal = false;
+      if (how === 'tray') { this.host('hideWindow'); this.toast('已最小化到托盘'); }
+      else this.host('closeApp');
+    },
+
+    /* ---------- 气泡模式 ---------- */
+    enterBubble: function() {
+      this.mode = 'bubble';
+      this._bw = 0; this._bh = 0;          // 重置尺寸缓存，进来要按当前文字重算一次
+      if (!this.wordsVisible) this.showWords = false;
+      this.showDocs = false;
+      this.showSettings = false;
+      this.applyBubblePad();
+      this.host('enterBubble');
+      var self = this;
+      setTimeout(function() {
+        self.applyBubbleSizeNow();
+        var ed = document.getElementById('editor');
+        ed.scrollTop = ed.scrollHeight;
+        ed.focus();
+      }, 60);
+    },
+    exitBubble: function() {
+      this.mode = 'full';
+      this._bw = 0; this._bh = 0;
+      this.host('exitBubble');
+      var ed = document.getElementById('editor');
+      if (ed) ed.focus();
+    },
+    /** 气泡尺寸（两态）：
+     *  输入态（光标在文末）—— 小胶囊：一个字起步，宽随当前行字数变长，一行高；
+     *  检查态（光标挪上去回看）—— 展开成大窗：每行字数定宽，按内容行数撑高
+     *        （封顶"显示行数"；关掉自适应则是固定大窗）。
+     *  宽 —— 空时是小气泡，随最后一行文字长度变宽，到"每行字数"上限后
+     *        变回原来的固定宽度（自动换行、高度照旧往上长）；
+     *  高 —— 自适应时按实际行数缩短（封顶"显示行数"）。 */
+    applyBubbleSize: function() {
+      if (this.mode !== 'bubble') return;
+      var self = this;
+      /* ★ 必须防抖 + 只在尺寸真的变了才动窗口。
+         以前每敲/删一个字都要 setWidth+setHeight，Windows 上这种连续的程序化
+         改窗口尺寸会打断 WebView 的输入会话（开着输入法时更明显），
+         用户体感就是"打着打着删不掉字了"。 */
+      clearTimeout(this._bszTimer);
+      this._bszTimer = setTimeout(function() { self.applyBubbleSizeNow(); }, 90);
+    },
+    applyBubbleSizeNow: function() {
+      if (this.mode !== 'bubble') return;
+      if (this._composing) return;      // 组字中不动窗口，等 compositionend 再补
+      var perLine = Math.max(10, Math.min(40, this.cfg.bubbleCharsPerLine | 0));
+      var maxLines = Math.max(1, Math.min(12, this.cfg.bubbleLines | 0));
+      var fs = this.cfg.fontSize;
+      var side = this.wordsVisible ? 214 : 0;
+      var pad = this._bpad === undefined ? 26 : this._bpad;
+      var atEnd = this.caretAtEnd();
+      /* ══ 窗口内边距（app 的 --bpad + 编辑器的 padding）必须真的算进去 ══
+         以前只加了个固定 16px，实际内边距 40px 上下 —— 文字区比算出来的宽度窄 20 多像素，
+         一行只塞得下一个字，看着就是"气泡永远只显示一个字"。
+         现在按真实计算样式取，宽度涨多少就是多少。 */
+      var sp = atEnd ? Math.min(pad, 8) : pad;
+      document.documentElement.style.setProperty('--bpad', sp + 'px');
+      var padH = this.bubblePadH(), padV = this.bubblePadV();
+      var fullW = Math.ceil(perLine * fs) + padH + 6 + side;
+      var w, h;
+      /* ══ 用户手动定大小：完全听用户的，不再随字数/光标位置变 ══ */
+      if (this.cfg.bubbleManualSize) {
+        document.documentElement.style.setProperty('--bpad', pad + 'px');
+        w = Math.round(Math.max(160, Math.min(1200, this.cfg.bubbleW || 420))) + side;
+        h = Math.round(Math.max(50, Math.min(900, this.cfg.bubbleH || 132)));
+        this.bubbleTiny = (w - side) < 340;
+        var bw0 = document.querySelector('.bctrl-wrap');
+        if (bw0 && bw0.classList) bw0.classList.toggle('tiny', this.bubbleTiny);
+        if (w === this._bw && h === this._bh) return;
+        this._bw = w; this._bh = h;
+        this.host('resizeBubble', w, h);
+        return;
+      }
+      if (atEnd) {
+        /* ══ 输入态：一行高的小胶囊，宽度 = 这一行真实写出来的文字宽度 ══ */
+        var line = this.caretLineText();
+        if (!line) {
+          var raw = (this.getText() || '').replace(/\s+$/, '');
+          var arr = raw ? raw.split('\n') : [];
+          line = arr.length ? arr[arr.length - 1] : '';
+        }
+        var textW = this.measureLineWidth(line, fs);
+        /* 上限 = 每行字数（超了就换行，胶囊不再变长）；下限 = 两个字的宽度 */
+        var wantW = Math.min(textW + fs * 0.7, perLine * fs);
+        w = Math.round(Math.max(fs * 2, wantW)) + padH + 2 + side;
+        if (w > fullW) w = fullW;
+        h = Math.ceil(fs * 1.9) + padV + 2;
+      } else {
+        /* ══ 检查态：展开成大窗（原来的默认大小），看完自动缩回去 ══ */
+        w = fullW;
+        if (this.cfg.bubbleAutoSize) {
+          var rows = Math.max(1, this.bubbleNeedLines(perLine, maxLines));
+          h = Math.ceil(rows * fs * 1.9 + 8) + padV;
+        } else {
+          h = Math.ceil(maxLines * fs * 1.9 + 10) + padV;
+        }
+      }
+      /* 小胶囊：控制钮让开（不然 23px 的圆钮比气泡还大，正好压在字上）。
+         顺手直接改一次 DOM 类名：窗口尺寸是同步改的，Vue 的 :class 要等下一个 tick，
+         那一瞬间钮还压在字上（截图和自测都能看出来）。 */
+      this.bubbleTiny = (w - side) < 340;
+      var bw = document.querySelector('.bctrl-wrap');
+      if (bw && bw.classList) bw.classList.toggle('tiny', this.bubbleTiny);
+      /* 尺寸没变就别碰窗口（这才是"删字删不动"的真凶） */
+      if (w === this._bw && h === this._bh) return;
+      this._bw = w; this._bh = h;
+      this.host('resizeBubble', w, h);
+    },
+
+    /** 气泡的水平内边距（app 的 --bpad 左右 + 编辑器左右 padding） */
+    bubblePadH: function() {
+      try {
+        var a = getComputedStyle(document.getElementById('app'));
+        var e = getComputedStyle(document.getElementById('editor'));
+        return Math.round(parseFloat(a.paddingLeft) + parseFloat(a.paddingRight) +
+                          parseFloat(e.paddingLeft) + parseFloat(e.paddingRight));
+      } catch (err) { return 44; }
+    },
+    /** 气泡的垂直内边距（上下同理） */
+    bubblePadV: function() {
+      try {
+        var a = getComputedStyle(document.getElementById('app'));
+        var e = getComputedStyle(document.getElementById('editor'));
+        return Math.round(parseFloat(a.paddingTop) + parseFloat(a.paddingBottom) +
+                          parseFloat(e.paddingTop) + parseFloat(e.paddingBottom));
+      } catch (err) { return 36; }
+    },
+    /** 这段文字按"当前光标处字体"排出来有多宽（离屏量，跟窗口宽度无关，
+        所以不会出现"一换行宽度就算小 → 又换行"的死循环） */
+    measureLineWidth: function(text, fs) {
+      if (!text) return 0;
+      var el = document.getElementById('__bmeas');
+      if (!el) {
+        el = document.createElement('span');
+        el.id = '__bmeas';
+        el.style.cssText = 'position:fixed;left:-9999px;top:0;visibility:hidden;' +
+                           'white-space:pre;pointer-events:none;font-weight:400';
+        document.body.appendChild(el);
+      }
+      try {
+        var info = this._caretInfo();
+        var node = (info && info.node) ? info.node : document.getElementById('editor');
+        var host = node.nodeType === 3 ? node.parentNode : node;
+        var cs = getComputedStyle(host);
+        el.style.fontFamily = cs.fontFamily;
+        el.style.fontSize = cs.fontSize || (fs + 'px');
+        el.style.fontWeight = cs.fontWeight;
+        el.style.letterSpacing = cs.letterSpacing;
+      } catch (e) { el.style.fontSize = fs + 'px'; }
+      el.textContent = text;
+      return el.getBoundingClientRect().width;
+    },
+    /** 光标是否在全文末尾（用来决定气泡是一字高还是两字高） */
+    caretAtEnd: function() {
+      try {
+        var ed = document.getElementById('editor');
+        var sel = window.getSelection();
+        if (!ed || !sel.rangeCount) return true;
+        var r = sel.getRangeAt(0);
+        if (!ed.contains(r.endContainer)) return true;
+        var rg = document.createRange();
+        rg.selectNodeContents(ed);
+        rg.setStart(r.endContainer, r.endOffset);
+        return rg.toString().length === 0;
+      } catch (e) { return true; }
+    },
+
+    /** 光标所在行的文本（改中间时气泡要按那一行的宽度长）。
+        注意 Range.toString() 不把 <br> 当换行，必须自己走 DOM。 */
+    caretLineText: function() {
+      try {
+        var ed = document.getElementById('editor');
+        var sel = window.getSelection();
+        if (!ed || !sel.rangeCount) return '';
+        var r = sel.getRangeAt(0);
+        var endNode = r.endContainer, endOff = r.endOffset;
+        var out = '';
+        if (endNode === ed) {          // 光标直接挂在编辑器元素上：数前 endOff 个子节点
+          for (var j = 0; j < endOff && j < ed.childNodes.length; j++) {
+            var m = ed.childNodes[j];
+            if (m.nodeType === 3) out += m.nodeValue;
+            else if (m.nodeType === 1 && m.tagName.toLowerCase() === 'br') out += '\n';
+          }
+        } else {
+          var hit = false;
+          var walk = function(node) {
+            var kids = node.childNodes;
+            for (var i = 0; i < kids.length; i++) {
+              var n = kids[i];
+              if (n === endNode) {
+                if (n.nodeType === 3) out += n.nodeValue.slice(0, endOff);
+                hit = true;
+                return;
+              }
+              if (n.nodeType === 3) { out += n.nodeValue; continue; }
+              if (n.nodeType !== 1) continue;
+              if (n.tagName.toLowerCase() === 'br') { out += '\n'; continue; }
+              walk(n);
+              if (hit) return;
+              if (/^(DIV|P|LI|H[1-6]|BLOCKQUOTE|PRE)$/.test(n.tagName)) out += '\n';
+            }
+          };
+          walk(ed);
+        }
+        var p = out.lastIndexOf('\n');
+        return p < 0 ? out : out.slice(p + 1);
+      } catch (e) { return ''; }
+    },
+    /** 当前全文按每行字数折算需要几行（封顶 maxLines） */
+    bubbleNeedLines: function(perLine, maxLines) {
+      var raw = this.getText() || '';
+      if (!raw) return 1;
+      var segs = raw.split('\n');
+      var n = 0;
+      for (var i = 0; i < segs.length; i++) {
+        n += Math.max(1, Math.ceil(segs[i].length / perLine));
+        if (n >= maxLines) return maxLines;
+      }
+      return Math.max(1, n);
+    },
+    /** 环绕元素边距：关闭或浓度 0 时不占空间（--bpad 归零，气泡贴边变小胶囊） */
+    applyBubblePad: function() {
+      var pad = (this.cfg.bubbleCloud && (this.cfg.cloudOpacity | 0) > 0)
+            ? Math.max(0, Math.min(80, this.cfg.cloudMargin | 0)) : 0;
+      this._bpad = pad;
+      document.documentElement.style.setProperty('--bpad', pad + 'px');
+    },
+    /** 气泡模式 + 词库常驻：给窗口右侧留出悬浮层位置（词库不压在输入框里） */
+    syncSidewords: function() {
+      var el = document.getElementById('app');
+      if (!el) return;
+      el.classList.toggle('sidewords', this.mode === 'bubble' && this.wordsVisible);
+    },
+    /** 气泡拖动条双击：按设置决定是否还原完整界面 */
+    onDragStripDbl: function() {
+      if (this.cfg.bubbleDblRestore) this.exitBubble();
+    },
+    /** 三连击切换模式：
+     *  气泡模式 —— 三连击输入框外的任何位置（拖动条/空白）回完整界面；
+     *  完整模式 —— 三连击标题栏空白处（避开按钮/图标）进气泡模式。 */
+    triClick: function(e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var now = Date.now();
+      if (this.mode === 'bubble') {
+        if (t.closest('#editor') || t.closest('.pop') || t.closest('.bctrl-wrap')) {
+          this._triN = 0; return;
+        }
+        this._triN = (now - (this._triAt || 0) < 700) ? this._triN + 1 : 1;
+        this._triAt = now;
+        if (this._triN >= 3) { this._triN = 0; this.exitBubble(); }
+      } else {
+        if (!t.closest('.header') || t.closest('button') || t.closest('.chip')
+            || t.closest('.appicon')) { this._triN = 0; return; }
+        this._triN = (now - (this._triAt || 0) < 700) ? this._triN + 1 : 1;
+        this._triAt = now;
+        if (this._triN >= 3) { this._triN = 0; this.enterBubble(); }
+      }
+    },
+
+    onShown: function() {
+      var ed = document.getElementById('editor');
+      if (ed) ed.focus();
+      if (this.mode === 'bubble') this.applyBubbleSize();
+    },
+
+    /* ---------- 编辑动作 ---------- */
+    /**
+     * 在光标处插入文本。
+     *
+     * 不再依赖 document.execCommand('insertText')（WebView 里对失焦后的选区时常静默失败，
+     * 表现为"点了词条什么也没发生"），直接操作 DOM Range，成功率高且可控。
+     */
+    insert: function(txt) {
+      var ed = document.getElementById('editor');
+      if (!ed) return;
+      txt = (txt === undefined || txt === null) ? '' : String(txt);
+      this._applyRange(this._caretRange(ed), txt);
+      this.onInput();
+    },
+    /** 取插入点：缓存的选区 > 当前选区 > 文末 */
+    _caretRange: function(ed) {
+      var sel = window.getSelection();
+      if (this._range && ed.contains(this._range.startContainer)) return this._range.cloneRange();
+      if (sel && sel.rangeCount && ed.contains(sel.getRangeAt(0).startContainer))
+        return sel.getRangeAt(0).cloneRange();
+      var r = document.createRange();
+      r.selectNodeContents(ed);
+      r.collapse(false);
+      return r;
+    },
+    /** 用 txt 替换 range，并把光标放到插入内容之后（唯一真正落字的入口） */
+    _applyRange: function(range, txt) {
+      var ed = document.getElementById('editor');
+      try { ed.focus(); } catch (e) {}
+      var sel = window.getSelection();
+      try {
+        range.deleteContents();
+        var node = null;
+        if (txt) {
+          /* 多行文本（导入"添加到此处"等）：\n 转成 <br>，否则换行在 contenteditable 里不显示 */
+          var parts = String(txt).split('\n');
+          var frag = document.createDocumentFragment(), last = null;
+          for (var pi = 0; pi < parts.length; pi++) {
+            if (pi > 0) { last = document.createElement('br'); frag.appendChild(last); }
+            if (parts[pi]) { last = document.createTextNode(parts[pi]); frag.appendChild(last); }
+          }
+          if (last) { range.insertNode(frag); node = last; }
+        }
+        var r2 = document.createRange();
+        if (node) r2.setStartAfter(node);
+        else r2.setStart(range.startContainer, range.startOffset);
+        r2.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(r2);
+        this._range = r2.cloneRange();
+      } catch (e) {
+        if (txt) ed.appendChild(document.createTextNode(txt));
+        this._range = null;
+      }
+    },
+    /**
+     * 光标位置归一化：返回 {node: 文本节点, off: 偏移}。
+     *
+     * 关键坑：光标经常"贴"在元素边界上（startContainer 是 DIV、offset 是子节点下标），
+     * 例如 setText 之后、或点在某一行末尾。以前 replaceBefore 只认 nodeType===3，
+     * 这种位置直接 return false —— 表现就是"z1 有时候能插，有时候没反应"。
+     * 现在统一往前找最近的文本节点，把光标折算到它的末尾。
+     */
+    _caretInfo: function() {
+      var sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !sel.isCollapsed) return null;
+      var r = sel.getRangeAt(0);
+      var node = r.startContainer, off = r.startOffset;
+      if (node && node.nodeType === 3) return {node: node, off: off};
+      if (!node || node.nodeType !== 1) return null;
+      for (var i = Math.min(off, node.childNodes.length) - 1; i >= 0; i--) {
+        var t = this._lastTextNode(node.childNodes[i]);
+        if (t) return {node: t, off: t.textContent.length};
+      }
+      return null;
+    },
+    _lastTextNode: function(n) {
+      if (!n) return null;
+      if (n.nodeType === 3) return n;
+      for (var i = n.childNodes.length - 1; i >= 0; i--) {
+        var t = this._lastTextNode(n.childNodes[i]);
+        if (t) return t;
+      }
+      return null;
+    },
+    /** 从 node 往前找上一个文本节点（跨元素边界，不出编辑区） */
+    _prevTextNode: function(node) {
+      var n = node;
+      while (n) {
+        if (n.previousSibling) {
+          var t = this._lastTextNode(n.previousSibling);
+          if (t) return t;
+          n = n.previousSibling;   // 空子树，继续往前
+        } else {
+          n = n.parentNode;
+          if (!n || n.nodeType !== 1 || n.id === 'editor') return null;
+        }
+      }
+      return null;
+    },
+    /** 光标前 n 个字符（跨文本节点收集；不足 n 个时返回能取到的部分）。
+     *  以前只看光标所在文本节点，光标贴在节点开头时（粘贴/替换后很常见）
+     *  前一个节点末尾的 z 就丢了 —— "z1 时灵时不灵"的另一半根因。 */
+    _caretBefore: function(n) {
+      var info = this._caretInfo();
+      if (!info) return '';
+      var out = '', node = info.node, off = info.off;
+      while (node && out.length < n) {
+        var take = Math.min(off, n - out.length);
+        if (take > 0) {
+          out = node.textContent.substring(off - take, off) + out;
+          off -= take;
+        }
+        if (out.length >= n) break;
+        var prev = this._prevTextNode(node);
+        if (!prev) break;
+        node = prev;
+        off = prev.textContent.length;
+      }
+      return out;
+    },
+    /** 删掉光标前 n 个字符并插入 txt（z1 / 快捷码+Tab 用）。
+     *  删除范围可以跨文本节点：先把 Range 起点往回走 n 个字符。 */
+    replaceBefore: function(n, txt) {
+      var info = this._caretInfo();
+      if (!info) return false;
+      var node = info.node, off = info.off, need = n;
+      var startNode = null, startOff = 0;
+      while (true) {
+        if (off >= need) { startNode = node; startOff = off - need; break; }
+        need -= off;
+        var prev = this._prevTextNode(node);
+        if (!prev) return false;
+        node = prev;
+        off = prev.textContent.length;
+      }
+      var del = document.createRange();
+      del.setStart(startNode, startOff);
+      del.setEnd(info.node, info.off);
+      this._applyRange(del, txt);
+      this.onInput();
+      return true;
+    },
+    wrapSel: function(a, b) {
+      var sel = window.getSelection().toString();
+      this.insert(a + sel + b);
+    },
+    indent: function() { this.insert('\u3000\u3000'); },
+    exec: function(cmd) {
+      var ed = document.getElementById('editor');
+      if (ed) ed.focus();
+      try { document.execCommand(cmd, false, null); } catch (e) {}
+      this.onInput();
+    },
+    /** 删除当前行：用 Selection.modify 以行边界扩选（WebKit 支持，IDEA Ctrl+Y 同款手感） */
+    deleteLine: function() {
+      var ed = document.getElementById('editor');
+      if (!ed) return;
+      ed.focus();
+      var sel = window.getSelection();
+      if (!sel.rangeCount) return;
+      try {
+        if (!sel.isCollapsed) sel.collapseToEnd();
+        sel.modify('move', 'backward', 'lineboundary');
+        sel.modify('extend', 'forward', 'lineboundary');
+        document.execCommand('delete');
+        document.execCommand('delete');   // 再删掉空行，整行消失
+      } catch (e) { return; }
+      this.onInput();
+    },
+    /**
+     * 取"要格式化的选区"：优先当前 selection，焦点被工具条抢走时用缓存 _range。
+     * 只认编辑区里非空的选区 —— 顶部字体/字号/加粗都只对它生效。
+     */
+    pickSelRange: function() {
+      var ed = document.getElementById('editor');
+      var sel = window.getSelection();
+      var r = null;
+      if (sel && sel.rangeCount && !sel.isCollapsed && ed
+          && ed.contains(sel.getRangeAt(0).startContainer)) {
+        r = sel.getRangeAt(0).cloneRange();
+      } else if (this._range && !this._range.collapsed && ed
+                 && ed.contains(this._range.startContainer)) {
+        r = this._range.cloneRange();      // 焦点被按钮抢走时用缓存选区
+      }
+      if (r && ed) {
+        var n = r.toString().replace(/\s/g, '').length;
+        if (!n) r = null;
+      }
+      return r;
+    },
+    /**
+     * 对选中文字执行内联格式（字体/字号/加粗共用）。
+     * 没选中就返回 false（提示用户），绝不落到整篇 —— 顶部格式只对选中文本生效。
+     */
+    applyInline: function(cmd, val) {
+      var r = this.pickSelRange();
+      if (!r) { this.toast('请先选中要设置的文字'); return false; }
+      var ed = document.getElementById('editor');
+      var sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(r);
+      ed.focus();
+      try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
+      var done = false;
+      try { done = document.execCommand(cmd, false, val); } catch (e) {}
+      this._range = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : r;
+      this.onInput();
+      return done;
+    },
+    /** 工具条字体下拉：只给选中文字换字体（用完复位成占位提示） */
+    applySelFont: function() {
+      var v = this.tbFont; this.tbFont = '';
+      if (v === '__import__') { this.pickFont(); return; }
+      if (!v) return;
+      /* 导入的字体必须落到 @font-face 的族名上（execCommand 写原族名 = 没装就无效） */
+      if (this.fontFamily && v === this.fontFamily) {
+        var r = this.pickSelRange();
+        if (!r) { this.toast('请先选中要设置的文字'); return; }
+        this._styleRange({range: r, whole: false}, {fontFamily: "'SnapWriteCustom'"});
+        this.toast('选中文字已用「' + v + '」（导入字体）');
+        return;
+      }
+      if (this.applyInline('fontName', v)) this.toast('选中文字已用「' + v + '」');
+    },
+    /** 工具条字号下拉：只给选中文字换字号。
+     *  WebKit 没有按 px 的 fontSize 命令 —— 先用 7 号（xxx-large）打底，
+     *  再把生成的元素统一改成目标 px。 */
+    applySelSize: function() {
+      var n = parseInt(this.tbSize, 10); this.tbSize = '';
+      if (!n) return;
+      if (!this.applyInline('fontSize', '7')) return;
+      var ed = document.getElementById('editor');
+      var els = ed.querySelectorAll('span[style*="xxx-large"], font[size="7"]');
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        if (el.tagName === 'FONT') {
+          var sp = document.createElement('span');
+          sp.style.fontSize = n + 'px';
+          while (el.firstChild) sp.appendChild(el.firstChild);
+          el.parentNode.replaceChild(sp, el);
+        } else el.style.fontSize = n + 'px';
+      }
+      this.onInput();
+      this.toast('选中文字已设为 ' + n + 'px');
+    },
+    /**
+     * 加粗：只对选中文字生效（WPS 手感）。没选中不动作 ——
+     * 新打字的粗细由"正文样式"决定，不再有"整篇加粗开关"。
+     */
+    toggleBold: function() {
+      var r = this.pickSelRange();
+      if (!r) { this.toast('请先选中要加粗的文字'); return; }
+      if (this.applyInline('bold', null)) {
+        var on = false;
+        try { on = document.queryCommandState('bold'); } catch (e) {}
+        this.toast(on ? '选中文字已加粗' : '选中文字已取消加粗');
+      }
+    },
+    insertChar: function(c) { this.insert(c); this.showChars = false; },
+
+    /* ---------- 词库 ---------- */
+    /** Ctrl+K / 词库按钮：任何模式下都能开关（常驻被手动关掉后也能再打开） */
+    toggleWords: function() {
+      if (this.wordsVisible) {
+        this.showWords = false;
+        this.wordsClosed = true;
+        this.addingWord = false;
+      } else {
+        this.showWords = true;
+        this.wordsClosed = false;
+      }
+      this.showDocs = false;
+    },
+    /** 面板右上 ✕：效果同快捷开关 */
+    closeWords: function() {
+      this.showWords = false;
+      this.wordsClosed = true;
+      this.addingWord = false;
+      this.editId = -1;
+    },
+    /** 点词条：一键插入（mousedown 阶段处理，避开失焦吞点击的坑） */
+    pickWord: function(w) {
+      var content = w && w.content ? w.content : '';
+      if (!content) return;
+      if (!this.cfg.alwaysWords) this.showWords = false;   // 常驻时保持展开
+      this.insert(content);
+    },
+    /** 词条行按下：编辑态必须放行默认行为，否则输入框永远拿不到焦点（"没法编辑词条"的根因） */
+    wordDown: function(e, w) {
+      if (this.editId === w.id) return;    // 正在编辑这条：让 input 正常聚焦/选字
+      e.preventDefault();
+      this.pickWord(w);
+    },
+    toggleAddWord: function() {
+      this.addingWord = !this.addingWord;
+      if (this.addingWord) { this.newCode = ''; this.newContent = ''; this.newCat = ''; }
+    },
+    reloadWords: function() { this.words = JSON.parse(this.host('getWords')); },
+    saveWord: function() {
+      var content = (this.newContent || '').trim();
+      if (!content) { this.toast('请填写词条内容'); return; }
+      this.host('addWord', (this.newCode || '').trim(), content, (this.newCat || '').trim());
+      this.newContent = ''; this.newCode = ''; this.newCat = '';
+      this.addingWord = false;
+      this.reloadWords();
+      this.toast('词条已保存');
+    },
+    /** 编辑已有词条：✎ 展开行内表单 */
+    startEdit: function(w) {
+      this.editId = w.id;
+      this.editCode = w.code || '';
+      this.editContent = w.content || '';
+      this.editCat = w.cat || '';
+    },
+    saveEdit: function(id) {
+      var content = (this.editContent || '').trim();
+      if (!content) { this.toast('词条内容不能为空'); return; }
+      this.host('updateWord', id, (this.editCode || '').trim(), content,
+                (this.editCat || '').trim());
+      this.editId = -1;
+      this.reloadWords();
+      this.toast('词条已更新');
+    },
+    delWord: function(id) {
+      this.host('deleteWord', id);
+      if (this.editId === id) this.editId = -1;
+      this.reloadWords();
+      this.toast('已删除词条');
+    },
+
+    /* ---------- 文件（多文档，Typora 式） ---------- */
+    toggleDocs: function() {
+      this.showDocs = !this.showDocs;
+      this.showWords = false;
+      if (this.showDocs) this.refreshDocs();
+    },
+    refreshDocs: function() {
+      this.docs = JSON.parse(this.host('getDocs') || '[]');
+      try { this.deletedDocs = JSON.parse(this.host('listDeleted') || '[]'); }
+      catch (e) { this.deletedDocs = []; }
+    },
+    /** 从文件面板导出指定文档（打开导出面板，目标锁定该文件） */
+    exportDoc: function(name) {
+      this.expTarget = name || '';
+      this.showDocs = false;
+      this.showExport = true;
+    },
+    /** 找回已删除的文档：正文用最后一条快照，快照历史一起回来 */
+    restoreDeletedDoc: function(name) {
+      var self = this;
+      this.askConfirm('把「' + name + '」恢复回来？正文按最后一次快照还原，之前的快照也会一起找回。',
+        function() {
+          var r = self.host('restoreDeleted', name);
+          if (r && r.indexOf('__ERR__') !== 0) {
+            self.toast('已恢复为 ' + r);
+            self.refreshDocs();
+          } else {
+            self.toast('恢复失败：' + (r || '未知错误').replace('__ERR__:', ''));
+          }
+        });
+    },
+    fmtTime: function(ms) {
+      var d = new Date(ms), p = function(n) { return (n < 10 ? '0' : '') + n; };
+      return p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+    },
+    /* ---------- 设置里的「数据与恢复」：快照管理 + 回收站 ---------- */
+    refreshDataPanel: function() {
+      this.refreshDocs();
+      try { this.histDocs = JSON.parse(this.host('listHistDocs') || '[]'); }
+      catch (e) { this.histDocs = []; }
+    },
+    closeSettingsSoft: function() {
+      this.showSettings = false;
+      this.syncFrozen();
+    },
+    openHistFromSettings: function(name) {
+      this.showHistFor(name);
+    },
+    askPurgeDocHist: function(name) {
+      var self = this;
+      this.askConfirm('永久删除《' + name + '》的全部文字快照？删掉之后这一刻之前的稿子就再也找不回来了。',
+        function() {
+          var r = self.host('purgeDocHistory', name);
+          if (r && String(r).indexOf('__ERR__') === 0) { self.toast('删除失败'); return; }
+          self.toast('已永久删除《' + name + '》的快照');
+          self.refreshDataPanel();
+        });
+    },
+    askPurgeAllHist: function() {
+      var self = this;
+      this.askConfirm('永久删除所有文档的全部文字快照？这个操作不可撤销（文档正文不受影响）。',
+        function() {
+          var r = self.host('purgeAllHistory');
+          if (r && String(r).indexOf('__ERR__') === 0) { self.toast('删除失败'); return; }
+          self.toast('已清空全部快照');
+          self.refreshDataPanel();
+        });
+    },
+    askPurgeDeleted: function(name) {
+      var self = this;
+      this.askConfirm('把回收站里的「' + name + '」永久删除？正文和快照都会被彻底清掉，不可恢复。',
+        function() {
+          var r = self.host('purgeDeleted', name);
+          if (r && String(r).indexOf('__ERR__') === 0) { self.toast('删除失败'); return; }
+          self.toast('已永久删除「' + name + '」');
+          self.refreshDataPanel();
+        });
+    },
+    setEditorRaw: function(text) {
+      var ed = document.getElementById('editor');
+      ed.innerText = text || '';
+      try {
+        var r = document.createRange();
+        r.selectNodeContents(ed); r.collapse(false);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        this._range = r.cloneRange();
+      } catch (e) {}
+    },
+    openDoc: function(name) {
+      if (name === this.cfg.docName) { this.showDocs = false; return; }
+      var txt = this.host('switchDoc', name);
+      if (txt === '__ERR__' || txt === undefined) { this.toast('打开失败：' + name); return; }
+      this.cfg.docName = name;
+      this.setEditorRaw(txt);
+      this.showDocs = false;
+      this.docUnsaved = false;
+      this.refreshStats();
+      this.refreshDocs();
+      this.toast('已打开 ' + name);
+    },
+    askNewDoc: function() {
+      var self = this;
+      this.askPrompt('新建文档', '新文档', '文件名，如：第一章', function(v) {
+        var n = self.host('newDoc', v);
+        if (!n) { self.toast('新建失败'); return; }
+        self.cfg.docName = n;
+        self.setEditorRaw('');
+        self.showDocs = false;
+        self.docUnsaved = false;
+        self.refreshStats();
+        self.refreshDocs();
+        self.toast('已新建 ' + n);
+      });
+    },
+    askRenameDoc: function(name) {
+      var self = this;
+      this.askPrompt('重命名', name.replace(/\.(txt|md)$/i, ''), '新文件名', function(v) {
+        var n = self.host('renameDoc', name, v);
+        if (!n || n === '__ERR__') { self.toast('重命名失败'); return; }
+        if (self.cfg.docName === name) self.cfg.docName = n;
+        self.refreshDocs();
+        self.toast('已重命名为 ' + n);
+      });
+    },
+    askDeleteDoc: function(name) {
+      var self = this;
+      this.askConfirm('删除文档「' + name + '」？删除后不可恢复（正文快照仍可在"寻回"里找到）。', function() {
+        self.host('deleteDoc', name);
+        var now = self.host('getDocName') || '';
+        self.cfg.docName = now;
+        self.setEditorRaw(self.host('getDraft') || '');
+        self.docUnsaved = false;
+        self.refreshStats();
+        self.refreshDocs();
+        self.toast('已删除 ' + name);
+      });
+    },
+    importFile: function() {
+      var n = this.host('importDocFile');
+      if (!n) return;
+      this.cfg.docName = n;
+      this.setEditorRaw(this.host('getDraft') || '');
+      this.showDocs = false;
+      this.docUnsaved = false;
+      this.refreshStats();
+      this.refreshDocs();
+      this.toast('已打开 ' + n);
+    },
+
+    /* ---------- 通用输入框（替代 prompt） ---------- */
+    askPrompt: function(title, value, ph, cb) {
+      var self = this;
+      this.promptTitle = title;
+      this.promptValue = value || '';
+      this.promptPlaceholder = ph || '';
+      this._promptCb = cb;
+      this.promptShow = true;
+      setTimeout(function() {
+        var el = document.querySelector('.prompt-input');
+        if (el) { el.focus(); el.select(); }
+      }, 60);
+    },
+    promptOk: function() {
+      var v = (this.promptValue || '').trim();
+      var cb = this._promptCb;
+      this.promptShow = false;
+      this._promptCb = null;
+      if (v && cb) cb(v);
+    },
+
+    /* ---------- 通用确认框（替代 confirm） ---------- */
+    askConfirm: function(msg, cb) { this.confirmMsg = msg; this._confirmCb = cb; },
+    runConfirm: function() {
+      var cb = this._confirmCb;
+      this.confirmMsg = ''; this._confirmCb = null;
+      if (cb) cb();
+    },
+    askClearAll: function() {
+      var self = this;
+      this.showMore = false;
+      this.askConfirm('确定清空全部文本？此操作不可恢复（可在"寻回"里找回快照）。', function() {
+        self.host('clearAll');
+      });
+    },
+
+    /* ---------- 全局快捷键 ---------- */
+    /** 组合键组装（键名来自 e.key 或 e.code 的归一结果） */
+    buildCombo: function(e, key) {
+      var p = [];
+      if (e.ctrlKey) p.push('Ctrl');
+      if (e.shiftKey) p.push('Shift');
+      if (e.altKey) p.push('Alt');
+      if (e.metaKey) p.push('Win');
+      p.push(key);
+      return p.join('+');
+    },
+    /** 事件 -> "Ctrl+Shift+Z" 形式 */
+    comboOf: function(e) {
+      var k = e.key;
+      /* WebKit 在部分输入法/布局下 e.key 给 'Unidentified'，这时退回 e.code，
+         否则设置里录的键"看起来存了，实际永远匹配不上" */
+      if (!k || k === 'Unidentified' || k === 'Process') k = this.keyFromCode(e.code);
+      if (!k) return null;
+      if (k === 'Control' || k === 'Shift' || k === 'Alt' || k === 'Meta') return null;
+      var map = {' ':'Space', 'Escape':'Esc', 'ArrowUp':'Up', 'ArrowDown':'Down',
+                 'ArrowLeft':'Left', 'ArrowRight':'Right'};
+      if (map[k]) k = map[k];
+      else if (k.length === 1 && k !== '+') k = k.toUpperCase();
+      return this.buildCombo(e, k);
+    },
+    /** 物理键位组合（永远走 e.code）：中文输入法开着时 e.key 是拼音/Process，
+     *  只有物理键位是稳定的 —— 录制用这条路径，匹配时两条路径都试 */
+    comboCodeOf: function(e) {
+      var k = this.keyFromCode(e.code);
+      if (!k || k === 'Control' || k === 'Shift' || k === 'Alt' || k === 'Meta') return null;
+      return this.buildCombo(e, k);
+    },
+    /** e.code -> 统一的键名（KeyZ / Digit1 / Comma ...） */
+    keyFromCode: function(code) {
+      if (!code) return null;
+      var m = /^Key([A-Z])$/.exec(code);            if (m) return m[1];
+      m = /^Digit([0-9])$/.exec(code);              if (m) return m[1];
+      m = /^Numpad([0-9])$/.exec(code);             if (m) return m[1];
+      m = /^F([0-9]{1,2})$/.exec(code);             if (m) return 'F' + m[1];
+      var map = {Comma:',', Period:'.', Slash:'/', Semicolon:';', Quote:"'",
+                 BracketLeft:'[', BracketRight:']', Backslash:'\\', Minus:'-', Equal:'=',
+                 Backquote:'`', Space:'Space', Escape:'Esc', Enter:'Enter', Tab:'Tab',
+                 Backspace:'Backspace', Delete:'Delete', Insert:'Insert',
+                 ArrowUp:'Up', ArrowDown:'Down', ArrowLeft:'Left', ArrowRight:'Right',
+                 Home:'Home', End:'End', PageUp:'PageUp', PageDown:'PageDown'};
+      return map[code] || null;
+    },
+    /** 点"改"开始录制：同时告诉 Java 端"我在录键"。
+        以前只改前端状态，Java 那层照样把这次按键当动作执行并 consume 掉，
+        按键根本到不了 DOM —— 表现就是"按了没反应，改不了键"。 */
+    startKeyCapture: function(id) {
+      this.capturingAction = id;
+      this.host('setCapturing', id);
+    },
+    /** 录制收尾（绑定 / 取消 / 关面板都要走），别让 Java 一直停在"录键"状态 */
+    endKeyCapture: function() {
+      this.capturingAction = '';
+      this.host('setCapturing', '');
+    },
+    /** 组合键合法性：必须带 Ctrl / Alt / Win，或单个 F1~F12 */
+    keyOk: function(c) {
+      if (!c) return false;
+      if (/^F([1-9]|1[0-2])$/.test(c)) return true;
+      return /(Ctrl|Alt|Win)\+/.test(c);
+    },
+    /** 真正落键：Java 落盘 + 前端同步（两条按键通道共用同一条路） */
+    bindKey: function(id, c) {
+      if (!id || !c) return false;
+      if (!this.keyOk(c)) { this.toast('请用带 Ctrl / Alt / Win 的组合键（或 F1~F12）'); return false; }
+      this.host('setKey', id, c);
+      this.cfg.keys[id] = c;
+      this.endKeyCapture();
+      this.toast('已绑定 ' + c);
+      return true;
+    },
+    onGlobalKey: function(e) {
+      var self = this;
+
+      /* 1) 设置里正在录制快捷键：录制走物理键位（e.code），输入法开着也录得准 */
+      if (this.capturingAction) {
+        e.preventDefault(); e.stopPropagation();
+        if (e.key === 'Escape') { this.endKeyCapture(); return; }
+        var c = this.comboCodeOf(e) || this.comboOf(e);
+        if (!c) return;
+        this.bindKey(this.capturingAction, c);
+        return;
+      }
+
+      /* 2) Esc = 点掉所有弹层的 ✕（防止 ✕ 点不到就卡死在里面） */
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        e.preventDefault();
+        this.escapeAll('dom');
+        return;
+      }
+
+      var tag = (e.target && e.target.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      /* 3) Tab：词库快捷码展开（仅编辑区；输入法组字中不抢键） */
+      if (e.key === 'Tab' && !e.isComposing && e.target && e.target.id === 'editor') {
+        e.preventDefault();
+        this.tabKey('dom');
+        return;
+      }
+
+      /* 4) 前缀 + 数字 / 前缀 + 自定义快捷码：插入词条（仅编辑区）
+            以前只认"前缀+序号"，用户给词条起了自己的码（如 cq）就完全用不上，
+            看到的永远是 z1/z2。现在两种都认：z1（第 1 条）、zcq（码=cq 那条）。 */
+      if (!e.ctrlKey && !e.altKey && !e.metaKey && !e.isComposing
+          && e.target && e.target.id === 'editor'
+          && typeof e.key === 'string' && e.key.length === 1) {
+        var m4 = this.prefixMatch(this._caretBefore(32), e.key);
+        if (m4) {
+          e.preventDefault();
+          this.replaceBefore(m4.len, m4.content);
+          return;
+        }
+      }
+
+      /* 5) 自定义快捷键匹配：物理键位 + 字符键位两条路都试，
+            中文输入法下录的和触发的才保证是同一个组合 */
+      var c1 = this.comboCodeOf(e);
+      var c2 = this.comboOf(e);
+      var hit = false;
+      if (c1) hit = this.runCombo(c1, 'dom');
+      if (!hit && c2) hit = this.runCombo(c2, 'dom');
+      if (hit) e.preventDefault();
+    },
+
+    /**
+     * 组合串 -> 执行绑定动作。
+     *
+     * src 是"这次组合从哪来的"：'dom'（页面 keydown）/ 'jvm'（Java 端转发）。
+     * 同一次真实按键两条通道都会到，所以「同组合 + 不同来源 + 200ms 内」要去重；
+     * 但同一来源连按两次（Ctrl+K 开、Ctrl+K 关）必须都生效 —— 所以按来源判断，
+     * 不能只按时间戳判断（只按时间会把连续按键的第二下吃掉）。
+     */
+    runCombo: function(combo, src) {
+      if (!combo) return false;
+      var now = Date.now();
+      if (this._lastCombo === combo && this._lastSrc !== src &&
+          now - this._lastComboAt < 200) return true;      // 另一条通道已经处理过
+      this._lastCombo = combo; this._lastComboAt = now; this._lastSrc = src;
+      /* 弹层（设置 / 导入 / 寻回 / 确认…）打开时，快捷键只允许开关设置本身和置顶，
+         其余一律不动正文 —— 不然在设置里按 Ctrl+B 会把整篇文字加粗。 */
+      var locked = this.layerOpen();
+      var allow = { settings: 1, pin: 1 };
+      var keys = this.cfg.keys || {};
+      for (var id in keys) {
+        if (!keys.hasOwnProperty(id)) continue;
+        if (keys[id] !== combo) continue;
+        if (locked && !allow[id]) continue;
+        if (this.runAction(id)) return true;
+      }
+      return false;
+    },
+
+    /** 是否有"挡住正文"的弹层/录键状态（查找条、词库面板是非模态的，不算） */
+    layerOpen: function() {
+      return !!(this.capturing || this.showSettings || this.showCloseModal ||
+                this.confirmMsg || this.showImportModal || this.showHistModal ||
+                this.showChars || this.showDocs || this.promptShow || this.showMore ||
+                this.showExport);
+    },
+
+    /**
+     * Java 端转发的按键入口（真实键位，不受 WebView DOM 事件缺陷影响）。
+     * 返回 true = 已处理，Java 会 consume 掉，避免原生命令再执行一次。
+     */
+    onHostKey: function(combo) {
+      if (!combo) return false;
+      /* 录制快捷键优先：这时按键只用来"取值"，绝不执行任何动作，
+         而且必须返回 true 让 Java 端 consume 掉（否则 WebKit 还会再执行一遍） */
+      if (this.capturingAction) {
+        if (combo === 'Esc') { this.endKeyCapture(); return true; }
+        this.bindKey(this.capturingAction, combo);
+        return true;
+      }
+      if (combo === 'Esc') return this.escapeAll('jvm');
+      /* Tab 由 Java 端转发进来：WebView 在 contenteditable 里会先拿 Tab 去遍历焦点，
+         DOM 的 keydown 根本收不到 —— 这就是"码+Tab 一点效果都没有"的真凶。 */
+      if (combo === 'Tab') return this.tabKey('jvm');
+      return this.runCombo(combo, 'jvm');
+    },
+
+    /**
+     * Tab：词库快捷码展开；没命中码就当段首缩进（WPS 手感）。
+     * 两条通道（DOM / Java 转发）都会进来，用来源+时间去重，别展开两次。
+     */
+    tabKey: function(src) {
+      if (this.showSettings || this.showHistModal || this.showExport || this.confirmMsg ||
+          this.showImportModal || this.promptShow) return false;
+      var ae = document.activeElement;
+      var tag = (ae && ae.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return false;
+      var ed = document.getElementById('editor');
+      var sel = window.getSelection();
+      var inEd = (ae === ed) || (ae && ae !== document.body && ed.contains(ae)) ||
+                 (sel && sel.rangeCount && ed.contains(sel.getRangeAt(0).startContainer));
+      if (!inEd) return false;                 // 焦点不在正文：Tab 该走焦点遍历
+      var now = Date.now();
+      if (this._lastTabSrc && this._lastTabSrc !== src && now - this._lastTabAt < 300)
+        return true;                                            // 另一条通道已处理
+      this._lastTabAt = now; this._lastTabSrc = src;
+      if (this.expandShortcut()) return true;
+      this.insert('\u3000\u3000');            // 没命中码：当缩进（WPS 同款）
+      return true;
+    },
+
+    /** Esc = 所有弹层的 ✕：录制中只取消录制 → 有弹层全关 → 气泡模式退出气泡 */
+    escapeAll: function(src) {
+      var now = Date.now();
+      if (this._lastEscSrc && this._lastEscSrc !== src &&
+          now - this._lastEscAt < 200) return true;          // 另一条通道已经处理过
+      this._lastEscAt = now; this._lastEscSrc = src;
+
+      if (this.capturing) {                 // 正在录老板键
+        this.capturing = false;
+        this.host('cancelCapture');
+        return true;
+      }
+      if (this.capturingAction) {           // 正在录快捷键：只取消录制
+        this.endKeyCapture();
+        return true;
+      }
+      var anyLayer = this.showSettings || this.showCloseModal || this.confirmMsg ||
+                     this.showImportModal || this.showHistModal || this.showChars ||
+                     this.showDocs || this.wordsVisible || this.promptShow ||
+                     this.showMore || this.showFind || this.showExport || this.ctxShow;
+      this.showCloseModal = false;
+      this.showExport = false;
+      this.confirmMsg = ''; this._confirmCb = null;
+      this.showImportModal = false;
+      this.showHistModal = false;
+      this.showChars = false;
+      this.ctxShow = false;
+      this.showDocs = false;
+      this.showMore = false;
+      this.showFind = false;
+      this.promptShow = false; this._promptCb = null;
+      this.showWords = false; this.wordsClosed = true; this.addingWord = false;
+      this.showSettings = false;
+      this.syncFrozen();
+      if (!anyLayer && this.mode === 'bubble') { this.exitBubble(); return true; }
+      return !!anyLayer;
+    },
+    /** 执行动作；返回 true 表示已处理 */
+    runAction: function(id) {
+      switch (id) {
+        case 'undo': this.exec('undo'); return true;
+        case 'redo': this.exec('redo'); return true;
+        case 'deleteLine': this.deleteLine(); return true;
+        case 'indent': this.indent(); return true;
+        case 'quote': this.wrapSel('“', '”'); return true;
+        case 'dash': this.insert('——'); return true;
+        case 'ellipsis': this.insert('……'); return true;
+        case 'book': this.wrapSel('《', '》'); return true;
+        case 'chars': this.showCharsAt(null); return true;
+        case 'bold': this.toggleBold(); return true;
+        case 'import': this.importDoc(); return true;
+        case 'history': this.showHist(); return true;
+        case 'find': this.openFind(); return true;
+        case 'save': this.saveNow(); return true;
+        case 'export': this.doExport(); return true;
+        case 'words': this.toggleWords(); return true;
+        case 'bubble': this.mode === 'bubble' ? this.exitBubble() : this.enterBubble(); return true;
+        case 'settings': if (this.showSettings) this.closeSettings(); else this.openSettings(); return true;
+        case 'pin': this.togglePin(); return true;
+      }
+      return false;
+    },
+
+    /**
+     * 词库前缀匹配。
+     *
+     * before = 光标前已经落进正文的文本；k = 这次按下的字符（还没落进去）。
+     * 认两种写法：
+     *   z1 …… z9       → 第 1~9 条（列表顺序，和词库面板上显示的序号一致）
+     *   z + 自定义码   → 用户在词条里自己填的快捷码（如 cq → zcq）
+     * 返回 {len, content}：len = 要从正文删掉几个字符（不含这次还没落下的这个键）。
+     * 自定义码取最长匹配，避免 c / cq 同时存在时"短的先命中"。
+     */
+    prefixMatch: function(before, k) {
+      var b = String(before || '').toLowerCase();
+      var pre = (this.cfg.wordPrefix || 'z').toLowerCase().charAt(0);
+      var tries = [{ s: b, tail: k ? String(k) : '', minus: 0 }];       // 码已经打完，这次键是"多出来的"
+      if (k) tries.push({ s: b + String(k).toLowerCase(), tail: '', minus: 1 }); // 这次键正好补完码
+      for (var t = 0; t < tries.length; t++) {
+        var s = tries[t].s, tail = tries[t].tail, minus = tries[t].minus;
+        if (s.length < 2) continue;
+        /* 前缀 + 数字 */
+        if (s.charAt(s.length - 2) === pre && /^[1-9]$/.test(s.charAt(s.length - 1))) {
+          var idx = parseInt(s.charAt(s.length - 1), 10) - 1;
+          if (idx < this.words.length && this.words[idx] && this.words[idx].content)
+            return { len: 2 - minus, content: this.words[idx].content + tail };
+          continue;
+        }
+        /* 前缀 + 自定义码（可多位，如 zcq / zrx） */
+        var best = null;
+        for (var i = 0; i < this.words.length; i++) {
+          var w = this.words[i] || {};
+          var c = (w.code || '').trim().toLowerCase();
+          if (!c || /^[1-9]$/.test(c) || !w.content) continue;
+          var cand = pre + c;
+          if (s.length < cand.length || s.slice(-cand.length) !== cand) continue;
+          if (!best || cand.length > best.len) best = { len: cand.length, content: w.content };
+        }
+        if (best) return { len: best.len - minus, content: best.content + tail };
+      }
+      return null;
+    },
+
+    /** 快捷码 + Tab 展开（最长匹配；跨文本节点取光标前缀）。返回是否展开成功 */
+    expandShortcut: function() {
+      var before = (this._caretBefore(24) || '').toLowerCase();
+      if (!before || !this.words || !this.words.length) return false;
+      var best = null, bestLen = 0;
+      for (var i = 0; i < this.words.length; i++) {
+        var w = this.words[i] || {};
+        var c = (w.code || '').trim().toLowerCase();
+        if (!c || !w.content) continue;
+        if (c.length > bestLen && before.slice(-c.length) === c) { best = w; bestLen = c.length; }
+      }
+      if (!best) return false;
+      /* 码前面要是还带着前缀（z + cq），前缀也一起删掉，别留个光秃秃的 z */
+      var pre = (this.cfg.wordPrefix || 'z').toLowerCase().charAt(0);
+      var cut = bestLen;
+      if (before.length > bestLen && before.charAt(before.length - bestLen - 1) === pre) cut++;
+      this.replaceBefore(cut, best.content);
+      /* 不弹提示：气泡模式下 toast 会挤进小胶囊里、把排版顶乱（用户明确要求） */
+      return true;
+    },
+
+    /* ---------- 特殊字符 / 更多 ---------- */
+    showCharsAt: function(e) {
+      this.charsPos = e ? {left: Math.min(e.clientX, window.innerWidth - 330) + 'px',
+                           top: (e.clientY + 12) + 'px'}
+                        : {left: '40px', top: '110px'};
+      this.showChars = !this.showChars;
+    },
+
+    /* ---------- 文档导入 ---------- */
+    importDoc: function() { this.showMore = false; this.host('importDoc'); },
+    showImport: function(name, text) {
+      this.impName = name;
+      this.impText = text;
+      this.impSel = '';
+      this.showImportModal = true;
+    },
+    /** 预览框里选中的那段文字（选在外面/没选返回空） */
+    impSelected: function() {
+      var sel = window.getSelection();
+      if (!sel || !sel.rangeCount || sel.isCollapsed) return '';
+      var pv = document.querySelector('.doc-preview');
+      if (!pv) return '';
+      var r = sel.getRangeAt(0);
+      if (!pv.contains(r.startContainer) || !pv.contains(r.endContainer)) return '';
+      return sel.toString();
+    },
+    /** 点按钮的 mousedown 阶段先抓一次选区（WebKit 里点按钮可能把选区收掉） */
+    impGrab: function() {
+      var s = this.impSelected();
+      if (s) this.impSel = s;
+    },
+    clearImpSel: function() {
+      this.impSel = '';
+      var s = window.getSelection();
+      if (s && s.removeAllRanges) s.removeAllRanges();
+    },
+    importApply: function(how) {
+      var ed = document.getElementById('editor');
+      /* 用户在预览里选了一段：以选中内容为准（点按钮前 mousedown 已抓过） */
+      var picked = this.impSel || this.impSelected();
+      var body = picked || this.impText;
+      if (how === 'copy') {
+        var ta = document.createElement('textarea');
+        ta.value = body;
+        ta.style.position = 'fixed'; ta.style.left = '-9999px';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        this.toast(picked ? ('已复制选中的 ' + body.length + ' 字') : '已复制全文');
+      } else if (how === 'append') {
+        ed.innerText = this.getText() + '\n\n' + body;
+        this.impSel = '';
+        this.refreshStats(); this.showImportModal = false;
+        this.toast(picked ? ('已追加选中的 ' + body.length + ' 字') : '已追加到正文');
+      } else {
+        /* 添加到此处：插到光标位置，原有文字全部保留（_applyRange 自己会 focus 编辑器，
+           这里不要再 focus 一次 —— 会先把光标弹到文首，插入位置就跑了） */
+        this.insert(body);
+        this.impSel = '';
+        this.refreshStats(); this.showImportModal = false;
+        this.toast(picked ? ('已添加选中的 ' + body.length + ' 字') : '已添加到光标处');
+      }
+    },
+
+    /* ---------- 导出（多格式） ---------- */
+    openExport: function() {
+      this.showMore = false;
+      this.expTarget = '';            // 空 = 当前文档
+      this.showExport = true;
+    },
+
+    /**
+     * 把正文拆成「段落 → 带样式片段」交给 Java 排版：
+     *   片段 = 掩码 + '|' + 文本（1=粗 2=斜 4=下划线），片段间 \u0001，段落间 \u0002
+     * 在 JS 里拆比在 Java 里解析 HTML 靠谱得多（DOM 结构太随意）。
+     */
+    buildBlocks: function() {
+      var ed = document.getElementById('editor');
+      if (!ed) return '';
+      var blocks = [], cur = [];
+      function flush() { blocks.push(cur.join('\u0001')); cur = []; }
+      function put(t, st) {
+        if (!t) return;
+        var parts = String(t).split('\n');
+        for (var i = 0; i < parts.length; i++) {
+          if (i > 0) flush();
+          if (parts[i])
+            cur.push((st.b ? 1 : 0) + (st.i ? 2 : 0) + (st.u ? 4 : 0) + '|' + parts[i]);
+        }
+      }
+      function walk(node, st) {
+        for (var i = 0; i < node.childNodes.length; i++) {
+          var n = node.childNodes[i];
+          if (n.nodeType === 3) { put(n.nodeValue, st); continue; }
+          if (n.nodeType !== 1) continue;
+          var tag = n.tagName.toLowerCase();
+          if (tag === 'br') { flush(); continue; }
+          if (tag === 'script' || tag === 'style') continue;
+          var st2 = { b: st.b || tag === 'b' || tag === 'strong' || /^h[1-6]$/.test(tag),
+                      i: st.i || tag === 'i' || tag === 'em',
+                      u: st.u || tag === 'u' };
+          var isBlock = /^(div|p|li|h[1-6]|blockquote|pre|tr)$/.test(tag);
+          if (isBlock) flush();
+          walk(n, st2);
+          if (isBlock) flush();
+        }
+      }
+      walk(ed, { b: false, i: false, u: false });
+      if (cur.length || !blocks.length) flush();
+      while (blocks.length && blocks[0] === '') blocks.shift();
+      while (blocks.length && blocks[blocks.length - 1] === '') blocks.pop();
+      if (!blocks.length) blocks.push('');
+      return blocks.join('\u0002');
+    },
+
+    doExportTo: function(fmt) {
+      var r;
+      if (this.expTarget && this.expTarget !== this.cfg.docName) {
+        /* 文件面板里指定的其它文档：Java 直接读磁盘文件（纯文本排版） */
+        r = this.host('exportDocAs', fmt, this.expTarget, this.expTitle ? '1' : '0');
+      } else {
+        var payload = this.buildBlocks();
+        var title = String(this.cfg.docName || '未命名').replace(/\.[^.]+$/, '');
+        r = this.host('exportAs', fmt, title, payload, this.expTitle ? '1' : '0');
+      }
+      this.showExport = false;
+      this.expTarget = '';
+      if (!r) return;
+      if (r.indexOf('ok:') === 0) this.toast('已导出 ' + r.slice(3));
+      else if (r === 'cancel') { /* 用户取消 */ }
+      else if (r.indexOf('err:') === 0) this.toast('导出失败：' + r.slice(4));
+    },
+
+    /** 老入口（Ctrl+E / 旧代码）统一走导出面板 */
+    doExport: function() { this.openExport(); },
+
+    /* ---------- 快捷键冲突提示 ---------- */
+    /** 返回冲突说明文案；无冲突返回 ''（默认键位不提示 —— 不然满屏都是"!"） */
+    keyWarn: function(a) {
+      var c = this.cfg.keys[a.id];
+      if (!c) return '';
+      var dups = [];
+      for (var id in this.cfg.keys) {
+        if (this.cfg.keys.hasOwnProperty(id) && this.cfg.keys[id] === c && id !== a.id)
+          dups.push(id);
+      }
+      if (dups.length) {
+        var names = dups.map(function(id) {
+          for (var k = 0; k < (window.app ? app.actions.length : 0); k++)
+            if (app.actions[k].id === id) return app.actions[k].name;
+          return id;
+        }).join('、');
+        return '和「' + names + '」绑了同一个键，会同时触发！点"改"换一个';
+      }
+      /* 只有用户改过的键才查常用组合冲突；出厂默认不动 */
+      if (c === a.def) return '';
+      var m = /^(Ctrl|Alt|Win)\+(C|V|X|A|S|Z|Y|F|W|T|N|P|B|O|H|E|K|M)$/i.exec(c);
+      if (m) return '「Ctrl+' + m[2].toUpperCase() + '」是常用组合键，容易和输入习惯冲突，建议换三四键组合';
+      return '';
+    },
+
+    /* ---------- 查找替换 ---------- */
+    openFind: function() {
+      this.showMore = false;
+      this.showFind = true;
+      var self = this;
+      setTimeout(function() {
+        self.refreshFind();
+        var i = document.getElementById('findInput');
+        if (i) { i.focus(); i.select(); }
+      }, 60);
+    },
+    /** 关闭查找：清掉全部高亮 */
+    closeFind: function() {
+      this.showFind = false;
+      this.clearMarks();
+      this.findCount = 0; this.findIdx = 0;
+      var ed = document.getElementById('editor');
+      if (ed) ed.focus();
+    },
+    /** 查找词/大小写变化：300ms 防抖后重建高亮 */
+    onFindInput: function() {
+      var self = this;
+      clearTimeout(this._findDeb);
+      this._findDeb = setTimeout(function() {
+        /* 输入法组字中不动编辑器 DOM，组字结束再重建 */
+        if (self._composing) { self.onFindInput(); return; }
+        self.refreshFind();
+      }, 300);
+    },
+    /** 清掉编辑器里所有高亮 span（并合并回相邻文本节点） */
+    clearMarks: function() {
+      var ed = document.getElementById('editor');
+      if (!ed) return;
+      var nodes = ed.querySelectorAll('span.fmark');
+      for (var i = nodes.length - 1; i >= 0; i--) {
+        var s = nodes[i], p = s.parentNode;
+        if (!p) continue;
+        while (s.firstChild) p.insertBefore(s.firstChild, s);
+        p.removeChild(s);
+        p.normalize();
+      }
+    },
+    /** 把所有匹配包上 <span class=fmark>（倒序包裹，前面的偏移不受影响） */
+    buildMarks: function() {
+      var all = this._findAll();
+      for (var i = all.length - 1; i >= 0; i--) {
+        var s = this._posOf(all.spans, all[i].start);
+        var e = this._posOf(all.spans, all[i].start + all[i].len);
+        if (!s || !e) continue;
+        try {
+          var r = document.createRange();
+          r.setStart(s.node, s.off);
+          r.setEnd(e.node, e.off);
+          var frag = r.extractContents();
+          var span = document.createElement('span');
+          span.className = 'fmark';
+          span.appendChild(frag);
+          r.insertNode(span);
+        } catch (ex) { /* 跨节点边界等极端情况跳过该处 */ }
+      }
+    },
+    /** 当前选区起点 -> 全文全局偏移（无选区/不在编辑区返回 -1） */
+    _selOffset: function() {
+      var sel = window.getSelection();
+      if (!sel || !sel.rangeCount) return -1;
+      var r = sel.getRangeAt(0);
+      var cn = r.startContainer, co = r.startOffset;
+      if (cn.nodeType === 1) {
+        var t = this._lastTextNode(r.startContainer.childNodes[Math.min(co, r.startContainer.childNodes.length) - 1] || r.startContainer);
+        if (t) { cn = t; co = t.textContent.length; }
+      }
+      if (cn.nodeType !== 3) return -1;
+      var hay = 0;
+      var nodes = this._edNodes();
+      for (var j = 0; j < nodes.length; j++) {
+        if (nodes[j] === cn) return hay + co;
+        hay += nodes[j].nodeValue.length;
+      }
+      return -1;
+    },
+    /**
+     * 重建高亮。关键：如果焦点在编辑区（用户正在打字），
+     * 包 span 会把光标所在的文本节点挪走 —— 必须先把光标换算成全局偏移，
+     * 包完再放回去，否则用户打着打着字光标就飞了（"影响原本编辑"的根源）。
+     */
+    refreshFind: function() {
+      if (!this.showFind || !this.findText) { this.clearMarks(); return; }
+      var ed = document.getElementById('editor');
+      var typing = ed && document.activeElement === ed;
+      var off = typing ? this._selOffset() : -1;
+      this.clearMarks();
+      this.buildMarks();
+      var all = this._findAll();
+      this.findCount = all.length;
+      if (!this.findIdx || this.findIdx > this.findCount) this.findIdx = this.findCount ? 1 : 0;
+      /* 把光标放回原位 */
+      if (typing && off >= 0) {
+        var p = this._posOf(all.spans, off);
+        if (p) {
+          var r = document.createRange();
+          r.setStart(p.node, p.off);
+          r.collapse(true);
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(r);
+        }
+      }
+    },
+    /** 编辑区内所有文本节点 */
+    _edNodes: function() {
+      var ed = document.getElementById('editor');
+      var w = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT, null, false);
+      var arr = [], n;
+      while ((n = w.nextNode())) if (n.nodeValue) arr.push(n);
+      return arr;
+    },
+    /** 全部匹配：[{start,len}]，附 hay（拼接全文）与 spans（每个节点的全局区间） */
+    _findAll: function() {
+      var q = this.findText || '';
+      var res = [];
+      if (!q) return res;
+      var hay = '', nodes = this._edNodes(), spans = [];
+      for (var i = 0; i < nodes.length; i++) {
+        spans.push({start: hay.length, end: hay.length + nodes[i].nodeValue.length,
+                    node: nodes[i]});
+        hay += nodes[i].nodeValue;
+      }
+      var qq = this.matchCase ? q : q.toLowerCase();
+      var hh = this.matchCase ? hay : hay.toLowerCase();
+      if (!qq) return res;
+      var from = 0;
+      while (true) {
+        var p = hh.indexOf(qq, from);
+        if (p < 0) break;
+        res.push({start: p, len: q.length});
+        from = p + q.length;
+      }
+      res.hay = hay;
+      res.spans = spans;
+      return res;
+    },
+    /** 全局偏移 -> {node, off}；找不到返回 null */
+    _posOf: function(spans, off) {
+      for (var i = 0; i < spans.length; i++) {
+        if (off >= spans[i].start && off <= spans[i].end)
+          return {node: spans[i].node, off: off - spans[i].start};
+      }
+      return null;
+    },
+    countMatches: function() {
+      this.findCount = this._findAll().length;
+      this.findIdx = this.findCount ? 1 : 0;
+    },
+    /** 跳到上一个/下一个匹配并选中（滚动到可见） */
+    gotoMatch: function(dir) {
+      var all = this._findAll();
+      this.findCount = all.length;
+      if (!all.length) { this.findIdx = 0; return; }
+      var sel = window.getSelection(), cur = 0;
+      if (sel && sel.rangeCount) {
+        var r = sel.getRangeAt(0);
+        var cn = r.startContainer, co = r.startOffset;
+        /* 光标贴在元素边界上时折算到前一个文本节点末尾（与 _caretInfo 同款归一化），
+           否则"光标在文末"会被当成 0，下一个匹配定位错位 */
+        if (cn.nodeType === 1) {
+          for (var q = Math.min(co, cn.childNodes.length) - 1; q >= 0; q--) {
+            var t = this._lastTextNode(cn.childNodes[q]);
+            if (t) { cn = t; co = t.textContent.length; break; }
+          }
+        }
+        for (var i = 0; i < all.spans.length; i++) {
+          if (all.spans[i].node === cn) {
+            cur = all.spans[i].start + co;
+            break;
+          }
+        }
+      }
+      var idx = 0, j;
+      if (dir > 0) {
+        for (j = 0; j < all.length; j++) if (all[j].start > cur) { idx = j; break; }
+        if (j >= all.length) idx = 0;           // 都在光标前 -> 绕回第一个
+      } else {
+        idx = all.length - 1;
+        for (j = all.length - 1; j >= 0; j--) if (all[j].start < cur) { idx = j; break; }
+        if (j < 0) idx = all.length - 1;        // 都在光标后 -> 绕回最后一个
+      }
+      var s = this._posOf(all.spans, all[idx].start);
+      var e = this._posOf(all.spans, all[idx].start + all[idx].len);
+      if (!s || !e) return;
+      var r2 = document.createRange();
+      r2.setStart(s.node, s.off);
+      r2.setEnd(e.node, e.off);
+      var sl = window.getSelection();
+      sl.removeAllRanges(); sl.addRange(r2);
+      this._range = r2.cloneRange();
+      /* 当前匹配高亮成橙色 */
+      var old = document.querySelector('span.fmark.fcur');
+      if (old) old.classList.remove('fcur');
+      if (s.node.parentElement && s.node.parentElement.classList.contains('fmark'))
+        s.node.parentElement.classList.add('fcur');
+      var ed = document.getElementById('editor');
+      var el = s.node.parentElement;
+      if (ed && el) {
+        var rect = el.getBoundingClientRect(), box = ed.getBoundingClientRect();
+        if (rect.top < box.top || rect.bottom > box.bottom)
+          el.scrollIntoView({block: 'center'});
+      }
+      this.findIdx = idx + 1;
+    },
+    /** 替换当前选中的匹配，然后跳到下一处 */
+    replaceOne: function() {
+      var sel = window.getSelection();
+      var hit = sel && sel.rangeCount && !sel.isCollapsed ? sel.toString() : '';
+      var isHit = !!hit &&
+        (this.matchCase ? hit === this.findText
+                        : hit.toLowerCase() === (this.findText || '').toLowerCase());
+      if (!isHit) { this.gotoMatch(1); return; }
+      this._applyRange(sel.getRangeAt(0), this.replText || '');
+      this.onInput();
+      this.clearMarks();                       // 清掉替换后残留的空高亮壳
+      var left = this._findAll().length;
+      this.findCount = left;
+      this.toast(left ? ('已替换，剩 ' + left + ' 处') : '已替换，全部替换完成');
+      this.refreshFind();
+      this.gotoMatch(1);
+    },
+    /** 全部替换（倒序替换，偏移不受影响） */
+    replaceAll: function() {
+      var all = this._findAll();
+      if (!all.length) { this.toast('没有找到「' + this.findText + '」'); return; }
+      var n = all.length;
+      for (var i = all.length - 1; i >= 0; i--) {
+        var s = this._posOf(all.spans, all[i].start);
+        var e = this._posOf(all.spans, all[i].start + all[i].len);
+        if (!s || !e) continue;
+        var r = document.createRange();
+        r.setStart(s.node, s.off);
+        r.setEnd(e.node, e.off);
+        r.deleteContents();
+        if (this.replText) r.insertNode(document.createTextNode(this.replText));
+      }
+      this.onInput();
+      this.clearMarks();
+      this.findCount = 0; this.findIdx = 0;
+      this.toast('已替换 ' + n + ' 处');
+      this.refreshFind();
+    },
+
+    /* ---------- 文字寻回（按文件独立，Typora 式） ---------- */
+    showHist: function() {
+      this.showMore = false;
+      this.showHistFor(this.cfg.docName);
+    },
+    /** 打开某个文件的寻回列表（文件面板 / 工具栏都走这里） */
+    showHistFor: function(name) {
+      this.histDoc = name || this.cfg.docName;
+      this.refreshDocs();                     // 下拉里要有全部文件 + 各自快照数
+      this.loadHistFor(this.histDoc);
+      this.showHistModal = true;
+    },
+    loadHistFor: function(name) {
+      this.histDoc = name || this.cfg.docName;
+      this.histList = JSON.parse(this.host('listDocHistory', this.histDoc) || '[]');
+    },
+    reloadHist: function() { this.refreshDocs(); this.loadHistFor(this.histDoc); },
+    /**
+     * 恢复快照：文本由 Java 直接返回，前端自己落字。
+     * 以前是 Java 里 notifyJs(setEditorText) 反向调 JS（桥接重入，WebKit 静默失败），
+     * 所以"点了恢复什么也没发生"。
+     */
+    restoreHist: function(id) {
+      var self = this;
+      var doc = this.histDoc || this.cfg.docName;
+      var isCur = doc === this.cfg.docName;
+      this.askConfirm('恢复《' + doc + '》的这条快照？当前内容会先另存一条，可再寻回。', function() {
+        var txt = self.host('restoreDocHistory', doc, id);
+        if (txt === undefined || txt === null || String(txt).indexOf('__ERR__') === 0) {
+          self.toast('恢复失败：快照已不存在');
+          self.reloadHist();
+          return;
+        }
+        txt = String(txt);
+        if (isCur) {
+          self.setEditorText(txt);
+          self.toast('已恢复该时刻的全文（' + txt.length + ' 字）');
+        } else {
+          self.showHistModal = false;
+          self.refreshDocs();
+          self.toast('已把《' + doc + '》恢复到该快照，点开文件即可查看');
+        }
+      });
+    },
+
+    /* ---------- 设置 ---------- */
+    startCapture: function() { this.capturing = true; this.host('beginCapture'); },
+    onCapture: function(combo) {
+      this.capturing = false;
+      if (!combo) { this.toast('已取消捕获'); return; }
+      var r = this.host('setBoss', combo);
+      if (r === 'invalid') { this.toast('组合无效'); return; }
+      this.cfg.boss = combo;
+      this.cfg.bossEnabled = true;
+      /* Ctrl+B / Ctrl+C 这类常用组合会让"加粗/复制"变成"隐藏窗口"，必须提醒（但不拦着） */
+      var risky = /^(Ctrl|Alt|Win)\+(C|V|X|A|S|Z|Y|F|W|T|N|P|B|O|H|E|K|M)$/i.test(combo);
+      this.toast(risky ? '已设为 ' + combo + '。注意：这是常用快捷键，极易误触，建议换个组合'
+                       : '老板键已设为 ' + combo);
+    },
+    resetKeys: function() {
+      this.host('resetKeys');
+      var o = JSON.parse(this.host('getConfig'));
+      this.cfg.keys = o.keys || {};
+      this.toast('快捷键已恢复默认');
+    },
+
+    /* ---------- 主题（单色 / 双拼渐变） ---------- */
+    toggleThemeMode: function() {
+      this.cfg.themeMode = this.cfg.themeMode === 'gradient' ? 'solid' : 'gradient';
+      this.applyTheme();
+    },
+    setPair: function(p) { this.cfg.accent = p.a; this.cfg.accent2 = p.b; this.applyTheme(); },
+    applyTheme: function() {
+      this.applyVars();
+      this.host('setTheme', this.cfg.themeMode, this.cfg.accent, this.cfg.accent2);
+    },
+    applyVars: function() {
+      var st = document.documentElement.style;
+      /* 深色 / 浅色皮肤：整体切换 CSS 令牌 */
+      var html = document.documentElement;
+      if (this.cfg.skin === 'dark') html.classList.add('dark');
+      else html.classList.remove('dark');
+      var a = this.cfg.accent || '#6366F1';
+      var b = this.cfg.accent2 || '#22D3EE';
+      st.setProperty('--accent', a);
+      st.setProperty('--accent2', b);
+      st.setProperty('--header-bg', this.cfg.themeMode === 'solid'
+          ? a : 'linear-gradient(135deg,' + a + ',' + b + ')');
+      st.setProperty('--fs', this.cfg.fontSize + 'px');
+      /* 标题分级字号/加粗（工具栏 H1/H2/H3 用，设置里可调） */
+      st.setProperty('--h1fs', (this.cfg.h1Size || 28) + 'px');
+      st.setProperty('--h2fs', (this.cfg.h2Size || 22) + 'px');
+      st.setProperty('--h3fs', (this.cfg.h3Size || 18) + 'px');
+      st.setProperty('--h1w', this.cfg.h1Bold === false ? '400' : '700');
+      st.setProperty('--h2w', this.cfg.h2Bold === false ? '400' : '700');
+      st.setProperty('--h3w', this.cfg.h3Bold === false ? '400' : '700');
+      /* 样式字体：正文/标题各自的字体族（空 = 跟随全局字体栈） */
+      var vm = this;
+      function styleFontVar(varName, cfgKey) {
+        var f = String(vm.cfg[cfgKey] || '').replace(/['"]/g, '').trim();
+        if (f) st.setProperty('--' + varName, vm.cssFamily(f));
+        else st.removeProperty('--' + varName);
+      }
+      styleFontVar('pff', 'pFont');
+      styleFontVar('h1ff', 'h1Font');
+      styleFontVar('h2ff', 'h2Font');
+      styleFontVar('h3ff', 'h3Font');
+      st.setProperty('--pbw', this.cfg.bold ? '700' : '400');
+      /* 字体栈：导入字体 > 工具栏选的系统字体 > 默认 */
+      var fam = '';
+      if (this._fontData) {
+        var fs = document.getElementById('dynfont');
+        if (!fs) {
+          fs = document.createElement('style');
+          fs.id = 'dynfont';
+          document.head.appendChild(fs);
+        }
+        if (fs.textContent.indexOf('SnapWriteCustom') < 0)
+          fs.textContent = "@font-face{font-family:'SnapWriteCustom';src:url(" + this._fontData + ");}";
+        fam = "'SnapWriteCustom',";
+      }
+      if (this.cfg.fontUi) fam += "'" + String(this.cfg.fontUi).replace(/'/g, '') + "',";
+      fam += "'Segoe UI','Microsoft YaHei',sans-serif";
+      st.setProperty('--font', fam);
+    },
+    applyFont: function() {
+      this.applyVars();
+      this.host('setAppearance', this.cfg.accent, this.cfg.fontSize, this.cfg.bold);
+      this.applyBubbleSize();
+    },
+    toggleAuto: function() {
+      this.autoStart = !this.autoStart;
+      this.host('setAutoStart', this.autoStart);
+      this.toast(this.autoStart ? '已开启开机自启动' : '已关闭开机自启动');
+    },
+    /** 改一下就生效：防抖 140ms 后统一把全部设置下发给 Java 并落盘 */
+    queueApply: function() {
+      var self = this;
+      clearTimeout(this._applyTimer);
+      this._applyTimer = setTimeout(function() { self.applyAll(); }, 140);
+    },
+    /**
+     * 立即下发全部设置（不需要"保存"按钮：改完就走这条路）。
+     * 所有 setter 都是幂等的，重复调用没有副作用。
+     */
+    applyAll: function() {
+      var g = this.host('setGesture', this.gestureInput, this.cfg.gestureEnabled);
+      if (g === 'invalid') {
+        /* 手势还没输完（比如只打了个 L），先不下发，等输全 */
+        this.gestureInput = this.cfg.gesture || 'LLRRLL';
+      } else {
+        this.cfg.gesture = this.gestureInput;
+      }
+      this.host('setBubbleConfig', this.cfg.bubbleMaxChars, this.cfg.bubbleCharsPerLine);
+      this.host('setAppearance', this.cfg.accent, this.cfg.fontSize, this.cfg.bold);
+      this.host('setTheme', this.cfg.themeMode, this.cfg.accent, this.cfg.accent2);
+      this.host('setSkin', this.cfg.skin || 'light');
+      this.host('setWallpaperOpacity', this.cfg.wallpaperOpacity);
+      this.host('setWallpaperFit', this.cfg.wallpaperFit);
+      this.host('setBubbleLines', this.cfg.bubbleLines);
+      this.host('setBubbleSizeCfg', this.cfg.bubbleW, this.cfg.bubbleH,
+                this.cfg.bubbleManualSize ? '1' : '0');
+      this.host('setBubbleCustom', this.cfg.bubbleCustomChars);
+      this.host('setBubbleCloudConfig', this.cfg.bubbleCloud, this.cfg.bubbleRhythm,
+                this.cfg.bubbleCloudKind, this.cfg.cloudOpacity);
+      this.host('setCloudMargin', this.cfg.cloudMargin);
+      this.host('setMusicFollow', this.cfg.musicFollow);
+      this.host('setBubbleFlags', this.cfg.bubbleDblRestore, this.cfg.bubbleAutoSize);
+      this.host('setBubbleIntrude', this.cfg.bubbleIntrude,
+                this.cfg.intrudeOpacity, this.cfg.intrudeSize);
+      this.host('setAutoSave', this.cfg.autoSave);
+      this.host('setWordsAlways', this.cfg.alwaysWords);
+      this.host('setCloseAction', this.cfg.closeAction);
+      this.applyBubblePad();
+      this.applyVars();
+      this.syncSidewords();
+      this.applyBubbleSize();
+    },
+    /** 关闭设置（✕ / Esc 同一条路） */
+    closeSettings: function() {
+      if (this.capturingAction) this.endKeyCapture();   // 别把 Java 端留在"录键"状态
+      this.showSettings = false;
+      this.syncFrozen();
+      var ed = document.getElementById('editor');
+      if (ed) ed.focus();
+    },
+    /** 打开设置面板 */
+    openSettings: function() {
+      this.showSettings = true;
+      this.refreshDataPanel();        // 快照列表 / 回收站要现取
+    },
+    /** 深色主题开关 */
+    toggleSkin: function() {
+      this.cfg.skin = (this.cfg.skin === 'dark') ? 'light' : 'dark';
+      this.applyVars();
+      this.host('setSkin', this.cfg.skin);
+      this.toast(this.cfg.skin === 'dark' ? '已切换深色主题' : '已切换浅色主题');
+    },
+
+    /* ---------- 外观：背景图 / 字体 / 音乐 ---------- */
+    wpStyle: function() {
+      var f = this.cfg.wallpaperFit || 'cover';
+      var size = (f === 'cover' || f === 'contain') ? f : 'auto';
+      return {
+        backgroundImage: 'url(' + this.wallpaper + ')',
+        backgroundSize: size,
+        backgroundRepeat: f === 'tile' ? 'repeat' : 'no-repeat',
+        backgroundPosition: 'center',
+        opacity: (this.cfg.wallpaperOpacity || 40) / 100
+      };
+    },
+    pickWallpaper: function() {
+      var d = this.host('pickWallpaper');
+      if (d) { this.wallpaper = d; this.toast('背景图片已设置（显示在写作区）'); }
+    },
+    clearWallpaper: function() {
+      this.host('clearWallpaper');
+      this.wallpaper = '';
+      this.toast('已清除背景图片');
+    },
+    pickFont: function() {
+      var name = this.host('pickFont');
+      if (name) {
+        this.fontFamily = name;
+        this._fontData = this.host('getFontData');
+        this.applyVars();
+        this.toast('字体已应用：' + name);
+      } else this.toast('未选择字体');
+    },
+    clearFont: function() {
+      this.host('clearFont');
+      this.fontFamily = '';
+      this._fontData = '';
+      if (this.cfg.fontUi === this.fontFamily) this.cfg.fontUi = '';
+      this.applyVars();
+      this.toast('已恢复默认字体');
+    },
+    /* ---------- 右键样式菜单（同 WPS：正文/标题套用 + 编辑样式） ---------- */
+    /** 光标（或缓存选区）所在段落属于哪个样式级别 */
+    blockOf: function() {
+      try {
+        var ed = document.getElementById('editor');
+        var sel = window.getSelection();
+        var node = null, off = 0;
+        if (sel && sel.rangeCount) {
+          node = sel.getRangeAt(0).startContainer;
+          off = sel.getRangeAt(0).startOffset;
+        } else if (this._range) {
+          node = this._range.startContainer;
+          off = this._range.startOffset;
+        }
+        if (!node) return 'p';
+        if (node === ed) {                 // 光标直接挂在编辑器上：取前一个子块
+          node = ed.childNodes[Math.max(0, off - 1)] || ed.lastChild;
+          if (!node) return 'p';
+        }
+        if (node.nodeType === 3) node = node.parentNode;
+        while (node && node !== ed) {
+          var tg = (node.tagName || '').toLowerCase();
+          if (tg === 'h1' || tg === 'h2' || tg === 'h3' || tg === 'p') return tg;
+          node = node.parentNode;
+        }
+      } catch (e) {}
+      return 'p';
+    },
+    /** 光标所在的块元素（p / h1 / h2 / h3）；右键的"整段"目标就是它 */
+    ctxBlockEl: function() {
+      try {
+        var ed = document.getElementById('editor');
+        var sel = window.getSelection();
+        var node = null, off = 0;
+        if (sel && sel.rangeCount) {
+          node = sel.getRangeAt(0).startContainer;
+          off = sel.getRangeAt(0).startOffset;
+        } else if (this._range) {
+          node = this._range.startContainer;
+          off = this._range.startOffset;
+        }
+        if (!node) return null;
+        if (node === ed) {
+          node = ed.childNodes[Math.min(off, ed.childNodes.length - 1)] || null;
+          if (!node) return ed;
+        }
+        if (node.nodeType === 3) return node.parentNode === ed ? ed : node.parentNode;
+        while (node && node !== ed) {
+          var tg = (node.tagName || '').toLowerCase();
+          if (tg === 'p' || tg === 'h1' || tg === 'h2' || tg === 'h3' || tg === 'div')
+            return node;
+          node = node.parentNode;
+        }
+        return ed;
+      } catch (e) { return null; }
+    },
+    levelName: function(tag) {
+      return tag === 'h1' ? '标题 1' : tag === 'h2' ? '标题 2'
+           : tag === 'h3' ? '标题 3' : '正文';
+    },
+    /** 该级别样式里配的字体（p → cfg.pFont，h1 → cfg.h1Font…），没配返回 '' */
+    styleCfgFont: function(tag) {
+      return tag === 'p' ? (this.cfg.pFont || '') : (this.cfg[tag + 'Font'] || '');
+    },
+    /** 从光标往上找第一个行内设置了某样式属性的元素值（没有返回 ''） */
+    _inlineStyleVal: function(blk, prop) {
+      try {
+        var sel = window.getSelection();
+        if (!sel.rangeCount) return '';
+        var node = sel.getRangeAt(0).startContainer;
+        while (node && node !== blk && node !== document.body) {
+          if (node.nodeType === 1 && node.style && node.style[prop])
+            return node.style[prop];
+          node = node.parentNode;
+        }
+      } catch (e) {}
+      return '';
+    },
+    /** 右键要格式化的范围：选中了就只动选中，没选中就整段（WPS 手感） */
+    ctxTarget: function() {
+      var ed = document.getElementById('editor');
+      if (!ed) return null;
+      var sel = window.getSelection();
+      if (sel && sel.rangeCount && !sel.isCollapsed &&
+          ed.contains(sel.getRangeAt(0).startContainer)) {
+        return { range: sel.getRangeAt(0).cloneRange(), whole: false };
+      }
+      var blk = this.ctxBlockEl();
+      if (!blk) return null;
+      if (blk === ed) {
+        /* 纯文本稿（没有 <p> 包裹）：把光标所在的那段文字当"整段"，
+           绝不动整篇 —— 右键只改眼前这一段 */
+        var info = this._caretInfo();
+        if (!info || !info.node) return null;
+        var rt = document.createRange();
+        rt.selectNodeContents(info.node);
+        if (!rt.toString().trim()) return null;
+        return { range: rt, whole: true, el: ed };
+      }
+      var r = document.createRange();
+      r.selectNodeContents(blk);
+      if (!r.toString().trim()) return null;    // 空段落没有可格式化的文字
+      return { range: r, whole: true, el: blk };
+    },
+    /** 光标在块内的字符偏移（格式套完要把光标放回原处，别跳段尾） */
+    _offsetInBlock: function(blk) {
+      try {
+        var sel = window.getSelection();
+        if (!blk || !sel.rangeCount) return -1;
+        var r = document.createRange();
+        r.selectNodeContents(blk);
+        r.setEnd(sel.getRangeAt(0).endContainer, sel.getRangeAt(0).endOffset);
+        return r.toString().length;
+      } catch (e) { return -1; }
+    },
+    _caretToOffset: function(blk, off) {
+      try {
+        var node, acc = 0, walker = document.createTreeWalker(blk, 4 /* TEXT */, null);
+        while ((node = walker.nextNode())) {
+          var len = node.nodeValue.length;
+          if (acc + len >= off) {
+            var r = document.createRange();
+            r.setStart(node, Math.max(0, off - acc));
+            r.collapse(true);
+            var sel = window.getSelection();
+            sel.removeAllRanges(); sel.addRange(r);
+            return true;
+          }
+          acc += len;
+        }
+        var r2 = document.createRange();
+        r2.selectNodeContents(blk); r2.collapse(false);
+        var s2 = window.getSelection();
+        s2.removeAllRanges(); s2.addRange(r2);
+      } catch (e) {}
+      return false;
+    },
+    /** 给一段范围套内联样式（拆出来→包 span→放回去），heading 也照改不误 */
+    _styleRange: function(t, css) {
+      var ed = document.getElementById('editor');
+      var wasCollapsed = t.range.collapsed;
+      var blk = t.el || this.ctxBlockEl();
+      var off = wasCollapsed ? this._offsetInBlock(blk) : -1;
+      var span = document.createElement('span');
+      for (var k in css) span.style[k] = css[k];
+      try {
+        span.appendChild(t.range.extractContents());
+        t.range.insertNode(span);
+      } catch (e) { return false; }
+      var sel = window.getSelection();
+      if (wasCollapsed && off >= 0 && blk) this._caretToOffset(blk, off);
+      else {
+        var r2 = document.createRange();
+        r2.selectNodeContents(span);
+        sel.removeAllRanges(); sel.addRange(r2);
+      }
+      try { ed.focus(); } catch (e) {}
+      this.onInput();
+      return true;
+    },
+    ctxOpen: function(e) {
+      this.ctxCur = this.blockOf();
+      this.ctxView = 'main';
+      var sel = window.getSelection();
+      var ed = document.getElementById('editor');
+      var hasSel = sel && sel.rangeCount && !sel.isCollapsed && ed &&
+                   ed.contains(sel.getRangeAt(0).startContainer);
+      this.ctxScope = hasSel ? ('选中 ' + sel.toString().replace(/\s/g, '').length + ' 字')
+                             : '整段';
+      /* 当前外观（用来显示"字体 宋体 ›"、字号、B/I/U 状态）。
+         字体优先显示：光标处的行内 span 设的字体 > 该级别样式配的字体 > 默认；
+         别把 WebKit 兜底出来的首个 Latin 字体（Segoe UI）当"用户选的字体"。 */
+      var blk = this.ctxBlockEl() || ed;
+      try {
+        var cs = getComputedStyle(blk);
+        var inlF = this._inlineStyleVal(blk, 'fontFamily');
+        this.ctxFontName = (inlF && inlF !== 'inherit') ? inlF
+                         : (this.styleCfgFont(this.ctxCur) || '');
+        var styleSize = this.ctxCur === 'p' ? this.cfg.fontSize
+                        : (this.cfg[this.ctxCur + 'Size'] || 0);
+        var inlineSize = this._inlineStyleVal(blk, 'fontSize');
+        this.ctxFontSize = (inlineSize && inlineSize !== 'inherit' &&
+                            !isNaN(parseFloat(inlineSize)))
+                         ? Math.round(parseFloat(inlineSize))
+                         : (styleSize || Math.round(parseFloat(cs.fontSize)) || this.cfg.fontSize);
+        var w = cs.fontWeight;
+        this.ctxBold = (w === 'bold' || parseInt(w, 10) >= 600);
+        this.ctxItalic = (cs.fontStyle === 'italic');
+        this.ctxUnder = (cs.textDecorationLine || '').indexOf('underline') >= 0;
+      } catch (err) {}
+      this.ctxStyleName = this.levelName(this.ctxCur);
+      this.ctxStyleLevel = this.ctxCur;
+      this.ctxPos = {
+        left: Math.min(e.clientX, window.innerWidth - 262) + 'px',
+        top: Math.max(6, Math.min(e.clientY, window.innerHeight - 330)) + 'px'
+      };
+      this.ctxShow = true;
+      /* 菜单比原来高了（多了样式面板）：渲染完再按真实高度收进窗口内 */
+      var self = this;
+      this.$nextTick(function() {
+        var el = document.querySelector('.ctxmenu');
+        if (!el) return;
+        var h = el.offsetHeight, H = window.innerHeight;
+        var top = Math.min(e.clientY, Math.max(6, H - h - 8));
+        self.ctxPos = { left: self.ctxPos.left, top: Math.max(6, top) + 'px' };
+      });
+    },
+    ctxApply: function(tag) {
+      this.ctxShow = false;
+      this.setBlock(tag);
+      this.toast('本段已套用「' + this.levelName(tag) + '」样式');
+    },
+    /* ---------- 字号标签 / 字体族名（导入字体必须走 @font-face 的族名） ---------- */
+    /** 16 → "16px 小四"；不是中文字号就只显示 px */
+    sizeLabel: function(px) {
+      var n = parseInt(px, 10) || 0;
+      for (var i = 0; i < this.cnSizes.length; i++)
+        if (this.cnSizes[i].p === n) return n + 'px ' + this.cnSizes[i].n;
+      return n ? n + 'px' : '默认';
+    },
+    /**
+     * 字体族名 → CSS 里能用的写法。
+     * 导入的字体在页面里注册成 'SnapWriteCustom'（@font-face），
+     * 直接写它原来的族名（比如"汉仪旗黑"）本机没装就等于没设 —— 这是
+     * "导入了字体但选了没变化"的根因。
+     */
+    cssFamily: function(name) {
+      if (!name) return '';
+      var n = String(name).trim().replace(/['"]/g, '');
+      if (!n) return '';
+      if (this.fontFamily && n === String(this.fontFamily).replace(/['"]/g, '').trim())
+        return "'SnapWriteCustom'";
+      return "'" + n + "'";
+    },
+    /* ---------- 样式模板（改一处，全文该级别一起变） ---------- */
+    styleFontOf: function(k) { return this.cfg[(k === 'p' ? 'p' : k) + 'Font'] || ''; },
+    styleSizeOf: function(k) {
+      var v = k === 'p' ? this.cfg.fontSize : this.cfg[k + 'Size'];
+      return parseInt(v, 10) || 16;
+    },
+    styleBoldOf: function(k) {
+      return k === 'p' ? !!this.cfg.bold : this.cfg[k + 'Bold'] !== false;
+    },
+    ctxStyleOpen: function(tag) {
+      this.ctxStyleLevel = tag || this.ctxCur || 'p';
+      this.ctxView = 'style';
+    },
+    ctxStyleSetFont: function(name) {
+      this.cfg[(this.ctxStyleLevel === 'p' ? 'p' : this.ctxStyleLevel) + 'Font'] = name || '';
+      this.applyStyles();
+      this.toast('「' + this.levelName(this.ctxStyleLevel) + '」字体：' +
+                 (name || '默认（全局字体）'));
+    },
+    ctxStyleSetSize: function(px) {
+      var n = parseInt(px, 10) || 0;
+      if (!n) return;
+      if (this.ctxStyleLevel === 'p') this.cfg.fontSize = Math.max(10, Math.min(60, n));
+      else this.cfg[this.ctxStyleLevel + 'Size'] = Math.max(10, Math.min(60, n));
+      this.applyStyles();
+      this.toast('「' + this.levelName(this.ctxStyleLevel) + '」字号：' + this.sizeLabel(n));
+    },
+    ctxStyleToggleBold: function() {
+      if (this.ctxStyleLevel === 'p') this.cfg.bold = !this.cfg.bold;
+      else this.cfg[this.ctxStyleLevel + 'Bold'] = !(this.cfg[this.ctxStyleLevel + 'Bold'] !== false);
+      this.applyStyles();
+      this.toast('「' + this.levelName(this.ctxStyleLevel) + '」' +
+                 (this.styleBoldOf(this.ctxStyleLevel) ? '已加粗' : '取消加粗'));
+    },
+    /** 右键改字体：选中→只改选中；没选中→改整段 */
+    ctxSetFont: function(name) {
+      var t = this.ctxTarget();
+      if (!t) { this.toast('这一段还没有文字，先写几个字再设格式'); return; }
+      var ok = this._styleRange(t, {fontFamily: name ? this.cssFamily(name) : 'inherit'});
+      if (!ok) { this.toast('这一段没法单独换字体'); return; }
+      this.ctxFontName = name || '默认';
+      this.ctxView = 'main';
+      this.toast((t.whole ? '整段' : '选中文字') + '字体：' + (name || '默认（跟随样式）'));
+    },
+    ctxSetSize: function(n) {
+      var t = this.ctxTarget();
+      if (!t) { this.toast('这一段还没有文字，先写几个字再设格式'); return; }
+      var css = n ? (n + 'px') : 'inherit';
+      if (!this._styleRange(t, {fontSize: css})) { this.toast('这一段没法单独改字号'); return; }
+      this.ctxFontSize = n || this.cfg.fontSize;
+      this.ctxView = 'main';
+      this.toast((t.whole ? '整段' : '选中文字') + '字号：' + (n ? n + 'px' : '默认'));
+    },
+    ctxStepSize: function(d) {
+      var list = this.ctxSizes, i = list.indexOf(this.ctxFontSize);
+      if (i < 0) {                       // 不在预设里：找最近的
+        i = 0;
+        for (var k = 0; k < list.length; k++) if (list[k] <= this.ctxFontSize) i = k;
+      }
+      var j = Math.max(0, Math.min(list.length - 1, i + d));
+      this.ctxSetSize(list[j]);
+    },
+    /** B / I / U：直接套内联样式，标题里也改得动（样式本身不受影响） */
+    ctxToggle: function(cmd) {
+      var t = this.ctxTarget();
+      if (!t) { this.toast('这一段还没有文字，先写几个字再设格式'); return; }
+      var css = null;
+      if (cmd === 'bold') css = {fontWeight: this.ctxBold ? '400' : '700'};
+      else if (cmd === 'italic') css = {fontStyle: this.ctxItalic ? 'normal' : 'italic'};
+      else css = {textDecoration: this.ctxUnder ? 'none' : 'underline'};
+      if (!this._styleRange(t, css)) { this.toast('改不动，换个位置再试'); return; }
+      if (cmd === 'bold') this.ctxBold = !this.ctxBold;
+      else if (cmd === 'italic') this.ctxItalic = !this.ctxItalic;
+      else this.ctxUnder = !this.ctxUnder;
+    },
+    ctxIndent: function() {
+      var blk = this.ctxBlockEl();
+      if (!blk || blk.id === 'editor') { this.ctxShow = false; return; }
+      var sel = window.getSelection();
+      var r = document.createRange();
+      r.setStart(blk, 0); r.collapse(true);
+      sel.removeAllRanges(); sel.addRange(r);
+      document.getElementById('editor').focus();
+      try { document.execCommand('insertText', false, '\u3000\u3000'); }
+      catch (e) { blk.insertBefore(document.createTextNode('\u3000\u3000'), blk.firstChild); }
+      this.ctxShow = false;
+      this.onInput();
+      this.toast('已缩进两格');
+    },
+    /** 清除格式：把范围内的行内样式/标签全拆掉，段落级别（正文/标题）保留 */
+    ctxClearFmt: function() {
+      var t = this.ctxTarget();
+      if (!t) { this.toast('这一段还没有文字'); return; }
+      var frag;
+      try { frag = t.range.extractContents(); } catch (e) { return; }
+      var box = document.createElement('span');
+      box.appendChild(frag);
+      var els = box.querySelectorAll('span,font,b,strong,i,em,u,s,sub,sup');
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i];
+        while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el);
+        if (el.parentNode) el.parentNode.removeChild(el);
+      }
+      var fr = document.createDocumentFragment();
+      while (box.firstChild) fr.appendChild(box.firstChild);
+      try { t.range.insertNode(fr); } catch (e) { return; }
+      this.ctxShow = false;
+      this.onInput();
+      this.toast('已清除行内格式（段落样式保留）');
+    },
+    /** 右键"编辑样式…"：打开设置并滚到样式区 */
+    ctxEditStyle: function() {
+      this.ctxShow = false;
+      this.openSettings();
+      var self = this;
+      setTimeout(function() {
+        var el = document.getElementById('stylesec');
+        if (el) el.scrollIntoView({ block: 'center' });
+      }, 80);
+    },
+    /** 工具栏 H1/H2/H3/正文：当前段落套用标题级别（execCommand formatBlock） */
+    setBlock: function(tag) {
+      var ed = document.getElementById('editor');
+      if (!ed) return;
+      ed.focus();
+      try { document.execCommand('formatBlock', false, '<' + tag + '>'); } catch (e) {}
+      this.onInput();
+      this.pulse();
+    },
+    /* ---------- 样式设置（正文/H1/H2/H3 各自的字体+字号+加粗） ----------
+       改样式 = 改所有该级别段落：全靠 CSS 变量，改完立即生效。 */
+    setStyleFont: function(k, v) { this.cfg[k + 'Font'] = v; this.applyStyles(); },
+    setStyleSize: function(k, v) {
+      var n = parseInt(v, 10) || 16;
+      if (k === 'p') this.cfg.fontSize = Math.max(12, Math.min(30, n));
+      else this.cfg[k + 'Size'] = Math.max(12, Math.min(60, n));
+      this.applyStyles();
+    },
+    toggleStyleBold: function(k) {
+      if (k === 'p') this.cfg.bold = !this.cfg.bold;
+      else this.cfg[k + 'Bold'] = !this.cfg[k + 'Bold'];
+      this.applyStyles();
+    },
+    /** 样式改动统一下发：CSS 变量立即生效 + Java 落盘 */
+    applyStyles: function() {
+      this.applyVars();
+      this.host('setAppearance', this.cfg.accent, this.cfg.fontSize, this.cfg.bold);
+      this.host('setHeadingCfg',
+                this.cfg.h1Size, this.cfg.h1Bold ? '1' : '0',
+                this.cfg.h2Size, this.cfg.h2Bold ? '1' : '0',
+                this.cfg.h3Size, this.cfg.h3Bold ? '1' : '0');
+      this.host('setStyleFonts', this.cfg.pFont || '', this.cfg.h1Font || '',
+                this.cfg.h2Font || '', this.cfg.h3Font || '');
+      this.applyBubbleSize();
+    },
+    /* ---------- 环绕元素：自定义图片 ---------- */
+    pickDecorImg: function() {
+      var d = this.host('pickDecorImage');
+      if (d) { this.decorImg = d; this._loadDecorImg(d); this.toast('环绕图片已设置'); }
+      else this.toast('未选择图片');
+    },
+    clearDecorImg: function() {
+      this.host('clearDecorImage');
+      this.decorImg = '';
+      this._decorOk = false;
+      this.toast('已清除环绕图片');
+    },
+    _loadDecorImg: function(dataUrl) {
+      var self = this;
+      var img = new Image();
+      img.onload = function() { self._decorOk = true; };
+      img.src = dataUrl;
+      this._decorEl = img;
+    },
+    pickCustomIcon: function() {
+      var d = this.host('pickCustomIcon');
+      if (d) { this.customIcon = d; this.iconUrl = d; this.toast('图标已更换（窗口/任务栏/托盘）'); }
+    },
+    resetCustomIcon: function() {
+      this.host('resetCustomIcon');
+      this.customIcon = '';
+      this.iconUrl = this.host('getIcon') || '';
+      this.toast('已恢复默认图标');
+    },
+
+    /* ---------- 插件 ---------- */
+    reloadPlugins: function() {
+      this.plugins = JSON.parse(this.host('listPlugins') || '[]');
+      this.toast(this.plugins.length ? '已装 ' + this.plugins.length + ' 个插件' : '暂无插件');
+    },
+
+    /* ---------- 气泡环绕元素 + 节奏律动 ---------- */
+    /* 节奏来源两个独立开关（可同开）：
+       · 敲击键盘 cfg.bubbleRhythm —— pulse() 在每次输入时给能量
+       · 跟随音乐 cfg.musicFollow —— mounted 里的轮询每 100ms 读一次
+         系统音量峰值（Java 端 VolumeMeter），任何播放器放的歌都能带动 */
+    addDecor: function(c) { this.cfg.bubbleCustomChars = (this.cfg.bubbleCustomChars || '') + c; this.applyBubbleDecor(); },
+    applyBubbleDecor: function() {
+      this.host('setBubbleCustom', this.cfg.bubbleCustomChars);
+      if (this.cfg.bubbleCloudKind !== 'custom') {
+        this.cfg.bubbleCloudKind = 'custom';
+      }
+      this.host('setBubbleCloudConfig', this.cfg.bubbleCloud, this.cfg.bubbleRhythm,
+                this.cfg.bubbleCloudKind, this.cfg.cloudOpacity);
+    },
+    initClouds: function() {
+      var cv = document.getElementById('cloudcv');
+      if (!cv) return;
+      this._cv = cv;
+      this._cx = cv.getContext('2d');
+      this._energy = 0;
+      this._musicE = 0;
+      this._puffs = [];
+      for (var i = 0; i < 18; i++) {
+        this._puffs.push({
+          t: i / 18,
+          s: 0.7 + Math.random() * 0.9,
+          ph: Math.random() * 6.28,
+          sp: 0.25 + Math.random() * 0.4
+        });
+      }
+      var self = this;
+      requestAnimationFrame(function loop(ts) {
+        requestAnimationFrame(loop);
+        self.cloudLoop(ts);
+      });
+    },
+    pulse: function() {
+      if (this.cfg && this.cfg.bubbleRhythm) this._energy = Math.min(1, (this._energy || 0) + 0.4);
+    },
+    cloudLoop: function(ts) {
+      var cv = this._cv, cx = this._cx;
+      if (!cv || !cx) return;
+      if (this.mode !== 'bubble' || !this.cfg.bubbleCloud) {
+        if (cv.__dirty) { cx.clearRect(0, 0, cv.width, cv.height); cv.__dirty = false; }
+        return;
+      }
+      var dpr = window.devicePixelRatio || 1;
+      var w = cv.clientWidth, h = cv.clientHeight;
+      if (!w || !h || w > 5000 || h > 5000) return;   // 尺寸异常时不画（防画到屏幕外）
+      if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+      cv.__dirty = true;
+      cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cx.clearRect(0, 0, w, h);
+
+      this._energy = (this._energy || 0) * 0.95;
+      /* 音乐能量 = 系统音量峰值（任何播放器都能带动） */
+      var musicE = this.cfg.musicFollow ? (this._sysPeak || 0) : 0;
+      var rhythmOn = !!this.cfg.bubbleRhythm;
+      var beatOn = rhythmOn || this.cfg.musicFollow;
+      var en = Math.max(rhythmOn ? this._energy : 0, Math.min(1, musicE * 1.9));
+
+      var base = beatOn ? 0.78 + 0.14 * Math.sin(ts / 1100) : 0.9;
+      /* 整体压暗：环绕元素是氛围，不该抢正文的注意力 */
+      var alpha = (this.cfg.cloudOpacity / 100) * base * (1 + en * 0.4) * 0.62;
+      if (alpha > 1) alpha = 1;
+
+      /* 染色：主题色向白靠，白底和深色桌面都看得见 */
+      var hex = (this.cfg.accent || '#6366F1').replace('#', '');
+      var r = parseInt(hex.substr(0, 2), 16) || 99,
+          g = parseInt(hex.substr(2, 2), 16) || 102,
+          b = parseInt(hex.substr(4, 2), 16) || 241;
+      var fill = 'rgba(' + Math.round(r * 0.55 + 110) + ',' +
+                 Math.round(g * 0.55 + 110) + ',' +
+                 Math.round(b * 0.55 + 110) + ',';
+
+      var m = 15;
+      var per = 2 * (w - 2 * m) + 2 * (h - 2 * m);
+      var drift = (ts / 1000) * 12;
+      var kind = this.cfg.bubbleCloudKind || 'cloud';
+      var chars = (this.cfg.bubbleCustomChars || '').split('');
+      if (kind === 'custom' && !chars.length) kind = 'cloud';   // 自定义为空时兜底显示云朵
+      if (kind === 'img' && !this._decorOk) kind = 'cloud';     // 图片没加载好也兜底
+
+      for (var i = 0; i < this._puffs.length; i++) {
+        var p = this._puffs[i];
+        var d = ((p.t * per + drift * p.sp + p.ph * 30) % per + per) % per;
+        var x, y;
+        if (d < w - 2 * m) { x = m + d; y = m; }
+        else if (d < w - 2 * m + h - 2 * m) { x = w - m; y = m + (d - (w - 2 * m)); }
+        else if (d < 2 * (w - 2 * m) + h - 2 * m) {
+          x = w - m - (d - (w - 2 * m) - (h - 2 * m)); y = h - m;
+        } else { x = m; y = h - m - (d - 2 * (w - 2 * m) - (h - 2 * m)); }
+        var bob = Math.sin(ts / 700 * p.sp + p.ph) * 3 + en * Math.sin(ts / 130 + p.ph) * 4;
+        var sc = p.s * (1 + en * 0.3);
+        this.drawDecor(cx, x, y + bob, sc, alpha, kind, chars, p, i, ts, fill);
+      }
+
+      /* 侵入文本框：挑三分之一的元素飘进输入区内部，透明度与大小可调 */
+      var appEl = document.getElementById('app');
+      if (appEl) appEl.classList.toggle('intrude', !!this.cfg.bubbleIntrude);
+      if (this.cfg.bubbleIntrude) {
+        var iA = (this.cfg.intrudeOpacity || 40) / 100 *
+                 (rhythmOn ? 0.82 + 0.18 * Math.sin(ts / 1300) : 1);
+        var iS = (this.cfg.intrudeSize || 100) / 100;
+        for (var j = 0; j < this._puffs.length; j += 3) {
+          var q = this._puffs[j];
+          /* 用相位做稳定的伪随机落点，再叠一层缓慢漂移，不抖动 */
+          var fx = 0.12 + 0.76 * ((Math.sin(q.ph * 3.1) + 1) / 2);
+          var fy = 0.16 + 0.68 * ((Math.cos(q.ph * 2.7) + 1) / 2);
+          var ix = w * fx + Math.sin(ts / 2600 + q.ph) * 10;
+          var iy = h * fy + Math.cos(ts / 3100 + q.ph * 1.4) * 8;
+          var isc = q.s * iS * 0.8;
+          this.drawDecor(cx, ix, iy, isc, iA, kind, chars, q, j, ts, fill);
+        }
+      }
+    },
+    /** 统一分发：图片 / 自定义字符 / 内置形状 */
+    drawDecor: function(cx, x, y, sc, alpha, kind, chars, p, i, ts, fill) {
+      if (kind === 'img' && this._decorOk && this._decorEl) this.drawImg(cx, x, y, sc, alpha);
+      else if (kind === 'custom') this.drawChar(cx, x, y, sc, alpha, chars, p, i);
+      else this.drawPuff(cx, x, y, sc, alpha, kind, ts, p.ph, fill);
+    },
+    /** 自定义图片：以 (x,y) 为中心画，基准 30px，随浓度节奏缩放 */
+    drawImg: function(cx, x, y, sc, alpha) {
+      var img = this._decorEl;
+      if (!img || !img.complete || !img.naturalWidth) return;
+      var size = 30 * sc * ((this.decorImgSize || 100) / 100);
+      var w = size, h = size * img.naturalHeight / img.naturalWidth;
+      if (h > size * 3) h = size * 3;                      // 超长图兜底
+      if (img.naturalWidth < img.naturalHeight) { w = size * img.naturalWidth / img.naturalHeight; }
+      cx.save();
+      cx.globalAlpha = alpha;
+      cx.drawImage(img, x - w / 2, y - h / 2, w, h);
+      cx.restore();
+    },
+    drawChar: function(cx, x, y, sc, alpha, chars, p, i) {
+      if (!chars.length) return;
+      cx.save();
+      cx.translate(x, y + 6 * sc);
+      cx.globalAlpha = alpha;
+      cx.fillStyle = (this.cfg.accent || '#6366F1');
+      cx.font = Math.round(15 * sc) + 'px "Segoe UI Symbol",serif';
+      cx.textAlign = 'center';
+      cx.fillText(chars[i % chars.length], 0, 0);
+      cx.restore();
+    },
+    drawPuff: function(cx, x, y, sc, alpha, kind, ts, ph, fill) {
+      cx.save();
+      cx.translate(x, y);
+      cx.globalAlpha = alpha;
+      if (kind === 'star') {
+        cx.fillStyle = fill + '0.95)';
+        cx.strokeStyle = 'rgba(255,255,255,.85)';
+        cx.lineWidth = 1;
+        var r = 8 * sc, r2 = 3 * sc;
+        cx.beginPath();
+        for (var i = 0; i < 8; i++) {
+          var ang = i * Math.PI / 4 - Math.PI / 2;
+          var rad = (i % 2 === 0) ? r : r2;
+          var px = Math.cos(ang) * rad, py = Math.sin(ang) * rad;
+          if (i === 0) cx.moveTo(px, py); else cx.lineTo(px, py);
+        }
+        cx.closePath();
+        cx.fill(); cx.stroke();
+      } else if (kind === 'petal') {
+        cx.fillStyle = fill + '0.9)';
+        cx.rotate(ts / 1400 + ph);
+        cx.beginPath();
+        cx.ellipse(0, 0, 9 * sc, 4 * sc, 0, 0, 6.29);
+        cx.fill();
+      } else if (kind === 'note') {
+        cx.fillStyle = fill + '0.95)';
+        cx.font = Math.round(15 * sc) + 'px serif';
+        cx.textAlign = 'center';
+        cx.fillText(ph > 3.14 ? '♪' : '♫', 0, 0);
+      } else {
+        /* 云朵：几个圆叠成蓬松小云 + 柔光边 */
+        cx.shadowColor = 'rgba(255,255,255,.85)';
+        cx.shadowBlur = 6 * sc;
+        cx.fillStyle = fill + '0.92)';
+        cx.strokeStyle = 'rgba(255,255,255,.9)';
+        cx.lineWidth = 1.1;
+        cx.beginPath();
+        cx.arc(-7 * sc, 2 * sc, 5.2 * sc, 0, 6.29);
+        cx.arc(0, -3 * sc, 6.8 * sc, 0, 6.29);
+        cx.arc(7.5 * sc, 1.6 * sc, 4.8 * sc, 0, 6.29);
+        cx.arc(0.5 * sc, 3.6 * sc, 5.6 * sc, 0, 6.29);
+        cx.fill(); cx.stroke();
+      }
+      cx.restore();
+    },
+
+    toast: function(msg) {
+      var self = this;
+      this.toastMsg = msg;
+      clearTimeout(this._toastTimer);
+      this._toastTimer = setTimeout(function() { self.toastMsg = ''; }, 1800);
+    },
+
+    /** 截图测试：填充示例内容 */
+    testFill: function() {
+      var ed = document.getElementById('editor');
+      ed.innerText = '第一章 青云起\n\n山门外的雨下了整整三日，沈砚之站在石阶尽头，\n望着云雾里的九重飞檐，握紧了掌心那半枚残玉。\n\n“今日之后，再无退路。”';
+      this.stats = {today: 128, total: 128};
+    }
+  }
+});
+
+/* 挂载；mount 返回组件代理实例，Java 端 window.app.* 调用方式保持不变 */
+try {
+  var vm = app.mount('#app');
+  window.app = vm;
+} catch (e) {
+  window.__errs.push('MOUNT: ' + (e && e.message ? e.message : e));
+  if (e && e.stack) window.__errs.push('STACK: ' + String(e.stack).substring(0, 500));
+  window.app = null;
+}
+
+/* 插件 API（插件 .js 在 Java 端于 initHost 之后执行，此对象必须先就绪） */
+window.snapwrite = {
+  version: 1,
+  insert: function(t) { app.insert(String(t)); },
+  getText: function() { return app.getText(); },
+  setText: function(t) {
+    document.getElementById('editor').innerText = String(t);
+    app.onInput();
+  },
+  toast: function(m) { app.toast(String(m)); },
+  host: function(n, a, b, c, d, e, f) { return app.host(n, a, b, c, d, e, f); }
+};
+
+/* 等待 Java 桥就绪后初始化（轮询，host 挂载在页面 load 完成之后） */
+var hostWait = setInterval(function() {
+  if (window.__hostReady && window.host && window.app) {
+    clearInterval(hostWait);
+    app.initHost();
+  }
+}, 120);
+
+/* 点击空白处收起弹出层 */
+document.addEventListener('mousedown', function(e) {
+  var el = e.target;
+  if (!el || !el.closest) return;
+  if (!el.closest('.pop') && !el.closest('.toolbar')) {
+    app.showMore = false;
+    app.showChars = false;
+    app.ctxShow = false;
+    if (!el.closest('.pill') && !el.closest('.wpop')) {
+      app.showWords = false;
+      app.wordsClosed = true;
+      app.addingWord = false;
+    }
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+# ---- 运行环境（太大，绝不上传）----
+runtime/
+jfx/
+tools/
+target/
+
+# ---- 构建产物（可要可不要，建议走 GitHub Release 发 exe/jar）----
+out/
+*.class
+shot.log
+shotb.log
+
+# build 目录只保留打包必需的 launch4j.xml 和 icon.ico，其余全是测试日志
+build/*
+!build/launch4j.xml
+!build/icon.ico
+!build/ico/
+
+# ---- 用户数据 / 日志（含个人文档，严禁上传）----
+data/
+
+# ---- 测试截图与临时输出 ----
+ui_*.png
+test/*.log
+test/*.out
+
+# ---- 系统杂项 ----
+Thumbs.db
+Desktop.ini
+*.lock
