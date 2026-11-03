@@ -50,6 +50,8 @@ public class FxMain {
     public static boolean shotCtxStyle = false;
     /** 设置截图变体：滚到"气泡悬浮模式"（含自己定大小滑杆） */
     public static boolean shotBubbleCfg = false;
+    /** 气泡拖动/双击还原真实鼠标回归：Robot 拖拖动条 + 双击，验证真机事件管线 */
+    public static boolean dragTest = false;
 
     public static void main(String[] args) {
         for (String a : args) {
@@ -76,6 +78,7 @@ public class FxMain {
             if ("--gesttest".equals(a)) { shotMode = true; gestTest = true; }
             if ("--fonttest".equals(a)) { shotMode = true; fontTest = true; }
             if ("--plugtest".equals(a)) { shotMode = true; plugTest = true; }
+            if ("--dragtest".equals(a)) { shotMode = true; dragTest = true; }
         }
         /* 单实例：已经在跑就直接把那个窗口叫出来，自己静默退出。
            这样不会出现"关不掉→反复双击→任务管理器一堆 javaw"的情况。 */

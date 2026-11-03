@@ -750,6 +750,15 @@
             ok('气泡拉伸热区[n=' + document.querySelectorAll('.rz').length + ']',
                document.querySelectorAll('.rz').length === 5);
             var strip = document.querySelector('.dragstrip');
+            /* 真实命中测试：elementFromPoint 走浏览器实际命中逻辑，
+               能抓出"被别的元素盖住导致真点击全废"（合成事件测不出来） */
+            var sr = strip.getBoundingClientRect();
+            var hitEl = document.elementFromPoint(sr.left + sr.width / 2, sr.top + sr.height / 2);
+            ok('拖动条真实命中[' + (hitEl ? (hitEl.className || hitEl.id || hitEl.tagName) : 'null') + ']',
+               !!hitEl && (hitEl === strip || strip.contains(hitEl)));
+            var hitL = document.elementFromPoint(sr.left + 4, sr.top + sr.height / 2);
+            ok('拖动条左端真实命中[' + (hitL ? (hitL.className || hitL.id || hitL.tagName) : 'null') + ']',
+               !!hitL && (hitL === strip || strip.contains(hitL)));
             app.cfg.bubbleDblRestore = false;
             strip.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
             ok('关闭双击还原：双击拖动条不还原[mode=' + app.mode + ']',
@@ -772,6 +781,77 @@
               setTimeout(function () {
                 var t2 = app.stats.today;
                 ok('切更短文档今日字数不倒扣[' + t1 + '→' + t2 + ']', t2 >= t1);
+
+                /* 13.5) r20：底纹/标签/导航/目录/中西文字体/样式斜体/自定义字号 */
+                try {
+                var ed = document.getElementById('editor');
+                ed.innerHTML = '<p>这是一段用来做标记测试的正文文字内容。</p>'
+                             + '<h1>第一章 大风歌</h1><p>大风起兮云飞扬。</p>';
+                app.onInput();
+                /* 在第 pi 段里选 from..to：跳过被包过的 span，找装得下的文本节点 */
+                function selIn(pi, from, to) {
+                  var p = ed.querySelectorAll('p')[pi], tn = null;
+                  (function find(n) {
+                    for (var c = n.firstChild; c; c = c.nextSibling) {
+                      if (c.nodeType === 3 && c.nodeValue.length >= to) { tn = c; return; }
+                      if (c.nodeType === 1) find(c);
+                    }
+                  })(p);
+                  var r = document.createRange();
+                  r.setStart(tn, from); r.setEnd(tn, to);
+                  var s = window.getSelection();
+                  s.removeAllRanges(); s.addRange(r);
+                }
+                selIn(0, 4, 8);
+                app.setSelShade('#FACC15');
+                ok('底纹标记[.hlmark=' + ed.querySelectorAll('.hlmark').length + ']',
+                   ed.querySelectorAll('.hlmark').length === 1);
+                selIn(1, 2, 4);
+                app.applyTag(app.tagDefs[0]);
+                ok('标签标记[.tagmark=' + ed.querySelectorAll('.tagmark').length + ']',
+                   ed.querySelectorAll('.tagmark').length === 1);
+                var tm = ed.querySelector('.tagmark');
+                ok('标签名字[data-tag=' + (tm ? tm.getAttribute('data-tag') : '无') + ']',
+                   !!tm && tm.getAttribute('data-tag') === app.tagDefs[0].name);
+                app.toggleNav();
+                ok('导航面板[nShow=' + app.navShow + ' n=' + app.navList.length + ']',
+                   app.navShow && app.navList.length >= 3);
+                app.toggleNav();
+                var r2 = document.createRange();
+                r2.selectNodeContents(ed); r2.collapse(false);
+                var sg = window.getSelection();
+                sg.removeAllRanges(); sg.addRange(r2);
+                app.genToc();
+                var tocA = ed.querySelectorAll('.toc a[href^="#hd"]');
+                var h1el = ed.querySelector('h1');
+                ok('一键生成目录[链接=' + tocA.length + ' 标题id=' + (h1el ? h1el.id : '无') + ']',
+                   tocA.length >= 1 && h1el && !!h1el.id);
+                /* 中西文字体栈：西文在最前 */
+                app.setGlobalWestFont('Georgia');
+                var fv = document.documentElement.style.getPropertyValue('--font')
+                           .replace(/['"]/g, '');
+                ok('西文字体栈[' + fv.slice(0, 20) + ']', fv.indexOf('Georgia,') === 0);
+                app.setGlobalWestFont('');
+                /* 样式斜体：H1 开斜体 → --h1it */
+                app.cfg.h1Italic = true;
+                app.applyStyles();
+                ok('样式斜体[--h1it='
+                   + document.documentElement.style.getPropertyValue('--h1it') + ']',
+                   document.documentElement.style.getPropertyValue('--h1it') === 'italic');
+                app.cfg.h1Italic = false;
+                app.applyStyles();
+                /* 自定义字号（小数也行） */
+                selIn(0, 0, 2);
+                app.applySelPx(18.5);
+                ok('自定义字号18.5px', !!ed.querySelector('span[style*="18.5px"]'));
+                /* 字体库桥 */
+                var lst = String(app.host('listImportedFonts') || '');
+                ok('字体库列表[list=' + (lst.charAt(0) === '[' ? 'ok' : lst) + ']',
+                   lst.charAt(0) === '[');
+                /* 恢复正文，别污染后面的断言 */
+                ed.innerHTML = '';
+                app.onInput();
+                } catch (e20) { ok('r20 段异常: ' + e20.message, false); }
 
                 /* 14) 零 JS 异常 */
                 ok('零 JS 异常' + (window.__errs && window.__errs.length

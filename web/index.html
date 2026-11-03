@@ -73,21 +73,51 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
 .editor{flex:1;overflow-y:auto;padding:22px 30px 40px;background:var(--panel);
   -webkit-user-select:text;user-select:text;outline:none;
   font-size:var(--fs);line-height:1.9;color:var(--ink);word-break:break-word;
-  font-family:var(--pff,var(--font));font-weight:var(--pbw,400)}
+  font-family:var(--pff,var(--font));font-weight:var(--pbw,400);
+  font-style:var(--pit,normal)}
 .editor.bold{font-weight:700}
 .editor:empty:before{content:attr(data-ph);color:var(--ph)}
 .editor ::selection{background:rgba(99,102,241,.25)}
 .editor::selection{background:rgba(99,102,241,.25)}
-/* 标题分级：各级别字号/字体/加粗都是"样式"，设置里可改（--h*fs / --h*ff / --h*w），
+/* 标题分级：各级别字号/字体/加粗/斜体都是"样式"，设置里可改（--h*fs / --h*ff / --h*w / --h*it），
    改样式 = 改所有该级别段落，和 WPS 的样式一个道理 */
 .editor h1{font-size:var(--h1fs);font-weight:var(--h1w);margin:16px 0 8px;line-height:1.5;
-  font-family:var(--h1ff,inherit)}
+  font-family:var(--h1ff,inherit);font-style:var(--h1it,normal)}
 .editor h2{font-size:var(--h2fs);font-weight:var(--h2w);margin:14px 0 6px;line-height:1.5;
-  font-family:var(--h2ff,inherit)}
+  font-family:var(--h2ff,inherit);font-style:var(--h2it,normal)}
 .editor h3{font-size:var(--h3fs);font-weight:var(--h3w);margin:12px 0 5px;line-height:1.5;
-  font-family:var(--h3ff,inherit)}
+  font-family:var(--h3ff,inherit);font-style:var(--h3it,normal)}
 .editor h1,.editor h2,.editor h3{color:var(--ink)}
 .editor p{margin:0}
+
+/* ═══════════════ 标签（tagmark）与目录（toc） ═══════════════ */
+/* 标签：包住一段文字的彩色小标记，data-tag 存名字，颜色走内联 --tagc */
+.tagmark{background:var(--tagc,rgba(245,158,11,.28));border-radius:4px;padding:0 3px;
+  box-shadow:inset 0 -1.5px 0 var(--tagc,rgba(245,158,11,.6))}
+.tagmark.flash{outline:2px solid var(--accent);outline-offset:2px;transition:outline .3s}
+/* 跳转定位闪框（导航/目录通用） */
+#editor .flash{outline:2px solid var(--accent);outline-offset:2px}
+/* 目录：一键生成；字号走 --tocfs，生成前后都实时跟设置走 */
+.toc{border:1px solid var(--line);border-radius:10px;padding:12px 18px;margin:10px 0;
+  background:var(--soft);font-size:var(--tocfs,16px);line-height:2}
+.toc .toc-h{font-weight:700;letter-spacing:.5em;text-indent:.5em;margin-bottom:4px}
+.toc ol{margin:0;padding-left:26px}
+.toc a{color:var(--ink);text-decoration:none;cursor:pointer}
+.toc a:hover{color:var(--accent)}
+/* 导航面板（标题+标签列表） */
+.navpop{width:250px;max-height:70vh;overflow-y:auto;padding:8px}
+.navsec{font-size:10.5px;color:var(--sub);padding:4px 6px 5px;letter-spacing:.05em}
+.navitem{display:flex;align-items:center;width:100%;text-align:left;padding:6px 8px;
+  border-radius:8px;font-size:12.5px;color:var(--ink);gap:6px}
+.navitem:hover{background:var(--soft);color:var(--accent)}
+.navitem .nvtxt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.navitem .nvtag{flex:none;font-size:10px;padding:1px 7px;border-radius:8px;color:#fff}
+.navlv1{font-weight:700}.navlv2{padding-left:20px}.navlv3{padding-left:34px;font-size:12px}
+/* 标签选择小弹层 */
+.tagpick{width:190px;padding:8px}
+.tagpick .tagrow{display:flex;align-items:center;gap:6px;width:100%;padding:6px 8px;
+  border-radius:8px;font-size:12.5px}
+.tagpick .tagrow:hover{background:var(--soft)}
 
 /* ═══════════════ 弹层 ═══════════════ */
 .pop{position:absolute;background:var(--panel);border-radius:14px;z-index:50;
@@ -344,6 +374,11 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
 .mode-bubble .header,.mode-bubble .toolbar{display:none}
 /* 拖动条：气泡顶部隐形细条（拖动移动窗口，双击还原） */
 .dragstrip{position:absolute;top:2px;left:34px;right:96px;height:18px;z-index:5;cursor:move}
+/* ══ 小胶囊态拖动条：展开态的 left:34/right:96 在 120px 宽的胶囊上算出负宽度，
+   等于没有拖动条 —— 这就是"小胶囊拖不动、双击还原不了"的真凶。
+   小胶囊改成贴顶覆盖内边距区（0..16px 正好是 bpad 8 + 编辑器 padding-top 8，
+   文字从 16px 起，不挡点字）；右边留 50px 给悬浮出现的控制钮。 */
+#app.mode-bubble.bubbletiny .dragstrip{top:0;left:4px;right:50px;height:16px}
 /* 控制钮：常显（半透明），鼠标靠近变实 —— 往下滑动写稿时关闭钮也能一眼看到，
    不用再把鼠标挪回最顶部 */
 .bctrl-wrap{position:absolute;top:0;right:2px;z-index:8;display:flex;gap:5px;
@@ -433,16 +468,31 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
     <div class="spacer"></div>
     <select class="tbsel fontsel" v-model="tbFont" title="给选中文字设置字体" @change="applySelFont">
       <option value="" disabled>字体（选中文字）</option>
-      <option v-if="fontFamily" :value="fontFamily">{{fontFamily}}（导入）</option>
+      <option v-for="f in importedFonts" :key="'if'+f.file" :value="f.name">{{f.name}}（导入）</option>
+      <option v-if="fontFamily && !importedFonts.some(function(x){return x.name===fontFamily})"
+              :value="fontFamily">{{fontFamily}}（导入）</option>
       <option v-for="f in fontList" :key="f" :value="f">{{f}}</option>
       <option value="__import__">导入字体…</option>
     </select>
     <select class="tbsel" v-model="tbSize" title="给选中文字设置字号" @change="applySelSize">
       <option value="" disabled>字号</option>
       <option v-for="n in sizeList" :key="n" :value="n">{{sizeLabel(n)}}</option>
+      <option value="__custom__">自定义…</option>
     </select>
     <button class="tb" title="加粗选中文字" @click="toggleBold"><b>B</b></button>
+    <button class="tb" title="斜体选中文字" @click="toggleItalicSel"><i>I</i></button>
+    <button class="tb" title="下划线选中文字" @click="toggleUnderlineSel"><u>U</u></button>
+    <button class="tb" title="文字颜色（选中文字）" @mousedown.stop
+            @click="markPop = (markPop==='fg' ? '' : 'fg')">
+      <span style="border-bottom:3px solid var(--accent)">A</span></button>
+    <button class="tb" title="文字底纹（标重点，导航面板可跳转）" @mousedown.stop
+            @click="markPop = (markPop==='bg' ? '' : 'bg')">
+      <span style="background:rgba(250,204,21,.55);border-radius:3px;padding:0 2px">纹</span></button>
     <span class="tbdiv"></span>
+    <button class="tb" title="插入标签 · 选中文字套标签，没选中插标签名（右键选样式）"
+            @click="tagPickerShow=!tagPickerShow" @mousedown.stop>标签</button>
+    <button class="tb" title="导航面板：标题/标签快速跳转 · 一键生成目录"
+            @click="toggleNav" @mousedown.stop>导航</button>
     <button class="tb" title="一级标题（当前段落）· 右键编辑该样式" @click="setBlock('h1')" data-rcstyle="h1">H1</button>
     <button class="tb" title="二级标题（当前段落）· 右键编辑该样式" @click="setBlock('h2')" data-rcstyle="h2">H2</button>
     <button class="tb" title="三级标题（当前段落）· 右键编辑该样式" @click="setBlock('h3')" data-rcstyle="h3">H3</button>
@@ -528,6 +578,13 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
         <button v-for="n in ctxSizes" :key="n" :class="{on:ctxFontSize===n}"
                 @click="ctxSetSize(n)">{{n}}</button>
       </div>
+      <div style="display:flex;gap:5px;align-items:center;padding:3px 6px">
+        <input class="prompt-input" style="flex:1;height:26px;padding:3px 8px;font-size:12px"
+               v-model="ctxCustomSize" placeholder="自定义字号 (8~200)"
+               @keydown.enter.prevent="ctxApplyCustomSize">
+        <button class="capture-btn" style="padding:3px 10px;font-size:12px"
+                @click="ctxApplyCustomSize">定</button>
+      </div>
       <div class="ctxgrid" style="grid-template-columns:repeat(3,1fr)">
         <button @click="ctxStepSize(-1)">A－</button>
         <button @click="ctxStepSize(1)">A＋</button>
@@ -554,8 +611,10 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
         <span style="color:var(--accent)">{{styleFontOf(ctxStyleLevel) || '默认'}}</span></div>
       <div class="ctxlist">
         <button class="ctxitem" @click="ctxStyleSetFont('')">默认（全局字体）</button>
-        <button class="ctxitem" v-if="fontFamily" @click="ctxStyleSetFont(fontFamily)">
-          {{fontFamily}}（导入）</button>
+        <button class="ctxitem" v-for="f in importedFonts" :key="'sif'+f.file"
+                @click="ctxStyleSetFont(f.name)">{{f.name}}（导入）</button>
+        <button class="ctxitem" v-if="fontFamily && !importedFonts.some(function(x){return x.name===fontFamily})"
+                @click="ctxStyleSetFont(fontFamily)">{{fontFamily}}（导入）</button>
         <button class="ctxitem" v-for="f in fontList" :key="'sf'+f"
                 @click="ctxStyleSetFont(f)">{{f}}</button>
       </div>
@@ -572,9 +631,18 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
                 :class="{on:styleSizeOf(ctxStyleLevel)===n}"
                 @click="ctxStyleSetSize(n)">{{n}}</button>
       </div>
-      <div class="ctxgrid" style="grid-template-columns:repeat(2,1fr)">
+      <div style="display:flex;gap:5px;align-items:center;padding:3px 6px">
+        <input class="prompt-input" style="flex:1;height:26px;padding:3px 8px;font-size:12px"
+               v-model="ctxCustomSize" placeholder="自定义字号 (8~200)"
+               @keydown.enter.prevent="ctxApplyCustomSize">
+        <button class="capture-btn" style="padding:3px 10px;font-size:12px"
+                @click="ctxApplyCustomSize">定</button>
+      </div>
+      <div class="ctxgrid" style="grid-template-columns:repeat(3,1fr)">
         <button :class="{on:styleBoldOf(ctxStyleLevel)}"
                 @click="ctxStyleToggleBold">加粗：{{styleBoldOf(ctxStyleLevel) ? '开' : '关'}}</button>
+        <button :class="{on:styleItalicOf(ctxStyleLevel)}"
+                @click="ctxStyleToggleItalic">斜体：{{styleItalicOf(ctxStyleLevel) ? '开' : '关'}}</button>
         <button @click="ctxEditStyle">更多设置…</button>
       </div>
     </template>
@@ -594,6 +662,74 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
       </svg></button>
     <button class="bctrl" title="隐藏（老板键 / 托盘可找回）"
             @mousedown.stop @click="host('hideWindow')">✕</button>
+  </div>
+
+  <!-- ═══ 文字颜色 / 底纹取色弹层 ═══ -->
+  <div class="pop menu" v-if="markPop" style="width:196px" :style="{right:'14px',top:'84px'}" @mousedown.stop>
+    <div class="ctxhd">{{markPop==='fg' ? '文字颜色（选中文字）' : '底纹颜色（标重点，导航可跳转）'}}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;padding:2px 10px 6px">
+      <i v-for="c in markColors" :key="c" :title="c"
+         :style="{background:c,width:'20px',height:'20px',borderRadius:'5px',cursor:'pointer',
+                  border:'1px solid var(--line)'}"
+         @click="markPop==='fg' ? setSelColor(c) : setSelShade(c)"></i>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;padding:2px 10px 6px">
+      <input type="color" v-model="markCustom" style="width:34px;height:26px;padding:1px"
+             title="自定义颜色"
+             @change="markPop==='fg' ? setSelColor(markCustom) : setSelShade(markCustom)">
+      <span class="hint">自定义</span>
+      <button class="capture-btn ghost" style="margin-left:auto;padding:3px 10px;font-size:12px"
+              @click="clearSelMark">清除</button>
+    </div>
+  </div>
+
+  <!-- ═══ 标签选择小弹层（工具条"标签"按钮 / Ctrl+Shift+G） ═══ -->
+  <div class="pop menu tagpick" v-if="tagPickerShow" style="right:14px;top:84px" @mousedown.stop>
+    <div class="ctxhd">选择标签（选中文字=套标签；没选中=插入标签名）</div>
+    <button class="tagrow" v-for="t in tagDefs" :key="t.name" @click="applyTag(t)">
+      <span class="nvtag" :style="{background:t.color}">{{t.name}}</span>
+    </button>
+    <div class="msep"></div>
+    <div style="display:flex;gap:5px;padding:2px 4px">
+      <input class="prompt-input" style="flex:1;height:26px;padding:3px 8px;font-size:12px"
+             v-model="newTagName" placeholder="新标签名" @keydown.enter.prevent="createTag">
+      <input type="color" v-model="newTagColor" style="width:30px;height:26px;padding:1px"
+             title="标签颜色">
+      <button class="capture-btn" style="padding:3px 9px;font-size:12px" @click="createTag">加</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;padding:4px">
+      <span v-for="(t,ti) in tagDefs" :key="'m'+ti" style="font-size:10.5px;display:inline-flex;
+            align-items:center;gap:3px;background:var(--soft);border-radius:8px;padding:1px 4px 1px 8px">
+        <i :style="{background:t.color,width:8,height:8,borderRadius:'50%',display:'inline-block'}"></i>
+        {{t.name}}
+        <b style="cursor:pointer;color:var(--sub);padding:0 3px" title="删除标签"
+           @click="removeTag(ti)">✕</b></span>
+    </div>
+  </div>
+
+  <!-- ═══ 导航面板（标题 + 标签；一键生成目录） ═══ -->
+  <div class="pop navpop" v-if="navShow" style="right:14px;top:84px" @mousedown.stop>
+    <div style="display:flex;align-items:center;padding:0 4px 6px">
+      <b style="font-size:13px;flex:1">导航</b>
+      <button class="capture-btn" style="padding:3px 10px;font-size:12px" @click="genToc"
+              title="在光标处插入目录（标题列表，可点击跳转；样式在下方实时调）">生成目录</button>
+      <span class="x" style="margin-left:6px;cursor:pointer;color:var(--sub)"
+            @click="navShow=false">✕</span>
+    </div>
+    <template v-if="navList.length">
+      <button class="navitem" v-for="(it,i) in navList" :key="i" @click="gotoNav(it)">
+        <span class="nvtag" v-if="it.tag" :style="{background:it.color}">{{it.tag}}</span>
+        <span class="nvtxt" :class="'navlv'+it.lv">{{it.text}}</span>
+      </button>
+    </template>
+    <div v-else class="ctxhd" style="padding:10px 8px">还没有标题（H1/H2/H3）或标签</div>
+    <div class="msep"></div>
+    <div class="row" style="padding:2px 6px 6px">
+      <label style="min-width:auto;font-size:11.5px">目录字号</label>
+      <input type="range" min="10" max="28" v-model.number="cfg.tocSize"
+             @input="applyVars" style="width:96px">
+      <span style="font-size:11px">{{cfg.tocSize}}px（生成前后都生效）</span>
+    </div>
   </div>
 
   <!-- ═══ 词库弹层（点击"词库"按钮 / Ctrl+K / 常驻开关才出现） ═══ -->
@@ -934,6 +1070,9 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
           <div class="switch" :class="{on: lv.k==='p' ? cfg.bold : cfg[lv.k+'Bold']}"
                @click="toggleStyleBold(lv.k)"></div>
           <span class="hint">加粗</span>
+          <div class="switch" :class="{on: lv.k==='p' ? cfg.italic : cfg[lv.k+'Italic']}"
+               @click="toggleStyleItalic(lv.k)"></div>
+          <span class="hint">斜体</span>
         </div>
         <div class="row" style="margin-top:8px"><label>背景图片</label>
           <button class="capture-btn" @click="pickWallpaper">选择图片</button>
@@ -956,10 +1095,41 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
                  @change="host('setWinOpacityPercent', cfg.winOpacity)" style="width:110px">
           <span class="hint">{{cfg.winOpacity}}%</span>
         </div>
-        <div class="row" style="margin-top:4px"><label>导入字体</label>
-          <button class="capture-btn" @click="pickFont">选择字体文件</button>
-          <button class="capture-btn ghost" v-if="fontFamily" @click="clearFont">清除</button>
-          <span class="hint">导入后成为全局默认字体；各级样式可在上方单独指定字体</span>
+        <div class="row" style="margin-top:4px"><label>字体管理</label>
+          <button class="capture-btn" @click="pickFont">导入字体文件</button>
+          <span class="hint">可导入多个；下面选择用哪个</span>
+        </div>
+        <div class="row" style="margin-top:4px" v-if="importedFonts.length">
+          <label>已导入</label>
+          <div style="flex:1;display:flex;flex-direction:column;gap:4px">
+            <div v-for="f in importedFonts" :key="f.file"
+                 style="display:flex;align-items:center;gap:8px">
+              <span style="flex:1;font-size:12.5px"
+                    :style="fontFamily===f.name?'color:var(--accent);font-weight:700':''">
+                {{f.name || f.file}}<span v-if="fontFamily===f.name">（当前）</span></span>
+              <button class="capture-btn ghost" style="padding:2px 9px;font-size:11.5px"
+                      @click="useImportedFont(f)">使用</button>
+              <button class="capture-btn ghost" style="padding:2px 9px;font-size:11.5px"
+                      @click="delImportedFont(f)">删除</button>
+            </div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:4px"><label>中文字体</label>
+          <select :value="fontFamily || cfg.fontUi || ''" @change="setGlobalCnFont($event.target.value)"
+                  style="max-width:150px">
+            <option value="">默认字体</option>
+            <option v-for="f in importedFonts" :key="'cn'+f.file" :value="f.name">{{f.name}}（导入）</option>
+            <option v-for="f in fontList" :key="'cn'+f" :value="f">{{f}}</option>
+          </select>
+        </div>
+        <div class="row" style="margin-top:4px"><label>西文字体</label>
+          <select :value="cfg.fontWest || ''" @change="setGlobalWestFont($event.target.value)"
+                  style="max-width:150px">
+            <option value="">跟随中文字体（不区分）</option>
+            <option v-for="f in importedFonts" :key="'we'+f.file" :value="f.name">{{f.name}}（导入）</option>
+            <option v-for="f in fontList" :key="'we'+f" :value="f">{{f}}</option>
+          </select>
+          <span class="hint">英文/数字用西文字体，中文落到中文字体</span>
         </div>
       </div>
 
@@ -1232,8 +1402,12 @@ var app = Vue.createApp({
           fontSize: 16, bold: false, closeAction: 'ask',
           wallpaperOpacity: 40, wallpaperFit: 'cover', winOpacity: 100, fontName: '',
           fontUi: '', h1Size: 28, h2Size: 22, h3Size: 18,
-          pFont: '', h1Font: '', h2Font: '', h3Font: '',
+          pFont: '', h1Font: '', h2Font: '', h3Font: '', fontWest: '',
           h1Bold: true, h2Bold: true, h3Bold: true,
+          italic: false, h1Italic: false, h2Italic: false, h3Italic: false,
+          tagDefs: [{name:'重要', color:'#F59E0B'}, {name:'待办', color:'#EF4444'},
+                    {name:'灵感', color:'#8B5CF6'}],
+          tocSize: 16,
           bubbleCloud: true, bubbleRhythm: true, bubbleCloudKind: 'cloud',
           bubbleCustomChars: '', bubbleLines: 3, cloudOpacity: 60, cloudMargin: 26,
           bubbleW: 420, bubbleH: 132, bubbleManualSize: false,
@@ -1284,12 +1458,22 @@ var app = Vue.createApp({
       {id:'words', name:'词库面板', def:'Ctrl+K'},
       {id:'bubble', name:'气泡模式开关', def:'Ctrl+Shift+M'},
       {id:'settings', name:'打开设置', def:'Ctrl+,'},
-      {id:'pin', name:'窗口置顶', def:'未设置'}
+      {id:'pin', name:'窗口置顶', def:'Ctrl+Shift+T'},
+      {id:'tag', name:'插入标签', def:'Ctrl+Shift+G'},
+      {id:'nav', name:'导航面板（标题/标签/目录）', def:'Ctrl+Shift+N'}
     ],
     iconUrl: '',
     customIcon: '',
     wallpaper: '',
     fontFamily: '',
+    importedFonts: [],
+    tagPickerShow: false, navShow: false,
+    newTagName: '', newTagColor: '#F59E0B',
+    markPop: '', markCustom: '#F59E0B',
+    ctxCustomSize: '',
+    navList: [],
+    markColors: ['#EF4444', '#F97316', '#FACC15', '#4ADE80', '#22D3EE',
+                 '#3B82F6', '#A78BFA', '#EC4899', '#334155', '#F5F5F4'],
     decorImg: '',
     decorImgSize: 100,
     fontList: ['微软雅黑', '宋体', '黑体', '楷体', '仿宋', '等线', '隶书', '幼圆',
@@ -1320,6 +1504,8 @@ var app = Vue.createApp({
   },
 
   computed: {
+    /** 标签定义实际存在 cfg.tagDefs 里（随配置持久化）；这里代理出来给模板和方法用 */
+    tagDefs: function() { return this.cfg.tagDefs || []; },
     docTitle: function() {
       return String(this.cfg.docName || '未命名').replace(/\.(txt|md)$/i, '');
     },
@@ -1359,6 +1545,11 @@ var app = Vue.createApp({
       if (el) el.classList.toggle('mode-bubble', v === 'bubble');
       this.syncSidewords();
     },
+    /* 小胶囊态类名：拖动条在胶囊上要换成贴顶热区（见 CSS .bubbletiny） */
+    bubbleTiny: function(v) {
+      var el = document.getElementById('app');
+      if (el) el.classList.toggle('bubbletiny', !!v);
+    },
     /* 冻结窗口：设置 / 退出确认时背后界面定格 */
     showSettings: function(v) { this.syncFrozen(); },
     showCloseModal: function(v) { this.syncFrozen(); },
@@ -1382,6 +1573,19 @@ var app = Vue.createApp({
     document.addEventListener('keydown', function(e) { self.onGlobalKey(e); });
     /* 三连击：气泡 → 完整；完整模式标题栏空白 → 气泡 */
     document.addEventListener('mousedown', function(e) { self.triClick(e); });
+    /* 目录里的链接：点了滚到对应标题（WebView 里 href="#..." 不会自己导航） */
+    var edEl = document.getElementById('editor');
+    if (edEl) edEl.addEventListener('click', function(e) {
+      var a = e.target && e.target.closest && e.target.closest('.toc a[href^="#"]');
+      if (!a) return;
+      e.preventDefault();
+      var t = document.getElementById(a.getAttribute('href').slice(1));
+      if (t) {
+        t.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        t.classList.add('flash');
+        setTimeout(function() { t.classList.remove('flash'); }, 900);
+      }
+    });
     /* ══ 右键兜底（捕获阶段）══
        部分 WebView 版本不把右键派发成 DOM contextmenu 事件 —— 表现就是
        "右键像被吞了"，编辑器和工具条上的右键菜单全都出不来。
@@ -1491,6 +1695,15 @@ var app = Vue.createApp({
       this.wallpaper = this.host('getWallpaper') || '';
       this.fontFamily = this.cfg.fontName || '';
       this._fontData = this.host('getFontData') || '';
+      /* 字体库：列出全部已导入字体，并逐个注册 @font-face（族名=真实族名，
+         样式/右键/工具条里选"XX（导入）"就能直接用） */
+      try { this.importedFonts = JSON.parse(this.host('listImportedFonts') || '[]'); }
+      catch (e) { this.importedFonts = []; }
+      this.registerImportedFaces();
+      /* 旧配置没有标签定义：给一组常用默认（改了会持久化） */
+      if (!this.cfg.tagDefs || !this.cfg.tagDefs.length)
+        this.cfg.tagDefs = [{name:'重要', color:'#F59E0B'}, {name:'待办', color:'#EF4444'},
+                            {name:'灵感', color:'#8B5CF6'}];
       this.decorImg = this.host('getDecorImage') || '';
       if (this.decorImg) this._loadDecorImg(this.decorImg);
       this.plugins = JSON.parse(this.host('listPlugins') || '[]');
@@ -1583,6 +1796,7 @@ var app = Vue.createApp({
       if (ev && ev.isTrusted) this._quickWord();
       this.pulse();
       this.refreshStats();
+      if (this.navShow) this.refreshNav();   // 导航面板开着：标题/标签/重点列表跟着正文变
       /* 查找开着时正文变了：防抖重建高亮（refreshFind 会保住光标位置） */
       if (this.showFind && this.findText) this.onFindInput();
       if (!this.cfg.autoSave) this.docUnsaved = true;
@@ -2186,7 +2400,23 @@ var app = Vue.createApp({
      *  WebKit 没有按 px 的 fontSize 命令 —— 先用 7 号（xxx-large）打底，
      *  再把生成的元素统一改成目标 px。 */
     applySelSize: function() {
+      if (this.tbSize === '__custom__') {     // 自定义字号：弹输入框，8~200 随便填
+        this.tbSize = '';
+        var self = this;
+        this.askPrompt('自定义字号（px，8~200）', '', '例如 18',
+          function(v) {
+            var n = parseFloat(v);
+            if (!n || n < 8 || n > 200) { self.toast('字号要在 8~200 之间'); return; }
+            self.applySelPx(Math.round(n * 10) / 10);
+          });
+        return;
+      }
       var n = parseInt(this.tbSize, 10); this.tbSize = '';
+      if (!n) return;
+      this.applySelPx(n);
+    },
+    /** 真正给选中文字设 px 字号（预设和自定义共用） */
+    applySelPx: function(n) {
       if (!n) return;
       if (!this.applyInline('fontSize', '7')) return;
       var ed = document.getElementById('editor');
@@ -2217,6 +2447,169 @@ var app = Vue.createApp({
       }
     },
     insertChar: function(c) { this.insert(c); this.showChars = false; },
+
+    /* ---------- 选中文字：斜体 / 下划线 / 颜色 / 底纹 ---------- */
+    toggleItalicSel: function() {
+      var r = this.pickSelRange();
+      if (!r) { this.toast('请先选中文字'); return; }
+      if (this.applyInline('italic', null)) {
+        var on = false;
+        try { on = document.queryCommandState('italic'); } catch (e) {}
+        this.toast(on ? '选中文字已斜体' : '选中文字已取消斜体');
+      }
+    },
+    toggleUnderlineSel: function() {
+      var r = this.pickSelRange();
+      if (!r) { this.toast('请先选中文字'); return; }
+      if (this.applyInline('underline', null)) {
+        var on = false;
+        try { on = document.queryCommandState('underline'); } catch (e) {}
+        this.toast(on ? '已加下划线' : '已取消下划线');
+      }
+    },
+    /** 选中区包一层带样式的 span（颜色/底纹/标签都用它） */
+    applySelMark: function(css, cls) {
+      var r = this.pickSelRange();
+      if (!r) { this.toast('请先选中要设置的文字'); return false; }
+      var span = document.createElement('span');
+      for (var k in css) span.style[k] = css[k];
+      if (cls) span.className = cls;
+      try {
+        span.appendChild(r.extractContents());
+        r.insertNode(span);
+      } catch (e) { return false; }
+      var sel = window.getSelection();
+      var r2 = document.createRange(); r2.selectNodeContents(span);
+      sel.removeAllRanges(); sel.addRange(r2);
+      this.onInput();
+      return true;
+    },
+    setSelColor: function(c) {
+      if (this.applySelMark({ color: c })) this.toast('文字颜色已改');
+      this.markPop = '';
+    },
+    setSelShade: function(c) {
+      if (this.applySelMark({ backgroundColor: c }, 'hlmark'))
+        this.toast('已标底纹（导航面板可跳转）');
+      this.markPop = '';
+    },
+    clearSelMark: function() {
+      if (this.markPop === 'fg') this.applySelMark({ color: 'inherit' });
+      else this.applySelMark({ backgroundColor: 'transparent' });
+      this.markPop = '';
+    },
+
+    /* ---------- 标签 / 导航 / 目录 ---------- */
+    createTag: function() {
+      var n = (this.newTagName || '').trim();
+      if (!n) return;
+      for (var i = 0; i < this.tagDefs.length; i++)
+        if (this.tagDefs[i].name === n) { this.toast('已有同名标签'); return; }
+      this.tagDefs.push({ name: n, color: this.newTagColor || '#F59E0B' });
+      this.newTagName = '';
+      this.pushTagDefs();
+    },
+    removeTag: function(i) { this.tagDefs.splice(i, 1); this.pushTagDefs(); },
+    pushTagDefs: function() {
+      this.host('setTagDefs', JSON.stringify(this.tagDefs));
+    },
+    /** 套标签：选中文字包上彩色标记；没选中就在光标处插入标签名 */
+    applyTag: function(t) {
+      var r = this.pickSelRange();
+      if (r && !r.collapsed) {
+        var span = document.createElement('span');
+        span.className = 'tagmark';
+        span.setAttribute('data-tag', t.name);
+        span.style.setProperty('--tagc', t.color + '55');
+        span.style.boxShadow = 'inset 0 -1.5px 0 ' + t.color;
+        span.appendChild(r.extractContents());
+        r.insertNode(span);
+        var sel = window.getSelection();
+        var r2 = document.createRange(); r2.selectNodeContents(span);
+        sel.removeAllRanges(); sel.addRange(r2);
+        this.onInput();
+        this.toast('已打标签「' + t.name + '」');
+      } else {
+        this.insert(t.name);
+        this.toast('已插入标签「' + t.name + '」（选中文字再点可套标记）');
+      }
+      this.tagPickerShow = false;
+    },
+    toggleNav: function() {
+      this.navShow = !this.navShow;
+      this.tagPickerShow = false;
+      if (this.navShow) this.navList = this.buildNavList();
+    },
+    /** 扫描正文：标题（H1/H2/H3）+ 标签标记 + 重点底纹，点击可跳转。
+        DOM 变化 Vue 的 computed 感知不到，所以是手动刷新的列表（打开面板/打标签/生成目录时重建） */
+    buildNavList: function() {
+      var ed = document.getElementById('editor');
+      var out = [];
+      if (!ed) return out;
+      var hs = ed.querySelectorAll('h1,h2,h3');
+      for (var i = 0; i < hs.length; i++) {
+        var tg = hs[i].tagName.toLowerCase();
+        out.push({ type: 'h', lv: tg === 'h1' ? 1 : tg === 'h2' ? 2 : 3,
+                   text: (hs[i].innerText || '').trim() || '（空标题）', el: hs[i] });
+      }
+      var ts = ed.querySelectorAll('.tagmark');
+      for (var j = 0; j < ts.length; j++) {
+        var name = ts[j].getAttribute('data-tag') || '标签', c = '#6B7280';
+        for (var k = 0; k < this.tagDefs.length; k++)
+          if (this.tagDefs[k].name === name) c = this.tagDefs[k].color;
+        out.push({ type: 't', tag: name, color: c, lv: 1,
+                   text: (ts[j].innerText || '').trim() || name, el: ts[j] });
+      }
+      var mk = ed.querySelectorAll('.hlmark');
+      for (var m = 0; m < mk.length; m++)
+        out.push({ type: 'm', tag: '重点', color: '#FACC15', lv: 1,
+                   text: (mk[m].innerText || '').trim().slice(0, 24) || '（空）', el: mk[m] });
+      return out;
+    },
+    refreshNav: function() { if (this.navShow) this.navList = this.buildNavList(); },
+    /** 跳到某个标题/标签/重点：滚过去 + 闪一下蓝框 */
+    gotoNav: function(it) {
+      if (!it || !it.el) return;
+      try {
+        it.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        it.el.classList.add('flash');
+        var el = it.el;
+        setTimeout(function() { el.classList.remove('flash'); }, 900);
+      } catch (e) {}
+    },
+    /** 一键生成目录：在光标处插入标题清单（可点击跳转，文字可再编辑） */
+    genToc: function() {
+      var ed = document.getElementById('editor');
+      if (!ed) return;
+      var hs = ed.querySelectorAll('h1,h2,h3');
+      if (!hs.length) { this.toast('还没有 H1/H2/H3 标题，先给段落设标题样式'); return; }
+      /* 给每个标题挂 id（重复生成时复用，目录链接才不失效） */
+      var rows = '';
+      for (var i = 0; i < hs.length; i++) {
+        if (!hs[i].id) hs[i].id = 'hd-' + (i + 1) + '-' + Date.now() % 100000;
+        var txt = (hs[i].innerText || '').trim();
+        var lv = hs[i].tagName === 'H1' ? 1 : hs[i].tagName === 'H2' ? 2 : 3;
+        rows += '<li style="margin-left:' + ((lv - 1) * 18) + 'px">' +
+                '<a href="#' + hs[i].id + '">' + (txt || '（空标题）') + '</a></li>';
+      }
+      var html = '<div class="toc"><div class="toc-h">目 录</div><ol>' + rows + '</ol></div><p><br></p>';
+      var sel = window.getSelection();
+      var r = (sel && sel.rangeCount && ed.contains(sel.getRangeAt(0).commonAncestorContainer))
+              ? sel.getRangeAt(0) : null;
+      if (!r) {                              // 没有光标位置：放最前面
+        r = document.createRange();
+        r.setStart(ed, 0); r.collapse(true);
+      }
+      var div = ed.ownerDocument.createElement('div');
+      div.innerHTML = html;
+      var frag = document.createDocumentFragment();
+      while (div.firstChild) frag.appendChild(div.firstChild);
+      r.deleteContents();
+      r.insertNode(frag);
+      try { ed.focus(); } catch (e) {}
+      this.onInput();
+      this.toast('目录已生成（文字可编辑，字号在导航面板调）');
+    },
 
     /* ---------- 词库 ---------- */
     /** Ctrl+K / 词库按钮：任何模式下都能开关（常驻被手动关掉后也能再打开） */
@@ -2701,7 +3094,8 @@ var app = Vue.createApp({
       var anyLayer = this.showSettings || this.showCloseModal || this.confirmMsg ||
                      this.showImportModal || this.showHistModal || this.showChars ||
                      this.showDocs || this.wordsVisible || this.promptShow ||
-                     this.showMore || this.showFind || this.showExport || this.ctxShow;
+                     this.showMore || this.showFind || this.showExport || this.ctxShow ||
+                     this.tagPickerShow || this.navShow || this.markPop;
       this.showCloseModal = false;
       this.showExport = false;
       this.confirmMsg = ''; this._confirmCb = null;
@@ -2713,6 +3107,7 @@ var app = Vue.createApp({
       this.showMore = false;
       this.showFind = false;
       this.promptShow = false; this._promptCb = null;
+      this.tagPickerShow = false; this.markPop = ''; this.navShow = false;
       this.showWords = false; this.wordsClosed = true; this.addingWord = false;
       this.showSettings = false;
       this.syncFrozen();
@@ -2741,6 +3136,8 @@ var app = Vue.createApp({
         case 'bubble': this.mode === 'bubble' ? this.exitBubble() : this.enterBubble(); return true;
         case 'settings': if (this.showSettings) this.closeSettings(); else this.openSettings(); return true;
         case 'pin': this.togglePin(); return true;
+        case 'tag': this.tagPickerShow = !this.tagPickerShow; this.navShow = false; return true;
+        case 'nav': this.toggleNav(); return true;
       }
       return false;
     },
@@ -3322,8 +3719,18 @@ var app = Vue.createApp({
       styleFontVar('h2ff', 'h2Font');
       styleFontVar('h3ff', 'h3Font');
       st.setProperty('--pbw', this.cfg.bold ? '700' : '400');
-      /* 字体栈：导入字体 > 工具栏选的系统字体 > 默认 */
+      /* 样式斜体（同加粗：改一处，该级别全部段落跟着变） */
+      st.setProperty('--pit', this.cfg.italic ? 'italic' : 'normal');
+      st.setProperty('--h1it', this.cfg.h1Italic ? 'italic' : 'normal');
+      st.setProperty('--h2it', this.cfg.h2Italic ? 'italic' : 'normal');
+      st.setProperty('--h3it', this.cfg.h3Italic ? 'italic' : 'normal');
+      st.setProperty('--tocfs', (this.cfg.tocSize || 16) + 'px');
+      /* 字体栈（中西文分离）：浏览器按字符逐个找第一个有该字形的字体 ——
+         西文字体放最前 → 英文/数字用它；中文字形它没有 → 落到后面的中文字体。
+         中文部分：导入字体(SnapWriteCustom) > 工具栏选的系统字体 > 默认 */
       var fam = '';
+      if (this.cfg.fontWest)
+        fam += "'" + String(this.cfg.fontWest).replace(/['"]/g, '') + "',";
       if (this._fontData) {
         var fs = document.getElementById('dynfont');
         if (!fs) {
@@ -3333,11 +3740,27 @@ var app = Vue.createApp({
         }
         if (fs.textContent.indexOf('SnapWriteCustom') < 0)
           fs.textContent = "@font-face{font-family:'SnapWriteCustom';src:url(" + this._fontData + ");}";
-        fam = "'SnapWriteCustom',";
+        fam += "'SnapWriteCustom',";
       }
       if (this.cfg.fontUi) fam += "'" + String(this.cfg.fontUi).replace(/'/g, '') + "',";
       fam += "'Segoe UI','Microsoft YaHei',sans-serif";
       st.setProperty('--font', fam);
+    },
+    /** 把字体库里每个字体注册成自己的族名（注册过就跳过，避免重复塞 base64） */
+    registerImportedFaces: function() {
+      var fs = document.getElementById('dynfont');
+      if (!fs) {
+        fs = document.createElement('style');
+        fs.id = 'dynfont';
+        document.head.appendChild(fs);
+      }
+      for (var i = 0; i < this.importedFonts.length; i++) {
+        var f = this.importedFonts[i];
+        if (!f.name || fs.textContent.indexOf("'" + f.name + "'") >= 0) continue;
+        var data = this.host('getFontDataByFile', f.file);
+        if (data) fs.textContent +=
+          "\n@font-face{font-family:'" + String(f.name).replace(/['"]/g, '') + "';src:url(" + data + ");}";
+      }
     },
     applyFont: function() {
       this.applyVars();
@@ -3439,10 +3862,60 @@ var app = Vue.createApp({
       if (name) {
         this.fontFamily = name;
         this._fontData = this.host('getFontData');
+        try { this.importedFonts = JSON.parse(this.host('listImportedFonts') || '[]'); }
+        catch (e) {}
+        this.registerImportedFaces();
         this.applyVars();
-        this.toast('字体已应用：' + name);
+        this.toast('字体已导入：' + name);
       } else this.toast('未选择字体');
     },
+    /** 字体管理：把库里某个字体设为全局中文字体 */
+    useImportedFont: function(f) {
+      if (!f) return;
+      this.fontFamily = f.name || '';
+      this._fontData = this.host('getFontDataByFile', f.file);
+      this.applyVars();
+      this.applyBubbleSize();
+      this.toast('中文字体已用：' + this.fontFamily);
+    },
+    /** 字体管理：删除库里某个字体 */
+    delImportedFont: function(f) {
+      var self = this;
+      this.askConfirm('删除字体「' + (f.name || f.file) + '」？正在使用它的文字会退回默认字体。', function() {
+        self.host('deleteFont', f.file);
+        self.importedFonts = self.importedFonts.filter(function(x) { return x.file !== f.file; });
+        if (self.fontFamily === f.name) {
+          self.fontFamily = '';
+          self._fontData = '';
+          self.applyVars();
+        }
+        self.toast('已删除 ' + (f.name || f.file));
+      });
+    },
+    /** 设置里选全局中文字体（导入/系统都能选） */
+    setGlobalCnFont: function(v) {
+      if (v === this.fontFamily) return;             // 没变
+      if (v && this.importedFonts.some(function(x) { return x.name === v; })) {
+        var hit = this.importedFonts.filter(function(x) { return x.name === v; })[0];
+        this.fontFamily = v;
+        this._fontData = this.host('getFontDataByFile', hit.file);
+        this.cfg.fontUi = '';
+      } else {
+        this.fontFamily = '';
+        this._fontData = '';
+        this.cfg.fontUi = v;
+        this.host('setFontUi', v);
+      }
+      this.applyVars();
+      this.applyBubbleSize();
+    },
+    /** 设置里选全局西文字体（英文/数字优先用它） */
+    setGlobalWestFont: function(v) {
+      this.cfg.fontWest = v;
+      this.host('setWestFont', v);
+      this.applyVars();
+    },
+    /** 清空导入字体（保留旧入口兼容） */
     clearFont: function() {
       this.host('clearFont');
       this.fontFamily = '';
@@ -3736,6 +4209,25 @@ var app = Vue.createApp({
       this.toast('「' + this.levelName(this.ctxStyleLevel) + '」' +
                  (this.styleBoldOf(this.ctxStyleLevel) ? '已加粗' : '取消加粗'));
     },
+    styleItalicOf: function(k) {
+      return k === 'p' ? !!this.cfg.italic : this.cfg[k + 'Italic'] === true;
+    },
+    ctxStyleToggleItalic: function() {
+      if (this.ctxStyleLevel === 'p') this.cfg.italic = !this.cfg.italic;
+      else this.cfg[this.ctxStyleLevel + 'Italic'] = !this.cfg[this.ctxStyleLevel + 'Italic'];
+      this.applyStyles();
+      this.toast('「' + this.levelName(this.ctxStyleLevel) + '」' +
+                 (this.styleItalicOf(this.ctxStyleLevel) ? '已斜体' : '取消斜体'));
+    },
+    /** 右键字号面板 / 改样式面板：自定义字号输入 */
+    ctxApplyCustomSize: function() {
+      var n = parseFloat(this.ctxCustomSize);
+      this.ctxCustomSize = '';
+      if (!n || n < 8 || n > 200) { this.toast('字号要在 8~200 之间'); return; }
+      n = Math.round(n * 10) / 10;
+      if (this.ctxView === 'style') this.ctxStyleSetSize(n);
+      else this.ctxSetSize(n);
+    },
     /** 右键改字体：选中→只改选中；没选中→改整段 */
     ctxSetFont: function(name) {
       var t = this.ctxTarget();
@@ -3845,6 +4337,11 @@ var app = Vue.createApp({
       else this.cfg[k + 'Bold'] = !this.cfg[k + 'Bold'];
       this.applyStyles();
     },
+    toggleStyleItalic: function(k) {
+      if (k === 'p') this.cfg.italic = !this.cfg.italic;
+      else this.cfg[k + 'Italic'] = !this.cfg[k + 'Italic'];
+      this.applyStyles();
+    },
     /** 样式改动统一下发：CSS 变量立即生效 + Java 落盘 */
     applyStyles: function() {
       this.applyVars();
@@ -3855,6 +4352,9 @@ var app = Vue.createApp({
                 this.cfg.h3Size, this.cfg.h3Bold ? '1' : '0');
       this.host('setStyleFonts', this.cfg.pFont || '', this.cfg.h1Font || '',
                 this.cfg.h2Font || '', this.cfg.h3Font || '');
+      this.host('setStyleItalics', this.cfg.italic ? '1' : '0',
+                this.cfg.h1Italic ? '1' : '0', this.cfg.h2Italic ? '1' : '0',
+                this.cfg.h3Italic ? '1' : '0');
       this.applyBubbleSize();
     },
     /* ---------- 环绕元素：自定义图片 ---------- */

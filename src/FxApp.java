@@ -69,12 +69,16 @@ public class FxApp extends Application {
     private String wallpaperPath = "";    // 背景图片（data/wallpaper.img），空=无
     private int wallpaperOpacity = 40;    // 背景图不透明度 %
     private int winOpacity = 100;         // 窗口整体不透明度 %
-    private String fontPath = "";         // 导入字体（data/customfont.bin），空=默认
+    private String fontPath = "";         // 当前激活的导入字体（data/fonts/ 下相对路径），空=默认
     private String fontName = "";         // 字体族名
+    private String fontWest = "";         // 西文字体（英文/数字优先用它，中文落到中文字体）
     private String fontUi = "";           // 工具栏选的系统字体族名，空=默认栈
     private int h1Size = 28, h2Size = 22, h3Size = 18;   // 标题级别字号
     private boolean h1Bold = true, h2Bold = true, h3Bold = true;
+    private boolean pItalic = false, h1Italic = false, h2Italic = false, h3Italic = false; // 样式斜体
     private String pFont = "", h1Font = "", h2Font = "", h3Font = ""; // 样式字体族（空=默认栈）
+    private String tagDefsJson = "";      // 标签定义 JSON：[{"name":"重要","color":"#F59E0B"}]
+    private int tocSize = 16;             // 目录字号（生成前后都实时生效）
     private boolean bubbleCloud = true;   // 气泡：云彩环绕
     private boolean bubbleRhythm = true;  // 气泡：节奏律动
     private String bubbleCloudKind = "cloud"; // 环绕元素 cloud|star|petal|note
@@ -116,7 +120,9 @@ public class FxApp extends Application {
             {"find", "Ctrl+F"},
             {"save", "Ctrl+S"},          {"export", "Ctrl+E"},     {"words", "Ctrl+K"},
             {"bubble", "Ctrl+Shift+M"},  {"settings", "Ctrl+,"},
-            {"pin", "Ctrl+Shift+T"}
+            {"pin", "Ctrl+Shift+T"},
+            {"tag", "Ctrl+Shift+G"},      // 插入标签（选中套标签 / 空选插标签名）
+            {"nav", "Ctrl+Shift+N"}       // 导航面板（标题+标签跳转 / 一键目录）
     };
     private final java.util.LinkedHashMap<String, String> keyMap =
             new java.util.LinkedHashMap<String, String>();
@@ -276,13 +282,15 @@ public class FxApp extends Application {
         stage.show();
         try { stage.setOpacity(winOpacity / 100.0); } catch (Exception ignored) {}
         if (FxMain.shotMode && !FxMain.bossTest && !FxMain.keyTest && !FxMain.selfTest
-                && !FxMain.gestTest && !FxMain.fontTest && !FxMain.plugTest) runShotTest();
+                && !FxMain.gestTest && !FxMain.fontTest && !FxMain.plugTest
+                && !FxMain.dragTest) runShotTest();
         if (FxMain.selfTest) runSelfTest();
         if (FxMain.bossTest) runBossTest();
         if (FxMain.keyTest) runKeyTest();
         if (FxMain.gestTest) runGestTest();
         if (FxMain.fontTest) runFontTest();
         if (FxMain.plugTest) runPlugTest();
+        if (FxMain.dragTest) runDragTest();
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -349,6 +357,123 @@ public class FxApp extends Application {
         });
         t.setDaemon(true);
         t.start();
+    }
+
+    /* ══════════════════════════════════════════════════════════════════
+       气泡拖动/双击还原 真实鼠标回归（--dragtest）：
+       合成事件和 elementFromPoint 都绕过浏览器命中/事件管线，测不出
+       "真机点了没反应"。这里用 Robot 发真实 OS 鼠标事件：
+       ① 进气泡（小胶囊 resting 态）→ Robot 按住拖动条拖 80,50px → 窗口必须跟着动
+       ② 在拖动条上 Robot 双击 → 必须还原完整界面
+       拖动条几何由 JS 实测（小胶囊和展开态的条不一样大，别写死）。
+       ══════════════════════════════════════════════════════════════════ */
+    private void runDragTest() {
+        Thread t = new Thread(() -> {
+            sleepQuiet(2200);
+            boolean dragged = false, restored = false, tiny = false;
+            double dx = 0, dy = 0; String mode = "?";
+            try {
+                java.awt.Robot r = new java.awt.Robot();
+                r.setAutoDelay(12);
+                runOnFx(() -> evalJs("app.enterBubble()"));
+                /* enterBubble 里 60ms 的 setTimeout 在忙时可能拖到 1 秒+ 才跑，
+                   布局没就绪就去点只会点空 —— 等窗口真的缩成气泡（<400 宽）再动手 */
+                boolean ready = false;
+                for (int i = 0; i < 24 && !ready; i++) {
+                    sleepQuiet(250);
+                    double[] gw = new double[2];
+                    runOnFx(() -> { gw[0] = stage.getWidth(); gw[1] = stage.getHeight(); });
+                    ready = gw[0] < 400;
+                }
+                log("dragtest 气泡布局就绪=" + ready);
+                /* 窗口钉到已知屏幕位置：排掉历史遗留坐标/看门狗挪窗的干扰 */
+                runOnFx(() -> { stage.setX(200); stage.setY(200); stage.toFront(); stage.requestFocus(); });
+                sleepQuiet(500);
+                tiny = "true".equals(evalJs("String(!!app.bubbleTiny)"));
+                log("dragtest diag mode=" + evalJs("String(app.mode)")
+                        + " st=" + evalJs("JSON.stringify({bw:app._bw,bh:app._bh,"
+                        + "manual:app.cfg.bubbleManualSize,pad:app._bpad,"
+                        + "comp:!!app._composing,words:app.wordsVisible,side:app.sidewordOn||false})"));
+                double[] g = new double[4];
+                runOnFx(() -> { g[0] = stage.getX(); g[1] = stage.getY();
+                                g[2] = stage.getWidth(); g[3] = stage.getHeight(); });
+                sleepQuiet(200);
+                String rect = evalJs("(function(){var s=document.querySelector('.dragstrip');"
+                        + "if(!s)return 'NOSTRIP';var b=s.getBoundingClientRect();"
+                        + "return JSON.stringify({x:b.left+b.width/2,y:b.top+b.height/2,"
+                        + "w:b.width,h:b.height});})()");
+                log("dragtest tiny=" + tiny + " 拖动条=" + rect + " 窗口=" + g[2] + "x" + g[3]);
+                int[] c = parseXY(rect);
+                int sx = (int) g[0] + c[0], sy = (int) g[1] + c[1];
+                r.mouseMove(sx, sy); sleepQuiet(250);
+                /* 现场取证：点击点的像素颜色 + 全屏截图（看窗口到底在不在那） */
+                java.awt.Color pc = r.getPixelColor(sx, sy);
+                boolean showing = false; double op = 1;
+                final boolean[] sh = new boolean[1]; final double[] opq = new double[1];
+                runOnFx(() -> { sh[0] = stage.isShowing(); opq[0] = stage.getOpacity(); });
+                showing = sh[0]; op = opq[0];
+                log("dragtest 点击点(" + sx + "," + sy + ") 像素=" + pc
+                        + " showing=" + showing + " opacity=" + op);
+                try {
+                    java.awt.image.BufferedImage img = r.createScreenCapture(
+                            new java.awt.Rectangle(0, 0, 800, 600));
+                    javax.imageio.ImageIO.write(img, "png",
+                            new java.io.File("data/selftest/dragtest_screen.png"));
+                } catch (Exception ignored) {}
+                r.mousePress(java.awt.event.InputEvent.BUTTON1_DOWN_MASK);
+                sleepQuiet(120);
+                for (int i = 1; i <= 10; i++) { r.mouseMove(sx + i * 8, sy + i * 5); sleepQuiet(30); }
+                r.mouseRelease(java.awt.event.InputEvent.BUTTON1_DOWN_MASK);
+                sleepQuiet(600);
+                double[] g2 = new double[4];
+                runOnFx(() -> { g2[0] = stage.getX(); g2[1] = stage.getY();
+                                g2[2] = stage.getWidth(); g2[3] = stage.getHeight(); });
+                dx = g2[0] - g[0]; dy = g2[1] - g[1];
+                dragged = Math.abs(dx) > 30 && Math.abs(dy) > 15;
+                log("dragtest 拖动 dx=" + dx + " dy=" + dy + " ok=" + dragged);
+                /* 双击还原（Robot 两次快速单击=真实双击）——先埋探针看事件到没到 */
+                rect = evalJs("(function(){var s=document.querySelector('.dragstrip');"
+                        + "var b=s.getBoundingClientRect();"
+                        + "return JSON.stringify({x:b.left+b.width/2,y:b.top+b.height/2});})()");
+                c = parseXY(rect);
+                int cx = (int) g2[0] + c[0], cy = (int) g2[1] + c[1];
+                evalJs("window.__ev={any:0,strip:0,dbl:0,exit:0,pts:[]};"
+                     + "document.addEventListener('mousedown',function(e){"
+                     + "  window.__ev.any++;"
+                     + "  if(e.target.closest&&e.target.closest('.dragstrip'))window.__ev.strip++;"
+                     + "  window.__ev.pts.push(e.clientX+','+e.clientY);},true);"
+                     + "document.addEventListener('dblclick',function(){window.__ev.dbl++;},true);"
+                     + "var _ex=app.exitBubble.bind(app);"
+                     + "app.exitBubble=function(){window.__ev.exit++;return _ex();};");
+                r.mouseMove(cx, cy); sleepQuiet(250);
+                robotClick(r, 1); sleepQuiet(80); robotClick(r, 1);
+                sleepQuiet(900);
+                mode = evalJs("String(window.app?app.mode:'NOAPP')");
+                String ev = evalJs("JSON.stringify(window.__ev||{})");
+                restored = "full".equals(mode);
+                log("dragtest 双击后 mode=" + mode + " 探针=" + ev);
+            } catch (Throwable ex) {
+                log("dragtest robot 异常: " + ex);
+            }
+            String res = (dragged && restored) ? "DRAG_OK" : (dragged ? "DRAG_ONLY" : "DRAG_DEAD");
+            System.out.println("DRAGTEST " + res + " tiny=" + tiny
+                    + " dx=" + dx + " dy=" + dy + " mode=" + mode);
+            sleepQuiet(300);
+            Platform.runLater(this::exitApp);
+        });
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** 从 "x,y" 或 JSON {x,y} 里抠出两个整数（--dragtest 用） */
+    private static int[] parseXY(String s) {
+        try {
+            java.util.regex.Matcher m = java.util.regex.Pattern
+                    .compile("(\\d+\\.?\\d*)[^0-9]+(\\d+\\.?\\d*)").matcher(s);
+            if (m.find()) return new int[]{(int) Double.parseDouble(m.group(1)),
+                                          (int) Double.parseDouble(m.group(2))};
+        } catch (Exception ignored) {}
+        return new int[]{60, 10};
     }
 
     private boolean isHiddenNow() {
@@ -1074,6 +1199,19 @@ public class FxApp extends Application {
         return d;
     }
 
+    /** 字体库目录：data/fonts/（可放多个导入字体） */
+    private File fontsDir() {
+        File d = new File(dataDir(), "fonts");
+        if (!d.exists()) d.mkdirs();
+        return d;
+    }
+
+    /** 文件名清洗：只留中文/字母/数字/_-.，防路径穿越 */
+    private static String safeFontFileName(String n) {
+        String s = (n == null ? "" : n).replaceAll("[^\\w\\u4e00-\\u9fa5.\\-]", "_");
+        return s.isEmpty() ? "font" : s;
+    }
+
     /** 数据根目录：自测模式写到 data/selftest，绝不碰用户真实草稿 */
     private static String dataRoot = "data";
 
@@ -1136,6 +1274,21 @@ public class FxApp extends Application {
             winOpacity = clamp(parseInt(c.getProperty("winOpacity"), 100), 30, 100);
             fontPath = c.getProperty("font", "");
             fontName = c.getProperty("fontName", "");
+            fontWest = sanitizeFontName(c.getProperty("fontWest", ""));
+            /* 旧版字体是单文件 data/customfont.ttf|otf：迁进 data/fonts/ 目录 */
+            for (String old : new String[]{"customfont.ttf", "customfont.otf"}) {
+                File o = new File(dataDir(), old);
+                if (o.exists()) {
+                    File nd = fontsDir();
+                    File dst = new File(nd, old);
+                    try {
+                        java.nio.file.Files.move(o.toPath(), dst.toPath(),
+                                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                        if (fontPath.equals(old)) fontPath = "fonts/" + old;
+                    } catch (Exception ignored) {}
+                }
+            }
+            if (fontPath.startsWith("customfont")) fontPath = "fonts/" + fontPath;
             fontUi = c.getProperty("fontUi", "");
             h1Size = clamp(parseInt(c.getProperty("h1Size"), 28), 12, 60);
             h2Size = clamp(parseInt(c.getProperty("h2Size"), 22), 12, 60);
@@ -1147,6 +1300,12 @@ public class FxApp extends Application {
             h1Font = sanitizeFontName(c.getProperty("h1Font", ""));
             h2Font = sanitizeFontName(c.getProperty("h2Font", ""));
             h3Font = sanitizeFontName(c.getProperty("h3Font", ""));
+            pItalic = Boolean.parseBoolean(c.getProperty("pItalic", "false"));
+            h1Italic = Boolean.parseBoolean(c.getProperty("h1Italic", "false"));
+            h2Italic = Boolean.parseBoolean(c.getProperty("h2Italic", "false"));
+            h3Italic = Boolean.parseBoolean(c.getProperty("h3Italic", "false"));
+            tagDefsJson = c.getProperty("tagDefs", "");
+            tocSize = clamp(parseInt(c.getProperty("tocSize"), 16), 10, 40);
             decorImgPath = c.getProperty("decorImg", "");
             bubbleCloud = Boolean.parseBoolean(c.getProperty("bubbleCloud", "true"));
             bubbleRhythm = Boolean.parseBoolean(c.getProperty("bubbleRhythm", "true"));
@@ -1433,6 +1592,13 @@ public class FxApp extends Application {
             c.setProperty("h1Font", h1Font);
             c.setProperty("h2Font", h2Font);
             c.setProperty("h3Font", h3Font);
+            c.setProperty("fontWest", fontWest);
+            c.setProperty("pItalic", String.valueOf(pItalic));
+            c.setProperty("h1Italic", String.valueOf(h1Italic));
+            c.setProperty("h2Italic", String.valueOf(h2Italic));
+            c.setProperty("h3Italic", String.valueOf(h3Italic));
+            c.setProperty("tagDefs", tagDefsJson);
+            c.setProperty("tocSize", String.valueOf(tocSize));
             c.setProperty("decorImg", decorImgPath);
             c.setProperty("bubbleCloud", String.valueOf(bubbleCloud));
             c.setProperty("bubbleRhythm", String.valueOf(bubbleRhythm));
@@ -1754,6 +1920,13 @@ public class FxApp extends Application {
                     case "getWallpaper": return getWallpaper();
                     case "getFontData":  return getFontData();
                     case "getFontName":  return getFontName();
+                    case "listImportedFonts": return listImportedFonts();
+                    case "getFontDataByFile": return getFontDataByFile(a1);
+                    case "deleteFont":   return deleteFont(a1);
+                    case "setWestFont":  setWestFont(a1); break;
+                    case "setStyleItalics": setStyleItalics(a1, a2, a3, a4); break;
+                    case "setTagDefs":   setTagDefs(a1); break;
+                    case "setTocSize":   setTocSize(parseIntS(a1)); break;
                     case "getBgm":       return getBgm();
                     case "isAutoStart":  return String.valueOf(isAutoStart());
                     case "saveDraft":    saveDraft(a1); break;
@@ -2127,6 +2300,11 @@ public class FxApp extends Application {
                     + ",\"h1Font\":\"" + esc(h1Font) + "\""
                     + ",\"h2Font\":\"" + esc(h2Font) + "\""
                     + ",\"h3Font\":\"" + esc(h3Font) + "\""
+                    + ",\"fontWest\":\"" + esc(fontWest) + "\""
+                    + ",\"pItalic\":" + pItalic + ",\"h1Italic\":" + h1Italic
+                    + ",\"h2Italic\":" + h2Italic + ",\"h3Italic\":" + h3Italic
+                    + ",\"tagDefs\":" + (tagDefsJson.isEmpty() ? "[]" : tagDefsJson)
+                    + ",\"tocSize\":" + tocSize
                     + ",\"bubbleCloud\":" + bubbleCloud
                     + ",\"bubbleRhythm\":" + bubbleRhythm
                     + ",\"musicFollow\":" + musicFollow
@@ -2306,27 +2484,25 @@ public class FxApp extends Application {
         }
 
         /**
-         * 真正把字体文件落到 data/ 并注册到 JVM。
+         * 真正把字体文件落进 data/fonts/ 字体库并注册到 JVM。
          *
          * ★ 必须保留原扩展名：fileToDataUrl 按扩展名判 MIME，以前存成
          *   data/customfont.bin → MIME 落到默认值 image/jpeg → WebView 拿到
          *   "data:image/jpeg;base64,<ttf 字节>" 直接拒绝当字体用，
          *   表现就是"导入字体没反应"。
+         * ★ v1.8 起支持多字体：每个字体单独成文件，listImportedFonts 可列出。
          */
         public String importFontFrom(File f) {
             if (f == null || !f.exists()) return "";
             try {
                 String low = f.getName().toLowerCase();
                 String ext = low.endsWith(".otf") ? ".otf" : ".ttf";
-                /* 旧版本可能存成 customfont.bin（MIME 错的），一并清掉 */
-                for (String old : new String[]{"customfont.bin", "customfont.ttf", "customfont.otf"}) {
-                    File o = new File(dataDir(), old);
-                    if (o.exists() && !old.equals("customfont" + ext)) o.delete();
-                }
-                File dst = new File(dataDir(), "customfont" + ext);
+                String base = safeFontFileName(
+                        f.getName().replaceAll("\\.(ttf|otf|bin)$", ""));
+                File dst = new File(fontsDir(), base + "_" + System.currentTimeMillis() + ext);
                 java.nio.file.Files.copy(f.toPath(), dst.toPath(),
                         java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                fontPath = dst.getName();
+                fontPath = "fonts/" + dst.getName();
                 javafx.scene.text.Font loaded = javafx.scene.text.Font.loadFont(f.toURI().toString(), 16);
                 fontName = loaded == null ? "" : loaded.getFamily();
                 saveConfig();
@@ -2339,12 +2515,68 @@ public class FxApp extends Application {
         }
 
         public void clearFont() {
+            if (fontPath.startsWith("fonts/")) new File(dataDir(), fontPath).delete();
             fontPath = "";
             fontName = "";
             saveConfig();
+            /* 顺手清掉旧版单文件残留 */
             new File(dataDir(), "customfont.ttf").delete();
             new File(dataDir(), "customfont.otf").delete();
             new File(dataDir(), "customfont.bin").delete();
+        }
+
+        /** 字体库列表：[{file:"xxx.ttf", name:"楷体"}]（族名现场从字体文件读） */
+        public String listImportedFonts() {
+            StringBuilder b = new StringBuilder("[");
+            File[] fs = fontsDir().listFiles();
+            boolean first = true;
+            if (fs != null) {
+                java.util.Arrays.sort(fs, (a, c) -> Long.compare(c.lastModified(), a.lastModified()));
+                for (File f : fs) {
+                    String n = f.getName().toLowerCase();
+                    if (!n.endsWith(".ttf") && !n.endsWith(".otf")) continue;
+                    String fam = fontFamilyCache(f);
+                    if (first) first = false; else b.append(',');
+                    b.append("{\"file\":\"").append(esc(f.getName()))
+                     .append("\",\"name\":\"").append(esc(fam)).append("\"}");
+                }
+            }
+            return b.append(']').toString();
+        }
+
+        /** 族名缓存（Font.loadFont 有开销，别每刷新一遍全读一遍） */
+        private final java.util.Map<String, String> fontFamilyCache = new java.util.HashMap<>();
+        private String fontFamilyCache(File f) {
+            String key = f.getName();
+            String hit = fontFamilyCache.get(key);
+            if (hit != null) return hit;
+            String fam = "";
+            try {
+                javafx.scene.text.Font loaded =
+                        javafx.scene.text.Font.loadFont(f.toURI().toString(), 16);
+                if (loaded != null) fam = loaded.getFamily();
+            } catch (Exception ignored) {}
+            if (fam.isEmpty()) fam = key.replaceAll("\\.(ttf|otf)$", "");
+            fontFamilyCache.put(key, fam);
+            return fam;
+        }
+
+        /** 取字体库里某个字体的 dataUrl（文件名必须干净，防穿越） */
+        public String getFontDataByFile(String file) {
+            if (file == null || file.contains("/") || file.contains("\\") || file.contains(".."))
+                return "";
+            File f = new File(fontsDir(), file);
+            return f.exists() ? fileToDataUrl(f) : "";
+        }
+
+        /** 删除字体库里某个字体；若是当前激活字体连带清掉 */
+        public String deleteFont(String file) {
+            if (file == null || file.contains("/") || file.contains("\\") || file.contains(".."))
+                return "ERR";
+            File f = new File(fontsDir(), file);
+            if (f.exists() && !f.delete()) return "ERR";
+            if (fontPath.equals("fonts/" + file)) { fontPath = ""; fontName = ""; saveConfig(); }
+            return "ok";
         }
 
         public String getFontData() {
@@ -2376,6 +2608,35 @@ public class FxApp extends Application {
             h1Font = sanitizeFontName(f1);
             h2Font = sanitizeFontName(f2);
             h3Font = sanitizeFontName(f3);
+            saveConfig();
+        }
+
+        /** 西文字体：英文/数字优先用它，中文落到中文字体（空=不区分） */
+        public void setWestFont(String name) {
+            fontWest = sanitizeFontName(name);
+            saveConfig();
+        }
+
+        /** 样式斜体：p,h1,h2,h3（顺序传参） */
+        public void setStyleItalics(String p, String i1, String i2, String i3) {
+            pItalic = "1".equals(p) || "true".equals(p);
+            h1Italic = "1".equals(i1) || "true".equals(i1);
+            h2Italic = "1".equals(i2) || "true".equals(i2);
+            h3Italic = "1".equals(i3) || "true".equals(i3);
+            saveConfig();
+        }
+
+        /** 标签定义（[{name,color}] JSON 全量替换） */
+        public void setTagDefs(String json) {
+            String j = json == null ? "" : json.trim();
+            /* 只收合法的 JSON 数组，防止把乱七八糟的东西写进配置 */
+            if (j.startsWith("[") && j.endsWith("]")) tagDefsJson = j;
+            saveConfig();
+        }
+
+        /** 目录字号 */
+        public void setTocSize(int n) {
+            tocSize = clamp(n, 10, 40);
             saveConfig();
         }
 
