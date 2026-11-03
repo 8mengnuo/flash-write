@@ -91,6 +91,10 @@ public class FxApp extends Application {
     private String customIconPath = "";   // 用户自定义图标（data/custom_icon.png），空=默认
     private String skin = "light";        // 皮肤：light=浅色 dark=深色（黑色主题）
     private boolean bubbleDblRestore = true;  // 气泡：双击拖动条还原完整界面
+    /* 气泡边缘拉伸状态（bubbleResizeStart/Move/End 三拍） */
+    private boolean rszDrag = false;
+    private String rszDir = "";
+    private double rszSX, rszSY, rszX0, rszY0, rszW0, rszH0;
     private boolean bubbleAutoSize = true;    // 气泡：高度随字数自适应（false=固定大小）
     private boolean bubbleIntrude = false;    // 气泡：环绕元素侵入文本框内部
     private int intrudeOpacity = 40;      // 侵入元素不透明度 %
@@ -1153,8 +1157,8 @@ public class FxApp extends Application {
             wallpaperFit = c.getProperty("wallpaperFit", "cover");
             if (!wallpaperFit.matches("cover|contain|tile|center")) wallpaperFit = "cover";
             bubbleLines = clamp(parseInt(c.getProperty("bubbleLines"), 3), 1, 12);
-            bubbleW = clamp(parseInt(c.getProperty("bubbleW"), 420), 160, 1200);
-            bubbleH = clamp(parseInt(c.getProperty("bubbleH"), 132), 50, 900);
+            bubbleW = clamp(parseInt(c.getProperty("bubbleW"), 420), 120, 2000);
+            bubbleH = clamp(parseInt(c.getProperty("bubbleH"), 132), 50, 1200);
             bubbleManualSize = Boolean.parseBoolean(c.getProperty("bubbleManualSize", "false"));
             bubbleCustomChars = c.getProperty("bubbleCustomChars", "");
             customIconPath = c.getProperty("customIcon", "");
@@ -1846,10 +1850,40 @@ public class FxApp extends Application {
                         bubbleLines = clamp(parseIntS(a1), 1, 12); saveConfig(); break;
                     /* 气泡手动大小（用户自己拉宽/拉高）：w, h, manual(1/0) */
                     case "setBubbleSizeCfg":
-                        bubbleW = clamp(parseIntS(a1), 160, 1200);
-                        bubbleH = clamp(parseIntS(a2), 50, 900);
+                        bubbleW = clamp(parseIntS(a1), 120, 2000);
+                        bubbleH = clamp(parseIntS(a2), 50, 1200);
                         bubbleManualSize = "1".equals(a3) || "true".equals(a3);
                         saveConfig(); break;
+                    /* 气泡边缘拉伸：JS 在边缘热区按下 → 拖动中持续上报屏幕坐标 → 松开结算 */
+                    case "bubbleResizeStart":
+                        rszDrag = true;
+                        rszDir = a1 == null ? "" : a1;
+                        rszSX = parseD(a2); rszSY = parseD(a3);
+                        rszX0 = stage.getX(); rszY0 = stage.getY();
+                        rszW0 = stage.getWidth(); rszH0 = stage.getHeight();
+                        break;
+                    case "bubbleResizeMove": {
+                        if (!rszDrag) break;
+                        double dx = parseD(a1) - rszSX, dy = parseD(a2) - rszSY;
+                        boolean east = rszDir.contains("e"), west = rszDir.contains("w"),
+                                south = rszDir.contains("s"), north = rszDir.contains("n");
+                        double x = rszX0, y = rszY0, w = rszW0, h = rszH0;
+                        if (east)  w = Math.max(120, Math.min(2000, rszW0 + dx));
+                        if (west)  { w = Math.max(120, Math.min(2000, rszW0 - dx)); x = rszX0 + rszW0 - w; }
+                        if (south) h = Math.max(50, Math.min(1200, rszH0 + dy));
+                        if (north) { h = Math.max(50, Math.min(1200, rszH0 - dy)); y = rszY0 + rszH0 - h; }
+                        stage.setX(x); stage.setY(y);
+                        stage.setWidth(w); stage.setHeight(h);
+                        break;
+                    }
+                    case "bubbleResizeEnd": {
+                        rszDrag = false;
+                        bubbleW = clamp((int) stage.getWidth(), 120, 2000);
+                        bubbleH = clamp((int) stage.getHeight(), 50, 1200);
+                        bubbleManualSize = true;     // 手拉过的尺寸=手动定大小，打字不再自动改
+                        saveConfig();
+                        return bubbleW + "," + bubbleH;   // JS 拿去同步滑杆显示
+                    }
                     case "setBubbleCustom":
                         bubbleCustomChars = a1 == null ? "" : a1.trim(); saveConfig(); break;
                     /* 环绕元素边距 / 跟随音乐 */
@@ -1883,6 +1917,10 @@ public class FxApp extends Application {
             try { return (int) Double.parseDouble(s.trim()); } catch (Exception e) { return 0; }
         }
 
+        private static double parseD(String s) {
+            try { return Double.parseDouble(s.trim()); } catch (Exception e) { return 0; }
+        }
+
         private static double parseDoubleS(String s) {
             try { return Double.parseDouble(s.trim()); } catch (Exception e) { return 0; }
         }
@@ -1911,6 +1949,7 @@ public class FxApp extends Application {
             currentDoc = n;
             draft = "";
             lastHistText = "";
+            total0 = 0;                             // 今日字数基准跟文档走，否则切到短文会倒扣
             loadHistory();                          // 新文档：历史也是新的一份
             saveConfig();
             return n;
@@ -1925,6 +1964,9 @@ public class FxApp extends Application {
             FxApp.this.saveDraft(draft);
             currentDoc = name;
             try { draft = readAll(f); } catch (Exception e) { draft = ""; }
+            total0 = countChars(draft);             // 今日字数按新文档重新计基准（否则切到
+                                                    // 更短的文档会把今日字数倒扣成 0，
+                                                    // 切到更长的会凭空虚增）
             loadHistory();                          // 切到该文档自己的寻回历史
             saveConfig();
             return draft;
@@ -1975,6 +2017,7 @@ public class FxApp extends Application {
                     draft = "";
                     try { writeAll(new File(docsDir(), currentDoc), ""); } catch (Exception ignored) {}
                 }
+                total0 = countChars(draft);          // 今日字数基准跟文档走
                 loadHistory();
                 saveConfig();
             }

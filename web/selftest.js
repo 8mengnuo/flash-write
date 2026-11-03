@@ -718,13 +718,74 @@
          app.exportFormats.some(function (f) { return f.id === 'pdf'; }) &&
          app.exportFormats.some(function (f) { return f.id === 'docx'; }));
 
-      /* 11) 零 JS 异常 */
-      ok('零 JS 异常' + (window.__errs && window.__errs.length
-         ? '：' + window.__errs.join(' | ') : ''), !window.__errs || window.__errs.length === 0);
+      /* 11) 右键兜底：mousedown(button=2) 必须能打开右键菜单/样式面板
+         （部分 WebView 不派发 contextmenu 事件，右键像被吞了 —— 靠 mousedown 兜底） */
+      function rmb(el) {
+        var r = el.getBoundingClientRect();
+        el.dispatchEvent(new MouseEvent('mousedown', { button: 2, bubbles: true,
+          cancelable: true, clientX: r.left + 5, clientY: r.top + 5 }));
+      }
+      app.ctxShow = false; app.ctxView = 'main';
+      app.exitBubble();                    // 工具条只在完整模式渲染（v-if），先退回去
+      setTimeout(function () {
+        var h1btn = document.querySelector('.toolbar .tb[data-rcstyle="h1"]');
+        ok('工具条 H1 有右键编辑入口', !!h1btn);
+        if (!h1btn) { window.__stResult = out.join('\n'); return; }
+        rmb(h1btn);
+      setTimeout(function () {
+        ok('工具条右键 H1 → 样式面板[show=' + app.ctxShow + ' view=' + app.ctxView +
+           ' level=' + app.ctxStyleLevel + ']',
+           app.ctxShow && app.ctxView === 'style' && app.ctxStyleLevel === 'h1');
+        app.ctxShow = false; app.ctxView = 'main';
+        rmb(ed);
+        setTimeout(function () {
+          ok('编辑区右键 → WPS 菜单[show=' + app.ctxShow + ' view=' + app.ctxView + ']',
+             app.ctxShow && app.ctxView === 'main');
+          app.ctxShow = false;
 
-      app.cfg.alwaysWords = false;
-      app.exitBubble();
-      setTimeout(function () { window.__stResult = out.join('\n'); }, 260);
+          /* 12) 气泡：双击还原开关真的管用；拖动条不再计入三连击；
+             边缘拉伸热区在（默认可拉伸） */
+          app.enterBubble();
+          setTimeout(function () {
+            ok('气泡拉伸热区[n=' + document.querySelectorAll('.rz').length + ']',
+               document.querySelectorAll('.rz').length === 5);
+            var strip = document.querySelector('.dragstrip');
+            app.cfg.bubbleDblRestore = false;
+            strip.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+            ok('关闭双击还原：双击拖动条不还原[mode=' + app.mode + ']',
+               app.mode === 'bubble');
+            for (var i = 0; i < 3; i++)
+              strip.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
+            ok('拖动条连点不再走三连击还原[mode=' + app.mode + ']', app.mode === 'bubble');
+            app.cfg.bubbleDblRestore = true;
+            strip.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+            ok('开启双击还原：双击拖动条还原[mode=' + app.mode + ']', app.mode === 'full');
+
+            /* 13) 今日字数：切到更短的文档不得把今日字数倒扣（切文档要重置基准） */
+            app.host('newDoc', '统计测试A.txt');
+            app.host('saveNow', '一二三四五六七八九十');   // +10 字
+            setTimeout(function () {
+              var t1 = app.stats.today;
+              ok('今日字数记录[t1=' + t1 + ']', t1 >= 10);
+              app.host('newDoc', '统计测试B.txt');          // 切到空文档（更短）
+              app.host('saveNow', '甲');                    // 只写 1 字
+              setTimeout(function () {
+                var t2 = app.stats.today;
+                ok('切更短文档今日字数不倒扣[' + t1 + '→' + t2 + ']', t2 >= t1);
+
+                /* 14) 零 JS 异常 */
+                ok('零 JS 异常' + (window.__errs && window.__errs.length
+                   ? '：' + window.__errs.join(' | ') : ''), !window.__errs || window.__errs.length === 0);
+
+                app.cfg.alwaysWords = false;
+                app.exitBubble();
+                setTimeout(function () { window.__stResult = out.join('\n'); }, 260);
+              }, 500);
+            }, 500);
+          }, 120);
+        }, 30);
+      }, 30);
+      }, 30);            // 完整模式包装层（工具条渲染等待）
         }, 200);       // D 设置面板
       }, 60);          // C 关查找断言
     }, 60);            // B 打开查找

@@ -61,6 +61,11 @@ public final class Hooks {
     private static long lastLeftAt = 0;
     private static int leftStreak = 0;
     private static int lastLeftX = -9999, lastLeftY = -9999;
+    /** 最近一次手势/老板键触发时刻：右键唤回的延迟定时器见到它就自杀，
+     *  避免"窗口隐藏时做 LLRRLL 手势，第 3 拍（右键）先把窗口弹回来"——
+     *  手势还没打完窗口就显示了，用户看到的就是'鼠标老板键失灵/乱跳' */
+    private static long lastFireAt = 0;
+    private static java.util.Timer summonTimer;
 
     /* ---------- 键码 <-> 可读名 映射（反射读取 VC_ 常量表，勿手写推算：
        JNativeHook 的键码不是 ASCII 排列，Z 不是 'Z'，直接算会错） ---------- */
@@ -250,9 +255,19 @@ public final class Hooks {
 
         long now = System.currentTimeMillis();
 
-        /* 右键：窗口隐藏时直接唤回气泡（窗口可见时由上层忽略，不会干扰日常右键） */
+        /* 右键：窗口隐藏时唤回气泡。延迟 600ms 执行：单击右键 = 稍等半秒唤回；
+           但若这个右键其实是手势序列的第 3/4 拍（LLRRLL 里有 R），序列完成时
+           fireBoss 先 toggle，定时器看到 lastFireAt 很近就自动作废，不打架 */
         if (b == 'R' && summonBubble != null) {
-            try { summonBubble.run(); } catch (Exception ignored) {}
+            if (summonTimer != null) summonTimer.cancel();
+            final Runnable sb = summonBubble;
+            summonTimer = new java.util.Timer("summon", true);
+            summonTimer.schedule(new java.util.TimerTask() {
+                public void run() {
+                    if (System.currentTimeMillis() - lastFireAt < 600) return;
+                    try { sb.run(); } catch (Exception ignored) {}
+                }
+            }, 600);
         }
         /* 左键三连击（同一位置 ±10px、间隔 <700ms）也唤回气泡 */
         if (b == 'L') {
@@ -286,6 +301,7 @@ public final class Hooks {
     /** 触发回调：异常绝不能抛回钩子线程 —— 一旦抛出，Windows 会认为钩子卡死并静默移除它，
      *  表现就是"老板键用着用着突然不灵了，重启才好"。 */
     private static void fireBoss() {
+        lastFireAt = System.currentTimeMillis();
         Runnable r = bossAction;
         if (r == null) return;
         try { r.run(); } catch (Throwable ignored) {}

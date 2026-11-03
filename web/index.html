@@ -363,8 +363,16 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
 #app.mode-bubble.intrude #cloudcv{z-index:6}
 /* 注意：这条得排除 .pop —— 弹层本来就要绝对定位，被改成 relative 后会掉进 flex 流里，
    词库面板就直接落到输入框下方（用户看到的"词库跑到框里/框下"）。 */
-#app.mode-bubble>*:not(#cloudcv):not(.dragstrip):not(.bctrl-wrap):not(.pop){
+#app.mode-bubble>*:not(#cloudcv):not(.dragstrip):not(.bctrl-wrap):not(.pop):not(.rz){
   position:relative;z-index:3}
+/* 气泡边缘拉伸热区：贴边 5px、底角 12px；z 低于控制钮(8)高于正文(3)，
+   顶部不设（顶部留给拖动条移动窗口） */
+.rz{position:absolute;z-index:7}
+.rz-w{left:0;top:0;bottom:0;width:5px;cursor:ew-resize}
+.rz-e{right:0;top:0;bottom:0;width:5px;cursor:ew-resize}
+.rz-s{left:0;right:0;bottom:0;height:5px;cursor:ns-resize}
+.rz-sw{left:0;bottom:0;width:12px;height:12px;cursor:nesw-resize}
+.rz-se{right:0;bottom:0;width:12px;height:12px;cursor:nwse-resize}
 
 /* ═══════════════ 轻提示 ═══════════════ */
 .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:99;
@@ -435,10 +443,10 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
     </select>
     <button class="tb" title="加粗选中文字" @click="toggleBold"><b>B</b></button>
     <span class="tbdiv"></span>
-    <button class="tb" title="一级标题（当前段落）" @click="setBlock('h1')">H1</button>
-    <button class="tb" title="二级标题（当前段落）" @click="setBlock('h2')">H2</button>
-    <button class="tb" title="三级标题（当前段落）" @click="setBlock('h3')">H3</button>
-    <button class="tb" title="正文（当前段落）" @click="setBlock('p')">正文</button>
+    <button class="tb" title="一级标题（当前段落）· 右键编辑该样式" @click="setBlock('h1')" data-rcstyle="h1">H1</button>
+    <button class="tb" title="二级标题（当前段落）· 右键编辑该样式" @click="setBlock('h2')" data-rcstyle="h2">H2</button>
+    <button class="tb" title="三级标题（当前段落）· 右键编辑该样式" @click="setBlock('h3')" data-rcstyle="h3">H3</button>
+    <button class="tb" title="正文（当前段落）· 右键编辑该样式" @click="setBlock('p')" data-rcstyle="p">正文</button>
   </div>
 
   <!-- ═══ 主编辑区 ═══ -->
@@ -452,6 +460,15 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
          @contextmenu.prevent="ctxOpen($event)"></div>
   </div>
 
+  <!-- ═══ 气泡边缘拉伸热区：拖边缘/角改窗口大小（松手即记住，并转为"自己定大小"） ═══ -->
+  <template v-if="mode==='bubble'">
+    <div class="rz rz-w"  @mousedown.stop.prevent="rszStart($event,'w')"></div>
+    <div class="rz rz-e"  @mousedown.stop.prevent="rszStart($event,'e')"></div>
+    <div class="rz rz-s"  @mousedown.stop.prevent="rszStart($event,'s')"></div>
+    <div class="rz rz-sw" @mousedown.stop.prevent="rszStart($event,'sw')"></div>
+    <div class="rz rz-se" @mousedown.stop.prevent="rszStart($event,'se')"></div>
+  </template>
+
   <!-- ═══ 右键菜单（WPS 式）：段落样式 + 字体/字号/格式直改 + 改样式模板 ═══ -->
   <div class="pop menu ctxmenu" v-if="ctxShow" :style="{left:ctxPos.left,top:ctxPos.top}"
        @mousedown.stop @contextmenu.prevent.stop>
@@ -460,13 +477,13 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
     <template v-if="ctxView==='main'">
       <div class="ctxhd">段落样式 · {{ctxScope}}<span class="ctxhd-tip">（右键标签=改该样式）</span></div>
       <div class="ctxtags">
-        <button class="ctxtag" :class="{on:ctxCur==='p'}" @click="ctxApply('p')"
+        <button class="ctxtag" :class="{on:ctxCur==='p'}" @click="ctxApply('p')" data-rcstyle="p"
                 @contextmenu.prevent.stop="ctxStyleOpen('p')">正文</button>
-        <button class="ctxtag" :class="{on:ctxCur==='h1'}" @click="ctxApply('h1')"
+        <button class="ctxtag" :class="{on:ctxCur==='h1'}" @click="ctxApply('h1')" data-rcstyle="h1"
                 @contextmenu.prevent.stop="ctxStyleOpen('h1')">标题 1</button>
-        <button class="ctxtag" :class="{on:ctxCur==='h2'}" @click="ctxApply('h2')"
+        <button class="ctxtag" :class="{on:ctxCur==='h2'}" @click="ctxApply('h2')" data-rcstyle="h2"
                 @contextmenu.prevent.stop="ctxStyleOpen('h2')">标题 2</button>
-        <button class="ctxtag" :class="{on:ctxCur==='h3'}" @click="ctxApply('h3')"
+        <button class="ctxtag" :class="{on:ctxCur==='h3'}" @click="ctxApply('h3')" data-rcstyle="h3"
                 @contextmenu.prevent.stop="ctxStyleOpen('h3')">标题 3</button>
       </div>
       <div class="msep"></div>
@@ -792,12 +809,12 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
                @click="cfg.bubbleManualSize=!cfg.bubbleManualSize;applyBubbleSizeNow()"></div>
           <span class="hint">打开后气泡宽/高完全由下面两条滑杆决定，写多写少都不变</span></div>
         <div class="row" v-if="cfg.bubbleManualSize"><label>气泡宽度</label>
-          <input type="range" min="160" max="1000" step="10" v-model.number="cfg.bubbleW"
+          <input type="range" min="120" max="2000" step="10" v-model.number="cfg.bubbleW"
                  @input="applyBubbleSizeNow" style="width:150px">
           <span style="min-width:44px">{{cfg.bubbleW}}px</span>
-          <span class="hint">≈ {{Math.round((cfg.bubbleW-44)/(cfg.fontSize||16))}} 字/行</span></div>
+          <span class="hint">≈ {{Math.round((cfg.bubbleW-44)/(cfg.fontSize||16))}} 字/行（也可直接拖气泡边缘）</span></div>
         <div class="row" v-if="cfg.bubbleManualSize"><label>气泡高度</label>
-          <input type="range" min="50" max="600" step="5" v-model.number="cfg.bubbleH"
+          <input type="range" min="50" max="1200" step="5" v-model.number="cfg.bubbleH"
                  @input="applyBubbleSizeNow" style="width:150px">
           <span style="min-width:44px">{{cfg.bubbleH}}px</span>
           <span class="hint">≈ {{Math.max(1,Math.round((cfg.bubbleH-40)/((cfg.fontSize||16)*1.9)))}} 行</span></div>
@@ -1365,6 +1382,30 @@ var app = Vue.createApp({
     document.addEventListener('keydown', function(e) { self.onGlobalKey(e); });
     /* 三连击：气泡 → 完整；完整模式标题栏空白 → 气泡 */
     document.addEventListener('mousedown', function(e) { self.triClick(e); });
+    /* ══ 右键兜底（捕获阶段）══
+       部分 WebView 版本不把右键派发成 DOM contextmenu 事件 —— 表现就是
+       "右键像被吞了"，编辑器和工具条上的右键菜单全都出不来。
+       mousedown(button=2) 一定派发，用它兜底：
+       · 编辑区右键 → 打开 WPS 式右键菜单（ctxOpen）
+       · 工具条/菜单里的 H1/H2/H3/正文 右键 → 直接进该级别的样式编辑面板
+       用 setTimeout(0) 延后执行：编辑器自己的 mousedown(edDown) 会先关一次菜单，
+       直接在这里开会被它再关掉。 */
+    document.addEventListener('mousedown', function(e) {
+      if (e.button !== 2) return;
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var tag = null;
+      var rc = t.closest('[data-rcstyle]');
+      if (rc) tag = rc.getAttribute('data-rcstyle');
+      else if (t.closest('#editor')) tag = '#editor';
+      else return;                       // 其它区域照常（词库右键等不拦）
+      e.preventDefault();
+      var cx = e.clientX, cy = e.clientY;
+      setTimeout(function() {
+        if (tag === '#editor') app.ctxOpen({ clientX: cx, clientY: cy });
+        else app.ctxStyleOpen(tag, { clientX: cx, clientY: cy });
+      }, 0);
+    }, true);
     /* 记录编辑区最近一次选区：点词库/工具栏后仍能插到原光标处 */
     document.addEventListener('selectionchange', function() {
       var sel = window.getSelection();
@@ -1601,6 +1642,31 @@ var app = Vue.createApp({
       document.addEventListener('mouseup', up);
     },
 
+    /* ---------- 气泡边缘拉伸（默认可用） ----------
+       边缘热区 mousedown → 拖动中把屏幕坐标持续交给 Java 结算窗口几何 →
+       松手 Java 返回最终 w,h：转成"自己定大小"，滑杆同步，打字不再自动改窗口。 */
+    rszStart: function(e, dir) {
+      if (e.button !== 0) return;
+      this._rsz = true;
+      this.host('bubbleResizeStart', dir, e.screenX, e.screenY);
+      var self = this;
+      function mv(ev) { self.host('bubbleResizeMove', ev.screenX, ev.screenY); }
+      function up() {
+        document.removeEventListener('mousemove', mv);
+        document.removeEventListener('mouseup', up);
+        self._rsz = false;
+        var r = String(self.host('bubbleResizeEnd') || '');
+        var p = r.split(',');
+        if (p.length === 2 && !isNaN(parseFloat(p[0]))) {
+          self.cfg.bubbleManualSize = true;
+          self.cfg.bubbleW = parseInt(p[0], 10);
+          self.cfg.bubbleH = parseInt(p[1], 10);
+        }
+      }
+      document.addEventListener('mousemove', mv);
+      document.addEventListener('mouseup', up);
+    },
+
     togglePin: function() { this.host('togglePin'); this.pinned = !this.pinned; },
     preset: function(w, h) { this.showMore = false; this.host('setSize', w, h); },
 
@@ -1666,6 +1732,7 @@ var app = Vue.createApp({
     applyBubbleSizeNow: function() {
       if (this.mode !== 'bubble') return;
       if (this._composing) return;      // 组字中不动窗口，等 compositionend 再补
+      if (this._rsz) return;            // 用户正在拉伸边缘：拖完再算，别跟手抢
       var perLine = Math.max(10, Math.min(40, this.cfg.bubbleCharsPerLine | 0));
       var maxLines = Math.max(1, Math.min(12, this.cfg.bubbleLines | 0));
       var fs = this.cfg.fontSize;
@@ -1684,8 +1751,8 @@ var app = Vue.createApp({
       /* ══ 用户手动定大小：完全听用户的，不再随字数/光标位置变 ══ */
       if (this.cfg.bubbleManualSize) {
         document.documentElement.style.setProperty('--bpad', pad + 'px');
-        w = Math.round(Math.max(160, Math.min(1200, this.cfg.bubbleW || 420))) + side;
-        h = Math.round(Math.max(50, Math.min(900, this.cfg.bubbleH || 132)));
+        w = Math.round(Math.max(120, Math.min(2000, this.cfg.bubbleW || 420))) + side;
+        h = Math.round(Math.max(50, Math.min(1200, this.cfg.bubbleH || 132)));
         this.bubbleTiny = (w - side) < 340;
         var bw0 = document.querySelector('.bctrl-wrap');
         if (bw0 && bw0.classList) bw0.classList.toggle('tiny', this.bubbleTiny);
@@ -1869,6 +1936,10 @@ var app = Vue.createApp({
         if (t.closest('#editor') || t.closest('.pop') || t.closest('.bctrl-wrap')) {
           this._triN = 0; return;
         }
+        /* 拖动条上的双击归"双击还原"设置管（见 onDragStripDbl），
+           不再计入三连击 —— 否则设置里关了双击还原，在拖动条上多点几下
+           还是会把窗口还原，开关看起来像坏的 */
+        if (t.closest('.dragstrip')) { this._triN = 0; return; }
         this._triN = (now - (this._triAt || 0) < 700) ? this._triN + 1 : 1;
         this._triAt = now;
         if (this._triN >= 3) { this._triN = 0; this.exitBubble(); }
@@ -3623,9 +3694,26 @@ var app = Vue.createApp({
     styleBoldOf: function(k) {
       return k === 'p' ? !!this.cfg.bold : this.cfg[k + 'Bold'] !== false;
     },
-    ctxStyleOpen: function(tag) {
+    ctxStyleOpen: function(tag, e) {
       this.ctxStyleLevel = tag || this.ctxCur || 'p';
       this.ctxView = 'style';
+      /* 从工具条/页面直接右键打开（菜单还没显示）：先定位再显示 */
+      if (!this.ctxShow) {
+        var x = (e && e.clientX) || 80, y = (e && e.clientY) || 90;
+        this.ctxPos = {
+          left: Math.min(x, window.innerWidth - 262) + 'px',
+          top: Math.max(6, Math.min(y, window.innerHeight - 330)) + 'px'
+        };
+        this.ctxShow = true;
+        var self = this;
+        this.$nextTick(function() {
+          var el = document.querySelector('.ctxmenu');
+          if (!el) return;
+          var h = el.offsetHeight, H = window.innerHeight;
+          var top = Math.min(y, Math.max(6, H - h - 8));
+          self.ctxPos = { left: self.ctxPos.left, top: Math.max(6, top) + 'px' };
+        });
+      }
     },
     ctxStyleSetFont: function(name) {
       this.cfg[(this.ctxStyleLevel === 'p' ? 'p' : this.ctxStyleLevel) + 'Font'] = name || '';
