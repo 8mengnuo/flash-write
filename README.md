@@ -1,4 +1,4 @@
-# 闪写 SnapWrite
+# 闪写 FlashWrite
 
 桌面码字软件：Java 21 + OpenJFX 21（WebView）+ Vue 3。
 完整编辑模式 + 气泡悬浮模式，支持老板键、词库、多文档、快照寻回、六种格式导出。
