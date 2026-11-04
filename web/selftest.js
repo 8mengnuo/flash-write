@@ -1427,12 +1427,13 @@
                       caretAt33(25);                      // 第 2 行中间，不在最后一行
                       app._lastInputAt = Date.now();
                       app.applyBubbleSizeNow();
+                      var h33 = app._bh, lo33 = Math.ceil(met33.lh * 2.5) + app.bubblePadV(),
+                          hi33 = Math.ceil(met33.lh * 3.7) + app.bubblePadV();
                       ok('光标不在最后一行=上下文三行[onLast=' + app.caretOnLastRow() +
-                         ' h=' + app._bh + ' 期望≈' + (Math.ceil(met33.lh * 3) + app.bubblePadV()) +
+                         ' h=' + h33 + ' 应在' + lo33 + '~' + hi33 +
                          ' w=' + app._bw + ' bub3=' + app._bub3 + ']',
-                         app.caretOnLastRow() === false &&
-                         Math.abs(app._bh - (Math.ceil(met33.lh * 3) + app.bubblePadV())) < 4 &&
-                         app._bub3 === true);
+                         app.caretOnLastRow() === false && app._bub3 === true &&
+                         h33 >= lo33 && h33 <= hi33);
 
                       /* 23.7 光标停在底纹里（没选中）也能"清除" */
                       ed.innerHTML = '<p>前后<span class="hlmark" ' +
@@ -1481,6 +1482,35 @@
                          ' 两次后剩=' + ed.querySelectorAll('.tagmark').length + ']',
                          onceT33 && !ed.querySelector('.tagmark'));
                       app.tagPaint = false; app.curTag = '';
+
+                      /* 23.10 嵌套壳（tagmark 包 hlmark）：光标停在里头也能一路拆净 */
+                      ed.innerHTML = '<p>前后<span class="tagmark" data-tag="重要" ' +
+                        'style="--tagc:rgba(245,158,11,.28)">' +
+                        '<span class="hlmark" style="background:#FACC15">嵌套文字</span></span>后</p>';
+                      var ne33 = ed.querySelector('.hlmark');
+                      var rn33 = document.createRange();
+                      rn33.setStart(ne33.firstChild, 2); rn33.collapse(true);
+                      var sn33 = window.getSelection();
+                      sn33.removeAllRanges(); sn33.addRange(rn33);
+                      app._selRange = null; app._range = null;
+                      app.markPop = 'bg'; app.clearSelMark();
+                      ok('嵌套壳从光标位拆净[hlmark=' + ed.querySelectorAll('.hlmark').length +
+                         ' tagmark=' + ed.querySelectorAll('.tagmark').length + ']',
+                         !ed.querySelector('.hlmark') && !ed.querySelector('.tagmark'));
+
+                      /* 23.11 选中跨多个标记：一次全拆（以前只拆起点那层） */
+                      ed.innerHTML = '<p><span class="tagmark" data-tag="甲标" ' +
+                        'style="--tagc:#123456">甲</span>和' +
+                        '<span class="tagmark" data-tag="乙标" style="--tagc:#654321">乙</span></p>';
+                      var p33 = ed.querySelector('p');
+                      var rr33 = document.createRange(); rr33.selectNodeContents(p33);
+                      var s33b = window.getSelection();
+                      s33b.removeAllRanges(); s33b.addRange(rr33);
+                      app.markPop = 'bg'; app.clearSelMark();
+                      ok('跨多个标记一次全拆[剩=' + ed.querySelectorAll('.tagmark').length + ']',
+                         !ed.querySelector('.tagmark'));
+                      /* （23.12 右键挪光标断言挪到 23.5 的完整模式回调里跑 ——
+                          气泡窗口太小，点击点会落在视口外，caretRangeFromPoint 量不到） */
                     } catch (e32) { ok('第32轮断言异常: ' + e32.message, false); }
 
                     /* 23.5 两端对齐按钮已删除（工具条只在完整模式渲染） */
@@ -1490,6 +1520,41 @@
                       var al32 = document.querySelectorAll('.albtn').length;
                       ok('两端对齐按钮已删除[found=' + !!jb32 + ' 对齐钮=' + al32 + ']',
                          !jb32 && al32 === 3);
+
+                      /* 23.12 右键无选中：光标挪到点击处（清除才作用在右键那段字上）。
+                         完整模式窗口够大，点击点一定在视口里 */
+                      ed.innerHTML = '<p>零散文字有标记' +
+                        '<span class="tagmark" data-tag="目标" style="--tagc:#9abcde">目标字</span>尾</p>';
+                      var tc33 = ed.querySelector('.tagmark');
+                      ed.scrollTop = 0;
+                      var tr33 = document.createRange();
+                      tr33.setStart(ed.firstChild.firstChild, 1); tr33.collapse(true);
+                      var ts33 = window.getSelection();
+                      ts33.removeAllRanges(); ts33.addRange(tr33);
+                      var trect33 = tc33.getBoundingClientRect();
+                      var cx33 = Math.round(trect33.left + trect33.width / 2),
+                          cy33 = Math.round(trect33.top + trect33.height / 2);
+                      var dbg33 = 'click=' + cx33 + ',' + cy33 + ' vp=' +
+                        window.innerWidth + 'x' + window.innerHeight + ' | ';
+                      for (var sy = 60; sy <= Math.min(window.innerHeight - 10, 300); sy += 40) {
+                        var ea = document.elementFromPoint(200, sy);
+                        var qr = null;
+                        try { qr = document.caretRangeFromPoint(200, sy); } catch (e9) {}
+                        dbg33 += '(200,' + sy + ')=' + (ea ? ea.tagName : 'null') + '/' +
+                                 (qr ? 'R' : 'null') + ' ';
+                      }
+                      app.ctxOpen({ clientX: cx33, clientY: cy33 });
+                      var inTag33 = false;
+                      try {
+                        var sc33 = window.getSelection();
+                        inTag33 = sc33.rangeCount > 0 && tc33.contains(sc33.getRangeAt(0).startContainer);
+                      } catch (e33b) {}
+                      ok('右键无选中时光标挪到点击处[' + dbg33 + ' inTag=' + inTag33 + ']',
+                         inTag33);
+                      app.markPop = 'bg'; app.clearSelMark();
+                      ok('右键挪光标后清除生效[剩=' + ed.querySelectorAll('.tagmark').length + ']',
+                         !ed.querySelector('.tagmark'));
+                      app.ctxShow = false;
                       app.tagPaint = false; app.curTag = ''; app.markPop = '';
                       ed.innerHTML = ''; app.onInput();
                       stVis();                 // 继续 22) 光标行可见断言

@@ -2120,6 +2120,7 @@ public class FxApp extends Application {
                     case "importDoc":      importDoc(); break;
                     /* 图标 / 配置扩展 */
                     case "pickCustomIcon":  return pickCustomIcon();
+                    case "pickExeIcon":     return pickExeIcon();
                     case "resetCustomIcon": resetCustomIcon(); break;
                     case "getCustomIcon":   return getCustomIcon();
                     case "setWallpaperFit":
@@ -3718,6 +3719,51 @@ public class FxApp extends Application {
             saveConfig();
             new File(dataDir(), "custom_icon.png").delete();
             applyAppIcon();
+        }
+
+        /** 提取别的 exe 文件的图标当作应用图标（窗口/任务栏/托盘即时生效）。
+         *  走 java.desktop 公开 API FileSystemView.getSystemIcon(File,w,h)（JDK12+，
+         *  Windows 上直接向 shell 要指定尺寸的图标，不碰 sun.* 内部类）。 */
+        public String pickExeIcon() {
+            FileChooser fc = new FileChooser();
+            fc.setTitle("选择要提取图标的 exe 文件");
+            fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("exe 文件", "*.exe"));
+            File f = fc.showOpenDialog(stage);
+            if (f == null) return "";
+            try {
+                javax.swing.filechooser.FileSystemView fv =
+                        javax.swing.filechooser.FileSystemView.getFileSystemView();
+                javax.swing.Icon icon = fv.getSystemIcon(f, 256, 256);
+                if (icon == null || icon.getIconWidth() <= 0) return "";
+                java.awt.Image img;
+                if (icon instanceof javax.swing.ImageIcon) {
+                    img = ((javax.swing.ImageIcon) icon).getImage();
+                } else {
+                    BufferedImage bi = new BufferedImage(icon.getIconWidth(),
+                            icon.getIconHeight(), BufferedImage.TYPE_INT_ARGB);
+                    java.awt.Graphics2D gg = bi.createGraphics();
+                    icon.paintIcon(null, gg, 0, 0);
+                    gg.dispose();
+                    img = bi;
+                }
+                int S = 256;
+                BufferedImage out = new BufferedImage(S, S, BufferedImage.TYPE_INT_ARGB);
+                java.awt.Graphics2D g = out.createGraphics();
+                g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
+                        java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+                double k = Math.min((double) S / img.getWidth(null),
+                                    (double) S / img.getHeight(null));
+                int w = Math.max(1, (int) (img.getWidth(null) * k));
+                int h = Math.max(1, (int) (img.getHeight(null) * k));
+                g.drawImage(img, (S - w) / 2, (S - h) / 2, w, h, null);
+                g.dispose();
+                File dst = new File(dataDir(), "custom_icon.png");
+                ImageIO.write(out, "png", dst);
+                customIconPath = "custom_icon.png";
+                saveConfig();
+                applyAppIcon();
+                return fileToDataUrl(dst);
+            } catch (Exception e) { return ""; }
         }
 
         public String getCustomIcon() {

@@ -1262,6 +1262,7 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
         <div class="row">
           <img class="icon-prev" :src="customIcon || iconUrl">
           <button class="capture-btn" @click="pickCustomIcon">用图片替换图标</button>
+          <button class="capture-btn" @click="pickExeIcon">用 exe 文件的图标</button>
           <button class="capture-btn ghost" @click="resetCustomIcon">恢复默认</button>
         </div>
         <div class="hint">窗口、任务栏、托盘图标即时生效；桌面 exe 文件图标在重新打包时启用。</div>
@@ -2423,14 +2424,23 @@ var app = Vue.createApp({
           h = Math.ceil(maxLines * met.lh + 4) + padV;
         } else {
           /* ★ 光标不在最后一行 = 这一行后面还有内容：显示三行
-             （上一行、这一行、下一行），宽度=整行宽 —— 光标停在段落中间时
-             看得到上下文，不再是孤零零一条窄框（用户：不显示左边的内容不对）。
+             （上一行、这一行、下一行）。宽 = 三行里最宽那行的真实宽度、
+             高 = 三行的精确行盒总高 —— 以前按"每行字数"给宽（右边多出一截
+             空白）、按 lh×3 估高（上下行各漏进来半截，像被裁掉一样）。
              光标在最后一行才用"一行贴字"的窄框。 */
           var onLast = this.caretOnLastRow();
           this._bub3 = (onLast === false);
           if (this._bub3) {
-            w = fullW;
-            h = Math.ceil(met.lh * 3) + padV;
+            var ctx3 = this.bubbleContextRows();
+            if (ctx3 && ctx3.ok) {
+              var inner3 = Math.min(Math.max(ctx3.maxW + fs * 0.5, fs * 1.05), capNow2);
+              w = Math.round(inner3) + padH + 10 + side;
+              if (w > fullW) w = fullW;
+              h = Math.ceil(ctx3.h) + padV;
+            } else {
+              w = fullW;
+              h = Math.ceil(met.lh * 3) + padV;
+            }
           } else {
             w = Math.round(inner) + padH + 10 + side;
             if (w > fullW) w = fullW;
@@ -2500,6 +2510,56 @@ var app = Vue.createApp({
         if (!maxBottom) return true;              // 空文档：光标就是最后一行
         return cb.bottom >= maxBottom - Math.max(2, cb.height * 0.5);
       } catch (e) { return null; }
+    },
+
+    /** 光标上下三行的精确几何（上一行、光标行、下一行，跨段落也算）。
+     *  返回 {h: 三行总高, maxW: 三行里最宽那行的文字宽, ok}；量不出来 ok=false。
+     *  ★ 高度用真实行盒（next.bottom − prev.top），不再按 lh×3 估 ——
+     *    估出来的高度和实际行高差几 px，上下行就各漏进来半截，看着像被裁。 */
+    bubbleContextRows: function() {
+      try {
+        var ed = document.getElementById('editor');
+        var cb = this.caretRect();
+        if (!ed || !cb || !(cb.height > 0)) return { ok: false };
+        var rr = document.createRange();
+        rr.selectNodeContents(ed);
+        var rects = rr.getClientRects();
+        var rows = [];
+        for (var i = 0; i < rects.length; i++) {
+          var t = rects[i];
+          if (!(t.height > 0) && !(t.width > 0)) continue;
+          var found = null;
+          for (var j = 0; j < rows.length; j++) {
+            if (Math.abs(rows[j].top - t.top) < 2 && Math.abs(rows[j].bottom - t.bottom) < 2) {
+              found = rows[j]; break;
+            }
+          }
+          if (found) {
+            if (t.right > found.right) found.right = t.right;
+            if (t.left < found.left) found.left = t.left;
+          } else rows.push({ top: t.top, bottom: t.bottom, left: t.left, right: t.right });
+        }
+        if (!rows.length) return { ok: false };
+        rows.sort(function(a, b) { return a.top - b.top; });
+        var mid = cb.top + cb.height / 2;
+        var ci = rows.length - 1;
+        for (var k = 0; k < rows.length; k++) {
+          if (rows[k].top <= mid + 1) ci = k; else break;
+        }
+        var prev = ci > 0 ? rows[ci - 1] : null;
+        var next = ci < rows.length - 1 ? rows[ci + 1] : null;
+        var cur = rows[ci];
+        if (!next) return { ok: false };        // 没有下一行 = 最后一行，调用方不该用这个
+        var top3 = prev ? prev.top : cur.top;
+        var bot3 = next.bottom;
+        /* 行宽从编辑区内容左缘量起（首行缩进、居中行都从真实左端算） */
+        var cs = getComputedStyle(ed);
+        var cl = ed.getBoundingClientRect().left + ed.clientLeft +
+                 (parseFloat(cs.paddingLeft) || 0);
+        var maxW = Math.max(cur.right, prev ? prev.right : 0, next.right) - cl;
+        return { ok: true, h: Math.max(bot3 - top3, cb.height),
+                 maxW: Math.max(0, maxW) };
+      } catch (e) { return { ok: false }; }
     },
 
     /** 光标所在「实际渲染视觉行」的矩形（宽 = 行右端 − 编辑区内容左缘，首行缩进也算）。
@@ -3570,18 +3630,69 @@ var app = Vue.createApp({
       if (!this.pickSelRange()) { this.toast('请先选中要标底纹的文字'); return; }
       this.applySelMark({ backgroundColor: this.lastShade || '#FACC15' }, 'hlmark');
     },
+    /** 拆掉一个底纹/标记壳：去两个类、摘 data-tag 和 --tagc/背景色，
+     *  span 拆干净后整个解包。返回是否本来就是个标记壳。 */
+    _stripMarkSpan: function(sp) {
+      if (!sp || !sp.classList) return false;
+      var wasMark = sp.classList.contains('hlmark') ||
+                    sp.classList.contains('tagmark') ||
+                    (sp.getAttribute && sp.getAttribute('data-tag'));
+      sp.classList.remove('hlmark');
+      sp.classList.remove('tagmark');
+      if (sp.getAttribute && sp.getAttribute('data-tag')) sp.removeAttribute('data-tag');
+      try { sp.style.removeProperty('--tagc'); } catch (e) {}
+      try { sp.style.removeProperty('background-color'); } catch (e) {}
+      var p = sp.parentNode;
+      if (sp.tagName === 'SPAN' && p && !sp.getAttribute('style') && !sp.className &&
+          !sp.getAttribute('data-tag')) {
+        while (sp.firstChild) p.insertBefore(sp.firstChild, sp);
+        p.removeChild(sp);
+      }
+      return wasMark;
+    },
     clearSelMark: function() {
       /* ★ 真正拆除格式层（拆 span/去类），不是盖上"透明"——
-         以前盖透明后 .hlmark 类还在，导航面板里依然显示这条"重点" */
-      if (this.markPop === 'fg') this.removeSelFormat('color');
-      else {
-        /* 底纹 / 标记是同一套视觉，两种壳都要拆干净（不然导航留下"重要（空）"） */
-        this.removeSelFormat('backgroundColor', 'hlmark');
-        this.removeSelFormat('backgroundColor', 'tagmark');
+         以前盖透明后 .hlmark 类还在，导航面板里依然显示这条"重点"。
+         ★ 三条路都拆干净：
+           1) 有选区：选区碰到的每一个底纹/标记壳都拆（以前只拆起点那一层，
+             而且拆完第一层选区就没了，第二层 tagmark 永远拆不掉 ——
+             这就是"标签清除格式删不掉"的真凶）；
+           2) 没选区、光标停在带格式的字上：从光标位置一路往外拆到编辑区根；
+           3) 只有内联背景色（无壳）：按老路 removeSelFormat 兜底。 */
+      if (this.markPop === 'fg') { this.removeSelFormat('color'); this.markPop = ''; return; }
+      var ed = document.getElementById('editor');
+      var r = this.pickSelRange();
+      var n = 0;
+      if (r && ed) {
+        var marks = ed.querySelectorAll('.hlmark,.tagmark');
+        for (var i = marks.length - 1; i >= 0; i--) {
+          var sp = marks[i];
+          var hit = false;
+          try { hit = r.intersectsNode(sp); } catch (e) { hit = false; }
+          if (hit && this._stripMarkSpan(sp)) n++;
+        }
+      }
+      if (!n) {
+        /* 选区没碰到任何壳（或没有选区）：从选区起点/光标位置往外逐层拆 */
+        var el = null;
+        if (r) el = r.startContainer.nodeType === 1 ? r.startContainer
+                  : r.startContainer.parentElement;
+        if (!el) el = this.caretEl();
+        while (el && el !== ed) {
+          var parent = el.parentNode;
+          if (el.classList && (el.classList.contains('hlmark') ||
+                               el.classList.contains('tagmark'))) {
+            this._stripMarkSpan(el);
+          } else if (el.style && el.style.backgroundColor) {
+            try { el.style.removeProperty('background-color'); } catch (e2) {}
+          }
+          el = parent;
+        }
       }
       this.sweepEmptyMarks();
       this.markPop = '';
       this.refreshNav();
+      if (n) this.onInput();
     },
 
     /* ---------- 标签 / 导航 / 目录 ---------- */
@@ -5314,6 +5425,73 @@ var app = Vue.createApp({
       this.onInput();
       return true;
     },
+    /** 按坐标找光标位置（右键"挪光标到点击处"用）。
+     *  ★ JavaFX WebView 的 document.caretRangeFromPoint 恒返回 null（实测），
+     *  caretPositionFromPoint 也没有 —— 只能自己算：
+     *  先按行盒找纵向最近的文本节点，再按 x 二分到字符。 */
+    caretFromPoint: function(x, y) {
+      try {
+        var ed = document.getElementById('editor');
+        if (!ed) return null;
+        var r0 = null;
+        try { r0 = document.caretRangeFromPoint(x, y); } catch (e) {}
+        if (!r0 && document.caretPositionFromPoint) {
+          try {
+            var p = document.caretPositionFromPoint(x, y);
+            if (p && p.offsetNode) {
+              r0 = document.createRange();
+              r0.setStart(p.offsetNode, p.offset); r0.collapse(true);
+            }
+          } catch (e2) {}
+        }
+        if (r0 && ed.contains(r0.startContainer)) return r0;
+        /* 兜底：找纵向最近（横向也尽量贴）的有内容文本节点行 */
+        var best = null, bestD = 1e9;
+        var walker = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT, null);
+        var n;
+        while ((n = walker.nextNode())) {
+          var len = n.nodeValue.length;
+          if (!len || !n.nodeValue.replace(/\s/g, '').length) continue;
+          var rAll = document.createRange();
+          rAll.selectNodeContents(n);
+          var rects = rAll.getClientRects();
+          if (!rects) continue;
+          for (var ri = 0; ri < rects.length; ri++) {
+            var t = rects[ri];
+            if (!(t.height > 0)) continue;
+            var rowDist = (y >= t.top && y <= t.bottom) ? 0
+                        : Math.min(Math.abs(y - t.top), Math.abs(y - t.bottom));
+            var dx = (x >= t.left && x <= t.right) ? 0
+                   : Math.min(Math.abs(x - t.left), Math.abs(x - t.right));
+            var d = rowDist * 1000 + dx;      // 纵向优先，横向其次（同一行选含 x 的那段字）
+            if (d < bestD) {
+              bestD = d;
+              best = { node: n };
+            }
+          }
+        }
+        if (!best || bestD >= 80000) return null;   // 点得离文字太远（纵向 >80px）：不作数
+        var tn = best.node, L = 0, R = tn.nodeValue.length;
+        var rr2 = document.createRange();
+        function offRect(i) {
+          rr2.setStart(tn, i); rr2.collapse(true);
+          return rr2.getBoundingClientRect();
+        }
+        while (R - L > 1) {
+          var M = (L + R) >> 1;
+          var mr = offRect(M);
+          if (!mr || (!(mr.width > 0) && !(mr.height > 0))) { L = M; continue; }
+          if (x > mr.left) L = M; else R = M;
+        }
+        var lr = offRect(L), rro = offRect(R);
+        var dl = (lr && (lr.width > 0 || lr.height > 0)) ? Math.abs(x - lr.left) : 1e9;
+        var dr = (rro && (rro.width > 0 || rro.height > 0)) ? Math.abs(x - rro.left) : 1e9;
+        var out = document.createRange();
+        out.setStart(tn, dl <= dr ? L : R);
+        out.collapse(true);
+        return out;
+      } catch (e3) { return null; }
+    },
     ctxOpen: function(e) {
       this.ctxCur = this.blockOf();
       this.ctxView = 'main';
@@ -5321,6 +5499,25 @@ var app = Vue.createApp({
       var ed = document.getElementById('editor');
       var hasSel = sel && sel.rangeCount && !sel.isCollapsed && ed &&
                    ed.contains(sel.getRangeAt(0).startContainer);
+      /* ★ 右键落在编辑器文字上、又没有选中文字：把光标挪到点击处 ——
+         不然"清除/底纹/标记"这些按光标位置操作的按钮作用在旧光标点上，
+         用户右键的那段字的格式根本动不到（"标签清除删不掉"的另一半真凶） */
+      if (!hasSel && ed) {
+        try {
+          var er = ed.getBoundingClientRect();
+          if (e.clientX >= er.left && e.clientX <= er.right &&
+              e.clientY >= er.top && e.clientY <= er.bottom) {
+            var cr = this.caretFromPoint(e.clientX, e.clientY);
+            if (cr && ed.contains(cr.startContainer)) {
+              var s3 = window.getSelection();
+              s3.removeAllRanges(); s3.addRange(cr);
+              this._range = cr.cloneRange();
+              this._selRange = null;
+              hasSel = false;
+            }
+          }
+        } catch (e4) {}
+      }
       this.ctxScope = hasSel ? ('选中 ' + sel.toString().replace(/\s/g, '').length + ' 字')
                              : '整段';
       /* 当前外观（用来显示"字体 宋体 ›"、字号、B/I/U 状态）。
@@ -5624,6 +5821,10 @@ var app = Vue.createApp({
     },
     pickCustomIcon: function() {
       var d = this.host('pickCustomIcon');
+      if (d) { this.customIcon = d; this.iconUrl = d; this.toast('图标已更换（窗口/任务栏/托盘）'); }
+    },
+    pickExeIcon: function() {
+      var d = this.host('pickExeIcon');
       if (d) { this.customIcon = d; this.iconUrl = d; this.toast('图标已更换（窗口/任务栏/托盘）'); }
     },
     resetCustomIcon: function() {
