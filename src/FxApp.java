@@ -105,6 +105,7 @@ public class FxApp extends Application {
     private int intrudeSize = 100;        // 侵入元素大小 %
     private boolean autoSave = true;      // 自动保存（关掉后靠 Ctrl+S 手动保存）
     private boolean alwaysWords = false;  // 词库面板常驻右侧
+    private boolean indentFirst = true;   // 全文段落自动首行缩进两格（回车新段也是）
     private String wordPrefix = "z";      // 词库快捷输入前缀（前缀+数字 一键插入）
     private boolean musicFollow = false;  // 跟随音乐：监听系统音量驱动律动
     private String currentDoc = "未命名.txt"; // 当前文档（data/docs/ 下的文件名）
@@ -136,6 +137,8 @@ public class FxApp extends Application {
     private WebView webView;
     private WebEngine engine;
     private String draft = "";
+    /** 文档 → 本地关联文件（"存到桌面"）：每次修改实时写回该文件 */
+    private final java.util.Map<String, String> docLinks = new java.util.HashMap<>();
     private final List<String[]> words = new ArrayList<String[]>();  // {code, content, cat}
     private int today0 = 0, total0 = 0;   // 会话开始时的今日字数/全文字数（增量统计基准）
     private boolean bubble = false;
@@ -235,6 +238,10 @@ public class FxApp extends Application {
 
         WebView web = new WebView();
         webView = web;
+        /* ★ 全局关掉 WebView 自带的右键菜单：右键底纹/彩色文字时冒出来的
+           "刷新文档/重新加载"那一套就是它。页面自己有完整的右键菜单，
+           原生菜单只会添乱 —— 一刀切，永不再弹。 */
+        web.setContextMenuEnabled(false);
         engine = web.getEngine();
         engine.load(getClass().getResource("/index.html").toExternalForm());
         // 页面加载完成后挂载 JS 桥（必须在 load 完成后，否则 window 上挂不上）
@@ -1199,11 +1206,65 @@ public class FxApp extends Application {
         return d;
     }
 
-    /** 字体库目录：data/fonts/（可放多个导入字体） */
+    /** 字体库目录：固定放「我的文档\闪写字体库」，用户在自己电脑上直接能翻到，
+     *  把 ttf/otf 拖进去重启就能用。
+     *  自测/测试模式仍写到隔离数据根（data/selftest/...），绝不碰用户真实字体库。 */
     private File fontsDir() {
-        File d = new File(dataDir(), "fonts");
+        File d = fontLibraryDir();
         if (!d.exists()) d.mkdirs();
+        migrateLegacyFonts(d);
         return d;
+    }
+
+    private static boolean fontsMigrated = false;
+
+    /** 字体库真实路径（不创建、不迁移，给 getFontsDir 显示用） */
+    private File fontLibraryDir() {
+        boolean isolated = !"data".equals(dataRoot.replace('\\', '/'));
+        if (isolated) return new File(dataDir(), "fonts");   // 自测：和真实库隔离
+        String home = System.getProperty("user.home", "");
+        File docs = new File(home, "Documents");
+        if (!docs.isDirectory()) docs = new File(home, "文档");
+        if (!docs.isDirectory()) return new File(dataDir(), "fonts");   // 找不到文档目录就退回程序目录
+        return new File(docs, "闪写字体库");
+    }
+
+    /** 老版本导入的字体都在 data/fonts：搬到新字体库，别让用户"导入的字体不见了" */
+    private void migrateLegacyFonts(File target) {
+        if (fontsMigrated) return;
+        fontsMigrated = true;
+        try {
+            File legacy = new File(dataDir(), "fonts");
+            if (legacy.equals(target) || !legacy.isDirectory()) return;
+            File[] fs = legacy.listFiles();
+            if (fs == null) return;
+            for (File f : fs) {
+                String n = f.getName().toLowerCase();
+                if (!n.endsWith(".ttf") && !n.endsWith(".otf")) continue;
+                File dst = new File(target, f.getName());
+                if (dst.exists()) continue;
+                java.nio.file.Files.copy(f.toPath(), dst.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    /** 字体库路径（设置里显示，用户按这个路径能自己在资源管理器里找到） */
+    public String getFontsDir() {
+        return fontsDir().getAbsolutePath();
+    }
+
+    /** 打开字体库文件夹（资源管理器里直接看得到、能往里拖字体） */
+    public void openFontsDir() {
+        try {
+            File d = fontsDir();
+            if (java.awt.Desktop.isDesktopSupported()
+                    && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.OPEN)) {
+                java.awt.Desktop.getDesktop().open(d);
+            } else {
+                new ProcessBuilder("explorer.exe", d.getAbsolutePath()).start();
+            }
+        } catch (Throwable ignored) {}
     }
 
     /** 文件名清洗：只留中文/字母/数字/_-.，防路径穿越 */
@@ -1275,6 +1336,11 @@ public class FxApp extends Application {
             fontPath = c.getProperty("font", "");
             fontName = c.getProperty("fontName", "");
             fontWest = sanitizeFontName(c.getProperty("fontWest", ""));
+            /* 文档 → 本地文件关联（key 前缀 link.） */
+            docLinks.clear();
+            for (String k : c.stringPropertyNames())
+                if (k.startsWith("link.") && !c.getProperty(k, "").isEmpty())
+                    docLinks.put(k.substring(5), c.getProperty(k));
             /* 旧版字体是单文件 data/customfont.ttf|otf：迁进 data/fonts/ 目录 */
             for (String old : new String[]{"customfont.ttf", "customfont.otf"}) {
                 File o = new File(dataDir(), old);
@@ -1325,6 +1391,7 @@ public class FxApp extends Application {
             if (!skin.matches("light|dark")) skin = "light";
             bubbleDblRestore = Boolean.parseBoolean(c.getProperty("bubbleDblRestore", "true"));
             bubbleAutoSize = Boolean.parseBoolean(c.getProperty("bubbleAutoSize", "true"));
+            indentFirst = Boolean.parseBoolean(c.getProperty("indentFirst", "true"));
             bubbleIntrude = Boolean.parseBoolean(c.getProperty("bubbleIntrude", "false"));
             intrudeOpacity = clamp(parseInt(c.getProperty("intrudeOpacity"), 40), 5, 100);
             intrudeSize = clamp(parseInt(c.getProperty("intrudeSize"), 100), 20, 200);
@@ -1350,11 +1417,29 @@ public class FxApp extends Application {
         total0 = countChars(draft);
     }
 
-    private void saveDraft(String text) {
+    /** 文档同名伴生 HTML：存格式（标题/底纹/标签/颜色），.txt 只存纯文字（统计/快照/兼容） */
+    private File htmlFileOf(String docName) {
+        String base = (docName == null ? "" : docName);
+        if (base.toLowerCase().endsWith(".txt")) base = base.substring(0, base.length() - 4);
+        return new File(docsDir(), base + ".html");
+    }
+
+    private void saveDraft(String text) { saveDraft(text, null); }
+
+    private void saveDraft(String text, String html) {
         draft = text == null ? "" : text;
         try {
             writeAll(new File(dataDir(), "draft.txt"), draft);
             writeAll(new File(docsDir(), currentDoc), draft);   // 多文档：写入当前文档
+            /* 格式持久化：把编辑器 HTML 存进伴生文件，重启/切回来都能还原标题、
+               底纹、标签、颜色 —— 以前只存纯文字，格式重启就丢 */
+            if (html != null) writeAll(htmlFileOf(currentDoc), html);
+            String linked = docLinks.get(currentDoc);
+            if (linked != null) {                                // 关联了本地文件：实时写回
+                File lf = new File(linked);
+                if (linked.toLowerCase().endsWith(".html") && html != null) writeAll(lf, html);
+                else writeAll(lf, draft);
+            }
             docDirty = false;
             appendHistory(draft, histForceOnce);
             histForceOnce = false;
@@ -1371,6 +1456,14 @@ public class FxApp extends Application {
             Platform.runLater(() -> notifyJs("if(window.app&&app.setStats)app.setStats("
                     + tt + "," + total + ")"));
         } catch (Exception ignored) {}
+    }
+
+    /** 当前文档的伴生 HTML（没有返回空串） */
+    private String getDraftHtml() {
+        try {
+            File f = htmlFileOf(currentDoc);
+            return f.exists() ? readAll(f) : "";
+        } catch (Exception e) { return ""; }
     }
 
     /* ---------- 文字历史快照（Typora 式丢失寻回，按文档独立存放） ---------- */
@@ -1581,6 +1674,8 @@ public class FxApp extends Application {
             c.setProperty("winOpacity", String.valueOf(winOpacity));
             c.setProperty("font", fontPath);
             c.setProperty("fontName", fontName);
+            for (java.util.Map.Entry<String, String> en : docLinks.entrySet())
+                c.setProperty("link." + en.getKey(), en.getValue());
             c.setProperty("fontUi", fontUi);
             c.setProperty("h1Size", String.valueOf(h1Size));
             c.setProperty("h2Size", String.valueOf(h2Size));
@@ -1616,6 +1711,7 @@ public class FxApp extends Application {
             c.setProperty("skin", skin);
             c.setProperty("bubbleDblRestore", String.valueOf(bubbleDblRestore));
             c.setProperty("bubbleAutoSize", String.valueOf(bubbleAutoSize));
+            c.setProperty("indentFirst", String.valueOf(indentFirst));
             c.setProperty("bubbleIntrude", String.valueOf(bubbleIntrude));
             c.setProperty("intrudeOpacity", String.valueOf(intrudeOpacity));
             c.setProperty("intrudeSize", String.valueOf(intrudeSize));
@@ -1914,6 +2010,10 @@ public class FxApp extends Application {
                     case "getConfig":    return getConfig();
                     case "getWords":     return getWords();
                     case "getDraft":     return getDraft();
+                    case "getDraftHtml": return getDraftHtml();
+                    case "getDocLink":   return docLinks.get(currentDoc) == null ? "" : docLinks.get(currentDoc);
+                    case "linkDocTo":    return linkDocTo(a1);
+                    case "unlinkDoc":    unlinkDoc(); break;
                     case "setComposing": setComposing(a1); return "";
                     case "setCapturing": setCapturing(a1); return "";
                     case "getIcon":      return getIcon();
@@ -1921,6 +2021,9 @@ public class FxApp extends Application {
                     case "getFontData":  return getFontData();
                     case "getFontName":  return getFontName();
                     case "listImportedFonts": return listImportedFonts();
+                    case "listSystemFonts": return listSystemFonts();
+                    case "getFontsDir":   return getFontsDir();
+                    case "openFontsDir":  openFontsDir(); break;
                     case "getFontDataByFile": return getFontDataByFile(a1);
                     case "deleteFont":   return deleteFont(a1);
                     case "setWestFont":  setWestFont(a1); break;
@@ -1929,7 +2032,10 @@ public class FxApp extends Application {
                     case "setTocSize":   setTocSize(parseIntS(a1)); break;
                     case "getBgm":       return getBgm();
                     case "isAutoStart":  return String.valueOf(isAutoStart());
-                    case "saveDraft":    saveDraft(a1); break;
+                    case "saveDraft":    saveDraft(a1, a2); break;
+                    case "popNav":       popNav(a1); break;
+                    case "updateNav":    updateNav(a1); break;
+                    case "closeNav":     if (navStage != null) navStage.hide(); break;
                     /* 多文档 */
                     case "getDocs":      return getDocs();
                     case "getDocName":   return getDocName();
@@ -1938,7 +2044,7 @@ public class FxApp extends Application {
                     case "renameDoc":    return renameDoc(a1, a2);
                     case "deleteDoc":    deleteDoc(a1); break;
                     case "importDocFile":return importDocFile();
-                    case "saveNow":      return saveNow(a1);
+                    case "saveNow":      return saveNow(a1, a2);
                     case "setAutoSave":  setAutoSave(Boolean.parseBoolean(a1)); break;
                     case "setWordsAlways": setWordsAlways(Boolean.parseBoolean(a1)); break;
                     /* 词库 */
@@ -1991,6 +2097,7 @@ public class FxApp extends Application {
                     case "setSkin":        setSkin(a1); break;
                     case "setBubbleFlags": setBubbleFlags(Boolean.parseBoolean(a1),
                             Boolean.parseBoolean(a2)); break;
+                    case "setIndentCfg":   setIndentCfg(Boolean.parseBoolean(a1)); break;
                     case "setBubbleIntrude": setBubbleIntrude(Boolean.parseBoolean(a1),
                             parseIntS(a2), parseIntS(a3)); break;
                     case "setKey":         setKey(a1, a2); break;
@@ -2109,6 +2216,7 @@ public class FxApp extends Application {
 
         /** 注意：必须显式写 FxApp.this.saveDraft —— 否则解析到本方法自身，无限递归 */
         public void saveDraft(String t) { FxApp.this.saveDraft(t); }
+        public void saveDraft(String t, String html) { FxApp.this.saveDraft(t, html); }
 
         /* ---- 多文档 ---- */
         public String getDocs() { return docListJson(); }
@@ -2155,6 +2263,14 @@ public class FxApp extends Application {
                 File hs = histFile(from), hd = histFile(n);
                 if (hs.exists() && !hd.exists()) hs.renameTo(hd);
             } catch (Exception ignored) {}
+            File hs2 = htmlFileOf(from);           // 伴生 HTML（格式）跟着改名
+            if (hs2.exists()) {
+                File hd2 = htmlFileOf(n);
+                if (hd2.exists()) hd2.delete();
+                hs2.renameTo(hd2);
+            }
+            String link = docLinks.remove(from);   // 本地关联跟着改名
+            if (link != null) docLinks.put(n, link);
             if (from.equals(currentDoc)) { currentDoc = n; saveConfig(); }
             return n;
         }
@@ -2170,6 +2286,9 @@ public class FxApp extends Application {
                 else if (f.exists()) text = readAll(f);
             } catch (Exception ignored) {}
             if (f.exists()) f.delete();
+            File hf = htmlFileOf(name);            // 伴生 HTML 一并删
+            if (hf.exists()) hf.delete();
+            docLinks.remove(name);                 // 本地关联解除
             try {
                 File hs = histFile(name);
                 File del = new File(histDir(), name + ".deleted.hist");
@@ -2233,11 +2352,182 @@ public class FxApp extends Application {
         }
 
         /** 立即保存（Ctrl+S）：写盘并返回字数 */
-        public String saveNow(String text) {
+        public String saveNow(String text, String html) {
             /* 手动保存（Ctrl+S）就是一个"留档点"：不受 40 秒节流限制 */
             FxApp.this.histForceOnce = true;
-            FxApp.this.saveDraft(text);
+            FxApp.this.saveDraft(text, html);
             return String.valueOf(countChars(draft));
+        }
+
+        /** "存到桌面"：把当前文档关联到用户选的本地文件，此后每次修改实时写回。
+         *  html=当前编辑器 HTML（选 .html 时存格式，其他扩展名存纯文字）。返回所选路径。 */
+        public String linkDocTo(String html) {
+            FileChooser fc = new FileChooser();
+            fc.setTitle("把这篇文档存到本地");
+            fc.setInitialFileName(currentDoc == null ? "未命名.txt" : currentDoc);
+            File desk = new File(System.getProperty("user.home"), "Desktop");
+            if (desk.isDirectory()) fc.setInitialDirectory(desk);
+            fc.getExtensionFilters().addAll(
+                    new FileChooser.ExtensionFilter("文本文档", "*.txt"),
+                    new FileChooser.ExtensionFilter("网页（保留格式）", "*.html"),
+                    new FileChooser.ExtensionFilter("所有文件", "*.*"));
+            File f = fc.showSaveDialog(stage);
+            if (f == null) return "";
+            try {
+                boolean asHtml = f.getName().toLowerCase().endsWith(".html");
+                writeAll(f, asHtml && html != null ? html : (draft == null ? "" : draft));
+                docLinks.put(currentDoc, f.getAbsolutePath());
+                saveConfig();
+                log("doc linked: " + currentDoc + " -> " + f);
+                return f.getAbsolutePath();
+            } catch (Exception e) {
+                log("linkDocTo fail: " + e);
+                return "";
+            }
+        }
+
+        /** 解除当前文档的本地关联（文档仍在文档库，只是不再写回外部文件） */
+        public void unlinkDoc() {
+            docLinks.remove(currentDoc);
+            saveConfig();
+        }
+
+        /* ---- 导航悬浮窗格：弹出为独立置顶小窗，可钉在屏幕最左/最右 ---- */
+
+        private Stage navStage;
+        private javafx.scene.control.ListView<String[]> navListView;
+        private double navDragX, navDragY;
+
+        /** 弹出/更新导航窗。payload：条目用 \u0001 分隔，字段 type/lv/color/text 用 \u0002 分隔
+         *  （项目里没有 JSON 解析器，沿用导出用的 \u0002 约定） */
+        public void popNav(String payload) {
+            if (navStage == null) buildNavWindow();
+            renderNavItems(payload);
+            if (!navStage.isShowing()) {
+                positionNavSide(true);
+                navStage.show();
+            }
+            navStage.toFront();
+        }
+
+        /** 正文变化时同步刷新（面板没开就忽略） */
+        public void updateNav(String payload) {
+            if (navStage != null && navStage.isShowing()) renderNavItems(payload);
+        }
+
+        private void buildNavWindow() {
+            navStage = new Stage(StageStyle.TRANSPARENT);
+            navStage.setAlwaysOnTop(true);
+            javafx.scene.layout.VBox root = new javafx.scene.layout.VBox();
+            root.setStyle("-fx-background-color:rgba(251,251,253,0.97);-fx-background-radius:12;"
+                    + "-fx-border-color:#d9dde9;-fx-border-width:1;-fx-border-radius:12;"
+                    + "-fx-effect:dropshadow(gaussian,rgba(40,50,90,0.28),14,0.15,0,5);"
+                    + "-fx-padding:8;");
+            /* 标题条：拖动移动 + 贴边 + 关闭 */
+            javafx.scene.control.Label ttl = new javafx.scene.control.Label("导航");
+            ttl.setStyle("-fx-font-size:13px;-fx-font-weight:bold;-fx-text-fill:#333;");
+            javafx.scene.layout.Region spacer = new javafx.scene.layout.Region();
+            javafx.scene.layout.HBox.setHgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
+            javafx.scene.control.Button bl = new javafx.scene.control.Button("‹");
+            javafx.scene.control.Button br = new javafx.scene.control.Button("›");
+            javafx.scene.control.Button bx = new javafx.scene.control.Button("✕");
+            for (javafx.scene.control.Button b : new javafx.scene.control.Button[]{bl, br, bx}) {
+                b.setStyle("-fx-background-color:transparent;-fx-cursor:hand;"
+                        + "-fx-font-size:12px;-fx-text-fill:#666;-fx-padding:2 6;");
+                b.setOnMouseEntered(e -> b.setStyle("-fx-background-color:#e8ebf5;-fx-cursor:hand;"
+                        + "-fx-font-size:12px;-fx-text-fill:#333;-fx-background-radius:6;-fx-padding:2 6;"));
+                b.setOnMouseExited(e -> b.setStyle("-fx-background-color:transparent;-fx-cursor:hand;"
+                        + "-fx-font-size:12px;-fx-text-fill:#666;-fx-padding:2 6;"));
+            }
+            bl.setTooltip(new javafx.scene.control.Tooltip("钉到屏幕最左"));
+            br.setTooltip(new javafx.scene.control.Tooltip("钉到屏幕最右"));
+            bl.setOnAction(e -> positionNavSide(true));
+            br.setOnAction(e -> positionNavSide(false));
+            bx.setOnAction(e -> {
+                navStage.hide();
+                /* 用户主动点关闭：从 UI 线程 executeScript 安全（非 JS 回调重入） */
+                try { engine.executeScript("if(window.app&&app.navPopClose)app.navPopClose()"); }
+                catch (Throwable ignored) {}
+            });
+            javafx.scene.layout.HBox bar = new javafx.scene.layout.HBox(4, ttl, spacer, bl, br, bx);
+            bar.setStyle("-fx-padding:2 2 6 4;-fx-alignment:center-left;");
+            bar.setOnMousePressed(e -> { navDragX = navStage.getX() - e.getScreenX();
+                                         navDragY = navStage.getY() - e.getScreenY(); });
+            bar.setOnMouseDragged(e -> { navStage.setX(e.getScreenX() + navDragX);
+                                         navStage.setY(e.getScreenY() + navDragY); });
+            /* 条目列表 */
+            navListView = new javafx.scene.control.ListView<>();
+            navListView.setStyle("-fx-background-color:transparent;-fx-border-color:transparent;"
+                    + "-fx-font-size:12.5px;");
+            navListView.setCellFactory(lv -> new javafx.scene.control.ListCell<String[]>() {
+                @Override protected void updateItem(String[] it, boolean empty) {
+                    super.updateItem(it, empty);
+                    if (empty || it == null) { setText(null); setGraphic(null); return; }
+                    int lvInd;
+                    try { lvInd = Integer.parseInt(it[1]); } catch (Exception e2) { lvInd = 0; }
+                    String base = "-fx-padding:3 4 3 " + (4 + lvInd * 14)
+                            + ";-fx-background-radius:6;-fx-cursor:hand;-fx-alignment:center-left;";
+                    javafx.scene.layout.HBox box = new javafx.scene.layout.HBox(6);
+                    box.setStyle(base);
+                    if ("h".equals(it[0])) {
+                        javafx.scene.control.Label l = new javafx.scene.control.Label(it[3]);
+                        l.setStyle("-fx-text-fill:#222;-fx-font-weight:"
+                                + (lvInd <= 0 ? "bold" : "normal") + ";");
+                        box.getChildren().add(l);
+                    } else {
+                        javafx.scene.layout.Region dot = new javafx.scene.layout.Region();
+                        dot.setStyle("-fx-min-width:9;-fx-min-height:9;-fx-max-width:9;-fx-max-height:9;"
+                                + "-fx-background-radius:5;-fx-background-color:" + it[2] + ";");
+                        javafx.scene.control.Label l = new javafx.scene.control.Label(it[3]);
+                        l.setStyle("-fx-text-fill:#333;");
+                        box.getChildren().addAll(dot, l);
+                    }
+                    setOnMouseEntered(e -> box.setStyle(base + "-fx-background-color:#e9edf8;"));
+                    setOnMouseExited(e -> box.setStyle(base));
+                    setGraphic(box);
+                    setText(null);
+                }
+            });
+            navListView.setOnMouseClicked(e -> {
+                int i = navListView.getSelectionModel().getSelectedIndex();
+                if (i < 0) return;
+                try { engine.executeScript("if(window.app&&app.gotoNavIndex)app.gotoNavIndex(" + i + ")"); }
+                catch (Throwable ignored) {}
+            });
+            root.getChildren().addAll(bar, navListView);
+            javafx.scene.layout.VBox.setVgrow(navListView, javafx.scene.layout.Priority.ALWAYS);
+            navStage.setScene(new Scene(root, 236, 520));
+        }
+
+        /** 贴边定位：left=true 钉屏幕最左，false 钉最右 */
+        private void positionNavSide(boolean left) {
+            javafx.geometry.Rectangle2D vb =
+                    javafx.stage.Screen.getPrimary().getVisualBounds();
+            double w = 236, h = Math.min(560, vb.getHeight() * 0.62);
+            navStage.setWidth(w); navStage.setHeight(h);
+            navStage.setX(left ? vb.getMinX() + 6 : vb.getMaxX() - w - 6);
+            navStage.setY(vb.getMinY() + Math.max(60, vb.getHeight() * 0.16));
+        }
+
+        private void renderNavItems(String payload) {
+            if (navListView == null) return;
+            javafx.collections.ObservableList<String[]> items =
+                    javafx.collections.FXCollections.observableArrayList();
+            if (payload != null && !payload.isEmpty()) {
+                for (String row : payload.split("\u0001")) {
+                    String[] f = row.split("\u0002", -1);
+                    if (f.length < 4) continue;
+                    String lv = f[1];
+                    items.add(new String[]{f[0], Integer.toString(lv.matches("\\d+") ? Integer.parseInt(lv) - 1 : 0),
+                                           f[2], f[3]});
+                }
+            }
+            navListView.setItems(items);
+            if (items.isEmpty()) {
+                javafx.scene.control.Label empty = new javafx.scene.control.Label("还没有标题（H1/H2/H3）或标签");
+                empty.setStyle("-fx-text-fill:#999;-fx-font-size:11.5px;");
+                navListView.setPlaceholder(empty);
+            }
         }
 
         public void setAutoSave(boolean v) { autoSave = v; saveConfig(); }
@@ -2322,6 +2612,7 @@ public class FxApp extends Application {
                     + ",\"skin\":\"" + skin + "\""
                     + ",\"bubbleDblRestore\":" + bubbleDblRestore
                     + ",\"bubbleAutoSize\":" + bubbleAutoSize
+                    + ",\"indentFirst\":" + indentFirst
                     + ",\"bubbleIntrude\":" + bubbleIntrude
                     + ",\"intrudeOpacity\":" + intrudeOpacity
                     + ",\"intrudeSize\":" + intrudeSize
@@ -2408,6 +2699,12 @@ public class FxApp extends Application {
         public void setBubbleFlags(boolean dblRestore, boolean autoSize) {
             bubbleDblRestore = dblRestore;
             bubbleAutoSize = autoSize;
+            saveConfig();
+        }
+
+        /* ---- 全文首行缩进开关（段落 CSS text-indent，不算"格式"） ---- */
+        public void setIndentCfg(boolean on) {
+            indentFirst = on;
             saveConfig();
         }
 
@@ -2525,8 +2822,52 @@ public class FxApp extends Application {
             new File(dataDir(), "customfont.bin").delete();
         }
 
-        /** 字体库列表：[{file:"xxx.ttf", name:"楷体"}]（族名现场从字体文件读） */
-        public String listImportedFonts() {
+        /** 本机"真的装了"的字体族名（前端字体下拉只列这些）。
+         *  以前前端写死了一份字体名单，里面隶书/幼圆之类很多机器根本没有，
+         *  选了等于没反应。这里问 JDK 要系统字体清单，但只留**常用字体**：
+         *  本机一装两三百个字体，花里胡哨的装饰字体/符号字体列出来根本没法用。
+         *  用户想要别的字体，丢进「文档\闪写字体库」即可（走导入字体）。 */
+        private String sysFontsCache = null;
+        public String listSystemFonts() {
+            if (sysFontsCache != null) return sysFontsCache;
+            java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+            try {
+                String[] names = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment()
+                        .getAvailableFontFamilyNames(java.util.Locale.SIMPLIFIED_CHINESE);
+                for (String n : names) {
+                    if (n == null) continue;
+                    n = n.trim();
+                    if (n.isEmpty() || n.charAt(0) == '@') continue;   // @ 开头=竖排变体，别列
+                    set.add(n);
+                }
+            } catch (Throwable ignored) {}
+            /* 常用字体白名单（本机装了才列，顺序就是下拉里的顺序） */
+            String[] common = {
+                    "微软雅黑", "Microsoft YaHei", "微软雅黑 Light",
+                    "宋体", "SimSun", "新宋体", "NSimSun", "黑体", "SimHei",
+                    "楷体", "KaiTi", "仿宋", "FangSong", "等线", "DengXian",
+                    "思源黑体", "Source Han Sans SC", "思源宋体", "Source Han Serif SC",
+                    "霞鹜文楷", "LXGW WenKai", "华文中宋", "STZhongsong",
+                    "华文细黑", "STXihei", "华文楷体", "STKaiti",
+                    "Segoe UI", "Arial", "Times New Roman", "Georgia", "Calibri", "Consolas"};
+            java.util.List<String> out = new java.util.ArrayList<>();
+            for (String p : common) if (set.remove(p)) out.add(p);
+            /* 一个常用字体都没匹配到（极简/英文系统）：退回按字母序取前 20 个可用字体 */
+            if (out.isEmpty()) {
+                java.util.List<String> rest = new java.util.ArrayList<>(set);
+                rest.sort(String.CASE_INSENSITIVE_ORDER);
+                out.addAll(rest.subList(0, Math.min(20, rest.size())));
+            }
+            StringBuilder b = new StringBuilder("[");
+            for (int i = 0; i < out.size(); i++) {
+                if (i > 0) b.append(',');
+                b.append('"').append(esc(out.get(i))).append('"');
+            }
+            sysFontsCache = b.append(']').toString();
+            return sysFontsCache;
+        }
+
+        /** 字体库列表：[{file:"xxx.ttf", name:"楷体"}]（族名现场从字体文件读） */        public String listImportedFonts() {
             StringBuilder b = new StringBuilder("[");
             File[] fs = fontsDir().listFiles();
             boolean first = true;
@@ -2877,6 +3218,11 @@ public class FxApp extends Application {
             if (!stage.isShowing()) return;
             w = Math.max(48, w);
             h = Math.max(34, h);
+            /* ★ 一步到位 + 只在真变了才动窗口：程序化改窗口尺寸时 WebView 会
+               拿旧帧糊屏（多帧动画试过，画面整帧错乱）——"一闪一闪"的最大
+               来源是频繁重设窗口，这里合并掉小变化就是最有效的稳帧手段。 */
+            double cw = stage.getWidth(), ch = stage.getHeight();
+            if (Math.abs(cw - w) < 0.5 && Math.abs(ch - h) < 0.5) return;
             stage.setWidth(w);
             stage.setHeight(h);
             /* 兜底 2：气泡拖到屏幕边缘后再缩放，可能整个窗口跑出可视区。
@@ -3045,7 +3391,10 @@ public class FxApp extends Application {
             for (int i = list.size() - 1; i >= 0; i--) {
                 String[] e = list.get(i);
                 String txt = e[1];
+                /* 预览折叠所有空白：换行符原样塞进 JSON，WebView 会把它渲染成
+                   "缺字形的豆腐块"（寻回面板里一闪一闪的 □）—— 折成空格就干净了 */
                 String prev = txt.length() > 60 ? txt.substring(0, 60) : txt;
+                prev = prev.replaceAll("\\s+", " ").trim();
                 if (sb.length() > 1) sb.append(',');
                 sb.append("{\"id\":").append(i)
                   .append(",\"doc\":\"").append(esc(name))

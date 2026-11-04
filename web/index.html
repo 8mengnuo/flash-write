@@ -63,9 +63,18 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
 .tb:active{transform:scale(.94)}
 .tb.on{background:var(--accent);color:#fff}
 .tbdiv{width:1px;height:16px;background:var(--line);margin:0 3px;flex:none}
+/* 对齐钮：窄方钮 + 图标（四个一排不占地方） */
+.albtn{width:24px;padding:0;display:inline-flex;align-items:center;justify-content:center}
 .tbsel{height:26px;border-radius:8px;border:1px solid var(--line);background:var(--soft);
   color:var(--ink);font-size:12px;padding:0 5px;max-width:150px}
-.fontsel{max-width:112px}
+.fontsel{max-width:118px}
+/* 自定义字号：直接填数字的输入框（不再弹窗） */
+.tbnum{height:26px;width:54px;border-radius:8px;border:1px solid var(--line);
+  background:var(--soft);color:var(--ink);font-size:12px;padding:0 3px;text-align:center;
+  -webkit-appearance:none;appearance:none}
+.tbnum::-webkit-inner-spin-button,.tbnum::-webkit-outer-spin-button{
+  -webkit-appearance:none;appearance:none;margin:0}
+.tbnum:focus{outline:none;border-color:var(--accent)}
 
 /* ═══════════════ 主编辑区（背景图垫在文字之下，仅完整模式） ═══════════════ */
 .ed-wrap{position:relative;flex:1;display:flex;min-height:0}
@@ -89,21 +98,18 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
   font-family:var(--h3ff,inherit);font-style:var(--h3it,normal)}
 .editor h1,.editor h2,.editor h3{color:var(--ink)}
 .editor p{margin:0}
+/* 全文首行缩进（--tind 由 applyVars 下发，设置→外观可关）：
+   挂在段落块上而不是插入全角空格 —— 换行新段自动继承，
+   两端对齐时首行也老老实实缩进，不会像行首空格那样被拉伸/吞掉 */
+.editor>p,.editor>div{text-indent:var(--tind,2em)}
 
-/* ═══════════════ 标签（tagmark）与目录（toc） ═══════════════ */
-/* 标签：包住一段文字的彩色小标记，data-tag 存名字，颜色走内联 --tagc */
-.tagmark{background:var(--tagc,rgba(245,158,11,.28));border-radius:4px;padding:0 3px;
-  box-shadow:inset 0 -1.5px 0 var(--tagc,rgba(245,158,11,.6))}
+/* ═══════════════ 标签（tagmark）═══════════════ */
+/* 标签：包住一段文字的彩色小标记，data-tag 存名字，颜色走内联 --tagc。
+   和底纹（hlmark）同一套视觉：就是一块圆角色底 —— 标签=带名字的底纹 */
+.tagmark{background:var(--tagc,rgba(245,158,11,.28));border-radius:4px;padding:0 3px}
 .tagmark.flash{outline:2px solid var(--accent);outline-offset:2px;transition:outline .3s}
-/* 跳转定位闪框（导航/目录通用） */
+/* 跳转定位闪框（导航跳转） */
 #editor .flash{outline:2px solid var(--accent);outline-offset:2px}
-/* 目录：一键生成；字号走 --tocfs，生成前后都实时跟设置走 */
-.toc{border:1px solid var(--line);border-radius:10px;padding:12px 18px;margin:10px 0;
-  background:var(--soft);font-size:var(--tocfs,16px);line-height:2}
-.toc .toc-h{font-weight:700;letter-spacing:.5em;text-indent:.5em;margin-bottom:4px}
-.toc ol{margin:0;padding-left:26px}
-.toc a{color:var(--ink);text-decoration:none;cursor:pointer}
-.toc a:hover{color:var(--accent)}
 /* 导航面板（标题+标签列表） */
 .navpop{width:250px;max-height:70vh;overflow-y:auto;padding:8px}
 .navsec{font-size:10.5px;color:var(--sub);padding:4px 6px 5px;letter-spacing:.05em}
@@ -112,6 +118,8 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
 .navitem:hover{background:var(--soft);color:var(--accent)}
 .navitem .nvtxt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .navitem .nvtag{flex:none;font-size:10px;padding:1px 7px;border-radius:8px;color:#fff}
+/* 右键菜单的标签面板里也用同款小胶囊 */
+.ctxitem .nvtag{font-size:10px;padding:1px 7px;border-radius:8px;color:#fff;margin-right:6px}
 .navlv1{font-weight:700}.navlv2{padding-left:20px}.navlv3{padding-left:34px;font-size:12px}
 /* 标签选择小弹层 */
 .tagpick{width:190px;padding:8px}
@@ -297,6 +305,8 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
   background:var(--field);padding:0 6px;font-size:12px;outline:none}
 .capture-btn{background:var(--accent);color:#fff;border-radius:9px;padding:6px 14px;font-size:13px}
 .capture-btn.ghost{background:var(--hover);color:var(--tb-ink)}
+/* 已固定的标记（和"选颜色后固定"一个意思）：按钮高亮，一眼看出接下来套哪个 */
+.capture-btn.ghost.on{background:var(--accent);color:#fff}
 .capture-btn:hover{filter:brightness(1.08)}
 .hint{font-size:12px;color:var(--sub);line-height:1.6}
 .combo-show{background:rgba(99,102,241,.1);color:var(--accent);border-radius:8px;
@@ -368,6 +378,9 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
 #app.mode-bubble{background:transparent;padding:var(--bpad,26px);overflow:visible}
 .mode-bubble .ed-wrap{border-radius:16px;overflow:hidden;
   box-shadow:0 8px 30px rgba(60,70,120,.26)}
+/* 边距为 0（无环绕元素/浓度 0）时：阴影会被窗口边缘裁切，圆角外那圈
+   就成了一坨"灰色填涂"—— 贴边态收掉阴影，圆角外恢复透明 */
+#app.mode-bubble.flat .ed-wrap{box-shadow:none}
 .mode-bubble .editor{padding:8px 12px 10px;background:var(--panel)}
 /* 气泡模式不放提示文字：小气泡里一行提示比正文还抢眼 */
 #app.mode-bubble .editor:empty:before{content:none}
@@ -379,15 +392,22 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
    小胶囊改成贴顶覆盖内边距区（0..16px 正好是 bpad 8 + 编辑器 padding-top 8，
    文字从 16px 起，不挡点字）；右边留 50px 给悬浮出现的控制钮。 */
 #app.mode-bubble.bubbletiny .dragstrip{top:0;left:4px;right:50px;height:16px}
-/* 控制钮：常显（半透明），鼠标靠近变实 —— 往下滑动写稿时关闭钮也能一眼看到，
-   不用再把鼠标挪回最顶部 */
+/* 控制钮：鼠标不在窗口上时完全隐藏（不打视野），移上来才浮出 —— 自定义大小模式同理。
+   ★ 容器永远不拦点击（padding 区常把小胶囊顶部的拖动条盖住，"拖不动/双击无效"），
+   只有圆形按钮本体可点 */
 .bctrl-wrap{position:absolute;top:0;right:2px;z-index:8;display:flex;gap:5px;
-  padding:6px 6px 12px 16px;opacity:.55;transition:opacity .16s}
+  padding:6px 6px 12px 16px;opacity:0;pointer-events:none;transition:opacity .16s}
+#app.mode-bubble:hover .bctrl-wrap{opacity:.92}
 .bctrl-wrap:hover,.bctrl-wrap:focus-within{opacity:1}
+.bctrl{pointer-events:none}
+#app.mode-bubble:hover .bctrl{pointer-events:auto}
+/* 滚动条同理：鼠标不在时占位 0，避免右侧一条常驻灰轨 */
+#app.mode-bubble .editor::-webkit-scrollbar{width:0;height:0}
+#app.mode-bubble:hover .editor::-webkit-scrollbar{width:8px}
 /* 小胶囊态：控制钮完全让开（不然 23px 的圆钮比气泡还大，把正文全挡住）。
    鼠标移进气泡才浮出来 —— 想退出/还原时不需要先猜按钮在哪。 */
-.bctrl-wrap.tiny{opacity:0;pointer-events:none}
-#app:hover .bctrl-wrap.tiny{opacity:.92;pointer-events:auto}
+.bctrl-wrap.tiny{opacity:0}
+#app:hover .bctrl-wrap.tiny{opacity:.92}
 .bctrl{width:23px;height:23px;border-radius:50%;background:var(--panel);
   box-shadow:0 2px 8px rgba(60,70,120,.3);display:flex;align-items:center;justify-content:center;
   color:var(--tb-ink);transition:all .12s}
@@ -466,37 +486,69 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
     <button class="tb" :title="keyOf('history')" @click="showHist">寻回</button>
     <button class="tb" :title="keyOf('find')" @click="openFind">查找替换</button>
     <div class="spacer"></div>
-    <select class="tbsel fontsel" v-model="tbFont" title="给选中文字设置字体" @change="applySelFont">
-      <option value="" disabled>字体（选中文字）</option>
+    <!-- 字体：下拉框直接显示"光标处字体"（默认=正文样式），选中文字后选=只改选中 -->
+    <select class="tbsel fontsel" :value="caretFont"
+            :title="'光标处字体：' + (caretFont||'正文样式') + '（选中文字后选字体=只改选中这几个字）'"
+            @change="onTbFontChange">
+      <option value="" disabled>{{caretFont || '字体'}}</option>
+      <option v-if="caretFont && fontList.indexOf(caretFont) < 0 && !importedFonts.some(function(x){return x.name===caretFont})"
+              :value="caretFont">{{caretFont}}</option>
       <option v-for="f in importedFonts" :key="'if'+f.file" :value="f.name">{{f.name}}（导入）</option>
       <option v-if="fontFamily && !importedFonts.some(function(x){return x.name===fontFamily})"
               :value="fontFamily">{{fontFamily}}（导入）</option>
       <option v-for="f in fontList" :key="f" :value="f">{{f}}</option>
       <option value="__import__">导入字体…</option>
     </select>
-    <select class="tbsel" v-model="tbSize" title="给选中文字设置字号" @change="applySelSize">
-      <option value="" disabled>字号</option>
-      <option v-for="n in sizeList" :key="n" :value="n">{{sizeLabel(n)}}</option>
-      <option value="__custom__">自定义…</option>
+    <!-- 字号：下拉框直接显示"光标处字号"（默认=正文样式）；右边输入框可填任意 px -->
+    <select class="tbsel" :value="caretSize ? String(caretSize) : ''"
+            :title="'光标处字号：' + (caretSize ? caretSize+'px' : '正文样式') + '（选中文字后选字号=只改选中这几个字）'"
+            @change="onTbSizeChange">
+      <option value="" disabled>{{caretSize ? sizeLabel(caretSize) : '字号'}}</option>
+      <option v-if="caretSize && sizeList.indexOf(caretSize) < 0" :value="String(caretSize)">{{sizeLabel(caretSize)}}</option>
+      <option v-for="n in sizeList" :key="n" :value="String(n)">{{sizeLabel(n)}}</option>
     </select>
-    <button class="tb" title="加粗选中文字" @click="toggleBold"><b>B</b></button>
-    <button class="tb" title="斜体选中文字" @click="toggleItalicSel"><i>I</i></button>
-    <button class="tb" title="下划线选中文字" @click="toggleUnderlineSel"><u>U</u></button>
-    <button class="tb" title="文字颜色（选中文字）" @mousedown.stop
-            @click="markPop = (markPop==='fg' ? '' : 'fg')">
-      <span style="border-bottom:3px solid var(--accent)">A</span></button>
-    <button class="tb" title="文字底纹（标重点，导航面板可跳转）" @mousedown.stop
-            @click="markPop = (markPop==='bg' ? '' : 'bg')">
-      <span style="background:rgba(250,204,21,.55);border-radius:3px;padding:0 2px">纹</span></button>
+    <input class="tbnum" type="number" min="8" max="200" step="1" v-model="sizeInput"
+           title="自定义字号（px，8~200）：填好后回车或点别处生效，只改选中的文字"
+           placeholder="px" @keydown.enter.prevent="applySizeInput" @blur="applySizeInput">
+    <button class="tb" :class="{on:caretBold}" title="加粗选中文字（亮起=光标处是粗体）" @click="toggleBold"><b>B</b></button>
+    <button class="tb" :class="{on:caretItalic}" title="斜体选中文字（亮起=光标处是斜体）" @click="toggleItalicSel"><i>I</i></button>
+    <button class="tb" :class="{on:caretUnder}" title="下划线选中文字（亮起=光标处有下划线）" @click="toggleUnderlineSel"><u>U</u></button>
+    <button class="tb" :class="{on:colorPaint}" data-rcmark="fg"
+            title="文字颜色笔：点开后选中的文字自动变色；右键换颜色"
+            @mousedown.stop @click="quickColor">
+      <span :style="{borderBottom:'3px solid ' + (lastColor || '#E11D48')}">A</span></button>
+    <button class="tb" :class="{on:shadePaint}" data-rcmark="bg"
+            title="底纹笔：点开后选中的文字自动上底纹；右键改默认颜色"
+            @mousedown.stop @click="quickShade">
+      <span :style="{background:lastShadeBg,borderRadius:'3px',padding:'0 2px'}">纹</span></button>
     <span class="tbdiv"></span>
-    <button class="tb" title="插入标签 · 选中文字套标签，没选中插标签名（右键选样式）"
-            @click="tagPickerShow=!tagPickerShow" @mousedown.stop>标签</button>
-    <button class="tb" title="导航面板：标题/标签快速跳转 · 一键生成目录"
+    <!-- ★ 标签已并入底纹：右键"纹"→ 取色面板里的"标记为…"（带名字的彩色底纹，
+        导航面板可跳转）。工具栏不再有独立的标签按钮。 -->
+    <button class="tb" title="导航面板：标题/标记/重点快速跳转，可弹出为悬浮窗格"
             @click="toggleNav" @mousedown.stop>导航</button>
     <button class="tb" title="一级标题（当前段落）· 右键编辑该样式" @click="setBlock('h1')" data-rcstyle="h1">H1</button>
     <button class="tb" title="二级标题（当前段落）· 右键编辑该样式" @click="setBlock('h2')" data-rcstyle="h2">H2</button>
     <button class="tb" title="三级标题（当前段落）· 右键编辑该样式" @click="setBlock('h3')" data-rcstyle="h3">H3</button>
     <button class="tb" title="正文（当前段落）· 右键编辑该样式" @click="setBlock('p')" data-rcstyle="p">正文</button>
+    <span class="tbdiv"></span>
+    <button class="tb albtn" :class="{on:curAlign==='left'}" title="左对齐（回车后新段落默认左对齐）"
+            @mousedown.stop @click="alignSel('left')">
+      <svg width="13" height="13" viewBox="0 0 13 13"><g fill="currentColor">
+        <rect x="1" y="2" width="11" height="1.5" rx=".7"/>
+        <rect x="1" y="5.75" width="7" height="1.5" rx=".7"/>
+        <rect x="1" y="9.5" width="11" height="1.5" rx=".7"/></g></svg></button>
+    <button class="tb albtn" :class="{on:curAlign==='center'}" title="居中对齐"
+            @mousedown.stop @click="alignSel('center')">
+      <svg width="13" height="13" viewBox="0 0 13 13"><g fill="currentColor">
+        <rect x="1" y="2" width="11" height="1.5" rx=".7"/>
+        <rect x="3" y="5.75" width="7" height="1.5" rx=".7"/>
+        <rect x="1" y="9.5" width="11" height="1.5" rx=".7"/></g></svg></button>
+    <button class="tb albtn" :class="{on:curAlign==='right'}" title="右对齐"
+            @mousedown.stop @click="alignSel('right')">
+      <svg width="13" height="13" viewBox="0 0 13 13"><g fill="currentColor">
+        <rect x="1" y="2" width="11" height="1.5" rx=".7"/>
+        <rect x="5" y="5.75" width="7" height="1.5" rx=".7"/>
+        <rect x="1" y="9.5" width="11" height="1.5" rx=".7"/></g></svg></button>
   </div>
 
   <!-- ═══ 主编辑区 ═══ -->
@@ -520,12 +572,12 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
   </template>
 
   <!-- ═══ 右键菜单（WPS 式）：段落样式 + 字体/字号/格式直改 + 改样式模板 ═══ -->
-  <div class="pop menu ctxmenu" v-if="ctxShow" :style="{left:ctxPos.left,top:ctxPos.top}"
+  <div class="pop menu ctxmenu" data-popkey="ctx" v-if="ctxShow" :style="[{left:ctxPos.left,top:ctxPos.top}, popOff.ctx]"
        @mousedown.stop @contextmenu.prevent.stop>
 
     <!-- 主面板 -->
     <template v-if="ctxView==='main'">
-      <div class="ctxhd">段落样式 · {{ctxScope}}<span class="ctxhd-tip">（右键标签=改该样式）</span></div>
+      <div class="ctxhd">段落样式 · {{ctxScope}}<span class="ctxhd-tip">{{ctxScope==='整段' ? '（没选中：格式改整段）' : '（字体/字号/B I U 只改选中这几个字）'}}</span></div>
       <div class="ctxtags">
         <button class="ctxtag" :class="{on:ctxCur==='p'}" @click="ctxApply('p')" data-rcstyle="p"
                 @contextmenu.prevent.stop="ctxStyleOpen('p')">正文</button>
@@ -545,6 +597,10 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
         <button :class="{on:ctxBold}" @click="ctxToggle('bold')"><b>B</b></button>
         <button :class="{on:ctxItalic}" @click="ctxToggle('italic')"><i>I</i></button>
         <button :class="{on:ctxUnder}" @click="ctxToggle('underline')"><u>U</u></button>
+      </div>
+      <div class="ctxgrid" style="grid-template-columns:repeat(2,1fr);padding-top:0">
+        <button @click="ctxColor" :style="{color:lastColor}">颜色<span class="ctxhd-tip">上次色</span></button>
+        <button @click="ctxShade">底纹<span class="ctxhd-tip">上次色</span></button>
       </div>
       <div class="msep"></div>
       <button class="ctxitem" @click="ctxIndent">段首缩进两格</button>
@@ -664,9 +720,10 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
             @mousedown.stop @click="host('hideWindow')">✕</button>
   </div>
 
-  <!-- ═══ 文字颜色 / 底纹取色弹层 ═══ -->
-  <div class="pop menu" v-if="markPop" style="width:196px" :style="{right:'14px',top:'84px'}" @mousedown.stop>
-    <div class="ctxhd">{{markPop==='fg' ? '文字颜色（选中文字）' : '底纹颜色（标重点，导航可跳转）'}}</div>
+  <!-- ═══ 文字颜色 / 底纹取色弹层（贴着触发的按钮弹，不再写死右上角） ═══ -->
+  <div class="pop menu" data-popkey="mark" v-if="markPop" style="width:196px"
+       :style="[markPopPos || {right:'14px',top:'84px'}, popOff.mark]" @mousedown.stop>
+    <div class="ctxhd">{{markPop==='fg' ? '文字颜色（选完 A 就换这个色）' : '底纹颜色（标重点，导航可跳转）'}}</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;padding:2px 10px 6px">
       <i v-for="c in markColors" :key="c" :title="c"
          :style="{background:c,width:'20px',height:'20px',borderRadius:'5px',cursor:'pointer',
@@ -681,38 +738,43 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
       <button class="capture-btn ghost" style="margin-left:auto;padding:3px 10px;font-size:12px"
               @click="clearSelMark">清除</button>
     </div>
+    <!-- ★ 标记为XX（原"标签"功能并入底纹）：选中文字 → 点一个标记 =
+        带名字的彩色底纹，导航面板可跳转；再点一次同一个标记 = 取消 -->
+    <template v-if="markPop==='bg'">
+      <div class="msep"></div>
+      <div class="ctxhd">标记为…（选完就固定这个标记，接着选中的文字自动套；再点一次取消）</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;padding:0 10px 6px">
+        <button v-for="t in tagDefs" :key="t.name" class="capture-btn ghost"
+                :class="{on: tagPaint && curTag === t.name}"
+                style="padding:3px 9px;font-size:12px;display:inline-flex;align-items:center;gap:4px"
+                @click="applyTag(t)">
+          <i :style="{background:t.color,width:8,height:8,borderRadius:'50%',display:'inline-block'}"></i>
+          {{t.name}}</button>
+      </div>
+      <div style="display:flex;gap:5px;padding:2px 10px 6px">
+        <input class="prompt-input" style="flex:1;height:26px;padding:3px 8px;font-size:12px"
+               v-model="newTagName" placeholder="新标记名" @keydown.enter.prevent="createTag">
+        <input type="color" v-model="newTagColor" style="width:30px;height:26px;padding:1px"
+               title="标记颜色">
+        <button class="capture-btn" style="padding:3px 9px;font-size:12px" @click="createTag">加</button>
+      </div>
+      <div v-if="tagDefs.length" style="display:flex;flex-wrap:wrap;gap:4px;padding:0 10px 6px">
+        <span v-for="(t,ti) in tagDefs" :key="'m'+ti" style="font-size:10.5px;display:inline-flex;
+              align-items:center;gap:3px;background:var(--soft);border-radius:8px;padding:1px 4px 1px 8px">
+          <i :style="{background:t.color,width:8,height:8,borderRadius:'50%',display:'inline-block'}"></i>
+          {{t.name}}
+          <b style="cursor:pointer;color:var(--sub);padding:0 3px" title="删除该标记"
+             @click="removeTag(ti)">✕</b></span>
+      </div>
+    </template>
   </div>
 
-  <!-- ═══ 标签选择小弹层（工具条"标签"按钮 / Ctrl+Shift+G） ═══ -->
-  <div class="pop menu tagpick" v-if="tagPickerShow" style="right:14px;top:84px" @mousedown.stop>
-    <div class="ctxhd">选择标签（选中文字=套标签；没选中=插入标签名）</div>
-    <button class="tagrow" v-for="t in tagDefs" :key="t.name" @click="applyTag(t)">
-      <span class="nvtag" :style="{background:t.color}">{{t.name}}</span>
-    </button>
-    <div class="msep"></div>
-    <div style="display:flex;gap:5px;padding:2px 4px">
-      <input class="prompt-input" style="flex:1;height:26px;padding:3px 8px;font-size:12px"
-             v-model="newTagName" placeholder="新标签名" @keydown.enter.prevent="createTag">
-      <input type="color" v-model="newTagColor" style="width:30px;height:26px;padding:1px"
-             title="标签颜色">
-      <button class="capture-btn" style="padding:3px 9px;font-size:12px" @click="createTag">加</button>
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:4px;padding:4px">
-      <span v-for="(t,ti) in tagDefs" :key="'m'+ti" style="font-size:10.5px;display:inline-flex;
-            align-items:center;gap:3px;background:var(--soft);border-radius:8px;padding:1px 4px 1px 8px">
-        <i :style="{background:t.color,width:8,height:8,borderRadius:'50%',display:'inline-block'}"></i>
-        {{t.name}}
-        <b style="cursor:pointer;color:var(--sub);padding:0 3px" title="删除标签"
-           @click="removeTag(ti)">✕</b></span>
-    </div>
-  </div>
-
-  <!-- ═══ 导航面板（标题 + 标签；一键生成目录） ═══ -->
-  <div class="pop navpop" v-if="navShow" style="right:14px;top:84px" @mousedown.stop>
+  <!-- ═══ 导航面板（标题 + 标记 + 重点；可弹出为屏幕左/右侧悬浮窗格） ═══ -->
+  <div class="pop navpop" data-popkey="nav" v-if="navShow" :style="[{right:'14px',top:'84px'}, popOff.nav]" @mousedown.stop>
     <div style="display:flex;align-items:center;padding:0 4px 6px">
       <b style="font-size:13px;flex:1">导航</b>
-      <button class="capture-btn" style="padding:3px 10px;font-size:12px" @click="genToc"
-              title="在光标处插入目录（标题列表，可点击跳转；样式在下方实时调）">生成目录</button>
+      <button class="capture-btn" style="padding:3px 10px;font-size:12px" @click="popNav"
+              title="弹出为独立悬浮窗格（置顶，钉在屏幕最左/最右，点条目跳回正文）">弹出</button>
       <span class="x" style="margin-left:6px;cursor:pointer;color:var(--sub)"
             @click="navShow=false">✕</span>
     </div>
@@ -723,18 +785,11 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
       </button>
     </template>
     <div v-else class="ctxhd" style="padding:10px 8px">还没有标题（H1/H2/H3）或标签</div>
-    <div class="msep"></div>
-    <div class="row" style="padding:2px 6px 6px">
-      <label style="min-width:auto;font-size:11.5px">目录字号</label>
-      <input type="range" min="10" max="28" v-model.number="cfg.tocSize"
-             @input="applyVars" style="width:96px">
-      <span style="font-size:11px">{{cfg.tocSize}}px（生成前后都生效）</span>
-    </div>
   </div>
 
   <!-- ═══ 词库弹层（点击"词库"按钮 / Ctrl+K / 常驻开关才出现） ═══ -->
-  <div class="pop wpop" :class="{pinned:cfg.alwaysWords, sideword: mode==='bubble'}"
-       :style="mode==='full' ? 'right:10px;top:88px' : ''"
+  <div class="pop wpop" data-popkey="words" :class="{pinned:cfg.alwaysWords, sideword: mode==='bubble'}"
+       :style="[{right:mode==='full'?'10px':'',top:mode==='full'?'88px':''}, popOff.words]"
        v-if="wordsVisible" @mousedown.stop>
     <div class="wpop-h">
       <span>词库 · {{words.length}} 条</span>
@@ -793,8 +848,14 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
     </div>
     <div class="row" style="margin:0 0 8px;gap:6px">
       <button class="capture-btn ghost" style="flex:1" @click="importFile">打开文件…</button>
+      <button class="capture-btn ghost" style="flex:1" @click="linkDoc"
+              title="把当前文档存一份到桌面等位置，此后每次修改实时写回该文件">存到桌面…</button>
       <button class="capture-btn ghost" style="flex:1" @click="refreshDocs">刷新</button>
     </div>
+    <div class="wtip" v-if="docLink" style="margin:0 0 8px">
+      已关联：<b>{{docLink}}</b>
+      <button class="capture-btn ghost" style="padding:1px 8px;margin-left:6px"
+              @click="unlinkDoc">解除</button></div>
     <div class="witem drow" v-for="d in docs" :key="d.name" :class="{cur:d.current}"
          @mousedown.prevent="openDoc(d.name)">
       <div class="dname">{{d.name}}<span class="dcur" v-if="d.current">当前</span></div>
@@ -813,7 +874,7 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
   </div>
 
   <!-- ═══ 更多菜单 ═══ -->
-  <div class="pop" style="right:10px;top:50px" v-if="showMore" @mousedown.stop>
+  <div class="pop" data-popkey="more" :style="[{right:'10px',top:'50px'}, popOff.more]" v-if="showMore" @mousedown.stop>
     <div class="menu">
       <button class="mitem" @click="preset(800,150)">迷你条（800×150）</button>
       <button class="mitem" @click="preset(500,400)">小窗（500×400）</button>
@@ -822,6 +883,7 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
       <div class="msep"></div>
       <button class="mitem" @click="openSettings();showMore=false">设置 / 快捷键</button>
       <button class="mitem" @click="openExport">导出…</button>
+      <button class="mitem" @click="linkDoc">存到桌面…（修改实时写回）</button>
       <button class="mitem" @click="importDoc">导入文档…</button>
       <button class="mitem" @click="showHist">文字寻回…</button>
       <button class="mitem" @click="askClearAll">清空全部文本</button>
@@ -854,7 +916,7 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
   </div>
 
   <!-- ═══ 特殊字符面板 ═══ -->
-  <div class="pop chargrid" v-if="showChars" :style="charsPos" @mousedown.stop>
+  <div class="pop chargrid" data-popkey="chars" v-if="showChars" :style="[charsPos, popOff.chars]" @mousedown.stop>
     <button v-for="c in charList" :key="c" @click="insertChar(c)">{{c}}</button>
   </div>
 
@@ -931,15 +993,15 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
         <div class="row"><label>每行字数</label>
           <input type="number" v-model.number="cfg.bubbleCharsPerLine" min="10" max="40"
                  @change="applyBubbleSize">
-          <span class="hint">起点电子书同款约 20 字/行</span></div>
+          <span class="hint">宽度上限 = 当前字号下这么多字的实测宽度（20 字在 14px 约 290px、29px 约 590px）；没写满时框就跟着文字变长</span></div>
         <div class="row"><label>显示行数</label>
           <input type="number" v-model.number="cfg.bubbleLines" min="1" max="12"
                  @change="applyBubbleSize">
-          <span class="hint">{{cfg.bubbleAutoSize ? '每行最多字数（宽度到这就换行）' : '气泡高度；向上滚动可翻阅之前的文字'}}</span></div>
+          <span class="hint">高度 = 实际行数 × 当前真实行高，最多这么多行（字号变大，高度自动变高）</span></div>
         <div class="row"><label>大小自适应</label>
           <div class="switch" :class="{on:cfg.bubbleAutoSize && !cfg.bubbleManualSize}"
                @click="cfg.bubbleAutoSize=!cfg.bubbleAutoSize;cfg.bubbleManualSize=false;applyBubbleSizeNow()"></div>
-          <span class="hint">{{cfg.bubbleAutoSize && !cfg.bubbleManualSize ? '一行没打完 = 这行字的宽度；进入下一行才变宽' : '固定大小，超出就滚动'}}</span></div>
+          <span class="hint">{{cfg.bubbleAutoSize && !cfg.bubbleManualSize ? '默认 1 行高，跟着当前输入行走；向上翻看时变成这里的行数，回来就缩回' : '固定大小，超出就滚动'}}</span></div>
         <div class="row" style="margin-top:2px"><label>自己定大小</label>
           <div class="switch" :class="{on:cfg.bubbleManualSize}"
                @click="cfg.bubbleManualSize=!cfg.bubbleManualSize;applyBubbleSizeNow()"></div>
@@ -948,12 +1010,12 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
           <input type="range" min="120" max="2000" step="10" v-model.number="cfg.bubbleW"
                  @input="applyBubbleSizeNow" style="width:150px">
           <span style="min-width:44px">{{cfg.bubbleW}}px</span>
-          <span class="hint">≈ {{Math.round((cfg.bubbleW-44)/(cfg.fontSize||16))}} 字/行（也可直接拖气泡边缘）</span></div>
+          <span class="hint">≈ {{Math.max(1,Math.round((cfg.bubbleW-bubblePadH())/(cfg.fontSize||16)))}} 字/行（也可直接拖气泡边缘）</span></div>
         <div class="row" v-if="cfg.bubbleManualSize"><label>气泡高度</label>
           <input type="range" min="50" max="1200" step="5" v-model.number="cfg.bubbleH"
                  @input="applyBubbleSizeNow" style="width:150px">
           <span style="min-width:44px">{{cfg.bubbleH}}px</span>
-          <span class="hint">≈ {{Math.max(1,Math.round((cfg.bubbleH-40)/((cfg.fontSize||16)*1.9)))}} 行</span></div>
+          <span class="hint">≈ {{Math.max(1,Math.round((cfg.bubbleH-bubblePadV())/((cfg.fontSize||16)*1.9)))}} 行</span></div>
         <div class="row"><label>双击还原</label>
           <div class="switch" :class="{on:cfg.bubbleDblRestore}"
                @click="cfg.bubbleDblRestore=!cfg.bubbleDblRestore"></div>
@@ -1052,6 +1114,11 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
                  @click="setPair(p)"></div>
           </div>
         </div>
+        <div class="row"><label>首行缩进</label>
+          <div class="switch" :class="{on:cfg.indentFirst!==false}"
+               @click="toggleIndentFirst"></div>
+          <span class="hint">全文段落自动空两格，回车新段也缩进（两端对齐不冲突）</span>
+        </div>
         <div class="row" id="stylesec"><label>样式设置</label>
           <span class="hint">改样式 = 改所有该级别段落（同 WPS）；在正文里右键可快捷套用样式</span>
         </div>
@@ -1095,9 +1162,15 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
                  @change="host('setWinOpacityPercent', cfg.winOpacity)" style="width:110px">
           <span class="hint">{{cfg.winOpacity}}%</span>
         </div>
-        <div class="row" style="margin-top:4px"><label>字体管理</label>
-          <button class="capture-btn" @click="pickFont">导入字体文件</button>
-          <span class="hint">可导入多个；下面选择用哪个</span>
+        <div class="row" style="margin-top:4px"><label>字体库</label>
+          <button class="capture-btn" @click="host('openFontsDir')">打开字体库文件夹</button>
+          <button class="capture-btn ghost" @click="pickFont">导入字体…</button>
+        </div>
+        <div class="row" style="margin-top:2px"><label></label>
+          <span class="hint" style="user-select:text;line-height:1.5">
+            专用文件夹：{{fontsDir || '…'}}<br>
+            把 ttf/otf 字体直接拖进这个文件夹，重启后就能在字体下拉里选（不用再点导入）
+          </span>
         </div>
         <div class="row" style="margin-top:4px" v-if="importedFonts.length">
           <label>已导入</label>
@@ -1407,7 +1480,6 @@ var app = Vue.createApp({
           italic: false, h1Italic: false, h2Italic: false, h3Italic: false,
           tagDefs: [{name:'重要', color:'#F59E0B'}, {name:'待办', color:'#EF4444'},
                     {name:'灵感', color:'#8B5CF6'}],
-          tocSize: 16,
           bubbleCloud: true, bubbleRhythm: true, bubbleCloudKind: 'cloud',
           bubbleCustomChars: '', bubbleLines: 3, cloudOpacity: 60, cloudMargin: 26,
           bubbleW: 420, bubbleH: 132, bubbleManualSize: false,
@@ -1420,7 +1492,10 @@ var app = Vue.createApp({
     showFind: false, findText: '', replText: '', matchCase: false,
     findCount: 0, findIdx: 0,
     /* 工具条选中格式化：用完即复位（空 = 显示占位提示） */
-    tbFont: '', tbSize: '',
+    tbFont: '', tbSize: '', sizeInput: '',
+    /* 工具条上"光标处"的字体/字号/对齐：跟着光标跑，默认＝正文样式 */
+    caretFont: '', caretSize: 0, curAlign: 'left',
+    caretBold: false, caretItalic: false, caretUnder: false,   // 光标/选区处的 B I U
     /* 右键样式菜单（WPS 式：段落样式 + 字体/字号/格式直改） */
     ctxShow: false, ctxPos: {}, ctxCur: 'p', ctxView: 'main',
     ctxFontName: '', ctxFontSize: 16, ctxBold: false, ctxItalic: false, ctxUnder: false,
@@ -1467,17 +1542,35 @@ var app = Vue.createApp({
     wallpaper: '',
     fontFamily: '',
     importedFonts: [],
-    tagPickerShow: false, navShow: false,
+    fontsDir: '',
+    tagPickerShow: false, navShow: false, navPopped: false,
+    lastShade: '#FACC15',     // "纹"按钮左键直接套的颜色（取色面板选过就更新）
+    shadePaint: false,        // 底纹笔：开着的时候，选中的文字自动上底纹
+    lastColor: '#E11D48',     // "A"按钮的当前文字色（右键取色面板选过就更新）
+    colorPaint: false,        // 颜色笔：开着的时候，选中的文字自动变色
+    /* 标记（原"标签"）：和选颜色一个逻辑 —— 面板里点一下就"固定"住这个标记，
+       接下来在正文里选中的文字自动套它，不需要先选中文字再回来点。 */
+    curTag: '',               // 当前固定的标记名（空=没固定）
+    tagPaint: false,          // 标记笔：开着的时候，选中的文字自动套 curTag
+    docLink: '',              // 当前文档关联的本地文件（空=没关联）
     newTagName: '', newTagColor: '#F59E0B',
     markPop: '', markCustom: '#F59E0B',
+    /* 取色面板的位置（贴触发的按钮弹）。
+       ★ 不能用 _markPopPos 这种下划线开头的名字：Vue3 模板拒绝下划线开头
+         的属性（编译成裸标识符 ReferenceError）→ 渲染中断 = "右键进空白页面"，
+         而且一个渲染错会把整棵组件树拖垮（后面的弹层/类名切换全失效）。 */
+    markPopPos: null,
+    /* 弹层拖动偏移（key=弹层名）：按住弹层顶部空白处可拖开，避免弹窗叠弹窗互相遮挡 */
+    popOff: {},
     ctxCustomSize: '',
     navList: [],
     markColors: ['#EF4444', '#F97316', '#FACC15', '#4ADE80', '#22D3EE',
                  '#3B82F6', '#A78BFA', '#EC4899', '#334155', '#F5F5F4'],
     decorImg: '',
     decorImgSize: 100,
-    fontList: ['微软雅黑', '宋体', '黑体', '楷体', '仿宋', '等线', '隶书', '幼圆',
-               'Segoe UI', 'Arial', 'Georgia', 'Times New Roman', 'Courier New'],
+    /* 可选字体：启动时问主机"本机到底装了哪些字体"（listSystemFonts），
+       不再写死一堆根本没装的（隶书/幼圆在很多机器上就没有，选了等于没反应） */
+    fontList: [],
     sizeList: [12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 26, 28, 30],
     /* 中文字号（WPS/Word 的叫法；px 按 96dpi 换算：1pt = 4/3 px） */
     cnSizes: [{n:'初号',p:56},{n:'小初',p:48},{n:'一号',p:35},{n:'小一',p:32},
@@ -1506,6 +1599,13 @@ var app = Vue.createApp({
   computed: {
     /** 标签定义实际存在 cfg.tagDefs 里（随配置持久化）；这里代理出来给模板和方法用 */
     tagDefs: function() { return this.cfg.tagDefs || []; },
+    /** "纹"按钮上的色块预览（55% 透明度和真底纹一致） */
+    lastShadeBg: function() {
+      var h = (this.lastShade || '#FACC15').replace('#', '');
+      if (h.length !== 6) return 'rgba(250,204,21,.55)';
+      return 'rgba(' + parseInt(h.slice(0, 2), 16) + ',' + parseInt(h.slice(2, 4), 16)
+           + ',' + parseInt(h.slice(4, 6), 16) + ',.55)';
+    },
     docTitle: function() {
       return String(this.cfg.docName || '未命名').replace(/\.(txt|md)$/i, '');
     },
@@ -1545,11 +1645,18 @@ var app = Vue.createApp({
       if (el) el.classList.toggle('mode-bubble', v === 'bubble');
       this.syncSidewords();
     },
-    /* 小胶囊态类名：拖动条在胶囊上要换成贴顶热区（见 CSS .bubbletiny） */
     bubbleTiny: function(v) {
       var el = document.getElementById('app');
       if (el) el.classList.toggle('bubbletiny', !!v);
     },
+    /* 弹层打开时清掉上次的拖动偏移：每次都回到默认位置（取色面板才能贴按钮弹），
+       拖动是"这一回"的临时挪开，不是永久搬家 */
+    ctxShow:       function(v) { if (v) this.popOff.ctx = {}; },
+    tagPickerShow: function(v) { if (v) this.popOff.tag = {}; },
+    navShow:       function(v) { if (v) this.popOff.nav = {}; },
+    showMore:      function(v) { if (v) this.popOff.more = {}; },
+    showChars:     function(v) { if (v) this.popOff.chars = {}; },
+    markPop:       function(v) { if (v) this.popOff.mark = {}; },
     /* 冻结窗口：设置 / 退出确认时背后界面定格 */
     showSettings: function(v) { this.syncFrozen(); },
     showCloseModal: function(v) { this.syncFrozen(); },
@@ -1573,19 +1680,6 @@ var app = Vue.createApp({
     document.addEventListener('keydown', function(e) { self.onGlobalKey(e); });
     /* 三连击：气泡 → 完整；完整模式标题栏空白 → 气泡 */
     document.addEventListener('mousedown', function(e) { self.triClick(e); });
-    /* 目录里的链接：点了滚到对应标题（WebView 里 href="#..." 不会自己导航） */
-    var edEl = document.getElementById('editor');
-    if (edEl) edEl.addEventListener('click', function(e) {
-      var a = e.target && e.target.closest && e.target.closest('.toc a[href^="#"]');
-      if (!a) return;
-      e.preventDefault();
-      var t = document.getElementById(a.getAttribute('href').slice(1));
-      if (t) {
-        t.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        t.classList.add('flash');
-        setTimeout(function() { t.classList.remove('flash'); }, 900);
-      }
-    });
     /* ══ 右键兜底（捕获阶段）══
        部分 WebView 版本不把右键派发成 DOM contextmenu 事件 —— 表现就是
        "右键像被吞了"，编辑器和工具条上的右键菜单全都出不来。
@@ -1594,6 +1688,40 @@ var app = Vue.createApp({
        · 工具条/菜单里的 H1/H2/H3/正文 右键 → 直接进该级别的样式编辑面板
        用 setTimeout(0) 延后执行：编辑器自己的 mousedown(edDown) 会先关一次菜单，
        直接在这里开会被它再关掉。 */
+    /* ══ 弹层拖动 ══
+       多个弹窗同时开（导航 + 标签 + 取色面板…）会叠在一起互相遮挡：
+       按住弹层顶部 34px 内的空白处（标题栏区域）就能拖走，位置记住直到下次打开。 */
+    document.addEventListener('mousedown', function(ev) {
+      if (ev.button !== 0) return;
+      var t0 = ev.target;
+      if (!t0 || !t0.closest) return;
+      var pop = t0.closest('.pop');
+      if (!pop || !pop.getAttribute) return;
+      var key = pop.getAttribute('data-popkey');
+      if (!key) return;
+      if (key === 'words' && self.mode !== 'full') return;   // 气泡侧边词库不拖
+      /* 弹层里的按钮/输入框/词条行照常工作，不能被拖动抢走 */
+      if (t0.closest('button,input,select,textarea,.witem,.navitem,.ctxitem,.tagrow,.msep,canvas,.x')) return;
+      var pr = pop.getBoundingClientRect();
+      if (ev.clientY - pr.top > 34) return;                  // 只认顶部"标题栏"区域
+      ev.preventDefault();
+      var sx = ev.clientX, sy = ev.clientY, sl = pr.left, st = pr.top;
+      function mv(e2) {
+        var nl = Math.round(sl + e2.clientX - sx), nt = Math.round(st + e2.clientY - sy);
+        nl = Math.max(4, Math.min(window.innerWidth - 60, nl));
+        nt = Math.max(4, Math.min(window.innerHeight - 34, nt));
+        pop.style.left = nl + 'px';
+        pop.style.top = nt + 'px';
+        pop.style.right = 'auto';
+        if (self.$set) self.$set(self.popOff, key, { left: nl + 'px', top: nt + 'px', right: 'auto' });
+      }
+      function up() {
+        document.removeEventListener('mousemove', mv);
+        document.removeEventListener('mouseup', up);
+      }
+      document.addEventListener('mousemove', mv);
+      document.addEventListener('mouseup', up);
+    }, true);
     document.addEventListener('mousedown', function(e) {
       if (e.button !== 2) return;
       var t = e.target;
@@ -1602,7 +1730,24 @@ var app = Vue.createApp({
       var rc = t.closest('[data-rcstyle]');
       if (rc) tag = rc.getAttribute('data-rcstyle');
       else if (t.closest('#editor')) tag = '#editor';
-      else return;                       // 其它区域照常（词库右键等不拦）
+      else {
+      /* 工具条"纹/A"右键：打开取色面板（WebView 不派发 contextmenu，靠这兜底）。
+         ★ 面板要贴着按钮弹：按按钮的真实位置算坐标，底纹在左边面板就开在左边，
+           不再写死在右上角（"颜色调节不在底纹同一侧"就是这么来的）。 */
+        var mk = t.closest('[data-rcmark]');
+        if (mk) {
+          e.preventDefault();
+          var m1 = mk.getAttribute('data-rcmark');
+          var r1 = mk.getBoundingClientRect();
+          var pw = 196, lx = r1.right - pw, ty = r1.bottom + 6;
+          if (lx < 6) lx = 6;
+          if (lx + pw > window.innerWidth - 6) lx = window.innerWidth - 6 - pw;
+          if (ty + 120 > window.innerHeight) ty = Math.max(6, r1.top - 126);
+          app.markPopPos = { left: Math.round(lx) + 'px', top: Math.round(ty) + 'px' };
+          setTimeout(function() { app.markPop = (app.markPop === m1 ? '' : m1); }, 0);
+        }
+        return;
+      }
       e.preventDefault();
       var cx = e.clientX, cy = e.clientY;
       setTimeout(function() {
@@ -1616,12 +1761,56 @@ var app = Vue.createApp({
       var ed = document.getElementById('editor');
       if (sel && sel.rangeCount && ed && ed.contains(sel.getRangeAt(0).startContainer)) {
         self._range = sel.getRangeAt(0).cloneRange();
+        /* 选区缓存（给工具条格式化用）：只在真的拖选时记。
+           以前点字号输入框的一瞬间，WebKit 会先把编辑区选区塌成光标再挪走，
+           collapsed 也照记 → 记住的"选中文字"被冲掉，回车就找不到选区了。
+           现在只在编辑器内点下（真想取消选择）才清，点工具条不清。 */
+        if (!sel.isCollapsed) {
+          self._selRange = sel.getRangeAt(0).cloneRange();
+        } else if (self._edDown) {
+          self._selRange = null;      // 用户在编辑器里点了一下 = 主动取消选择
+        }
+        /* 工具条上的字体/字号/对齐跟着光标走（防抖，别每次动光标都算一遍样式） */
+        clearTimeout(self._cfTimer);
+        self._cfTimer = setTimeout(function() { self.syncCaretFormat(); }, 40);
+        /* 气泡模式：光标挪动（点击/方向键）也要重算窗口 —— 挪进段落中间要
+           展开成"上下文三行"，挪回最后一行要缩回"一行贴字" */
+        if (self.mode === 'bubble' && self.cfg.bubbleAutoSize) self.applyBubbleSize();
       }
       /* 导入弹窗：预览框里选了字，就只添加选中的那段 */
       if (self.showImportModal) {
         var s = self.impSelected();
         if (s !== self.impSel) self.impSel = s;
       }
+    });
+    /* 编辑区滚动（滚轮/拖滚动条翻看上文）：气泡要在"1 行"和"设定行数"之间切换。
+       光标那一行被滚出可视区 = 翻看态 → 展开成设定的行数；滚回来 → 缩回 1 行。 */
+    var edScroll = document.getElementById('editor');
+    if (edScroll) edScroll.addEventListener('scroll', function() {
+      /* 自己为了"看见光标行"补的滚动不算用户翻看（否则滚一下→重算→再滚，形成抖动） */
+      if (self._selfScroll || (Date.now() - (self._selfScrollAt || 0)) < 150) return;
+      if (self.mode === 'bubble' && self.cfg.bubbleAutoSize) self.applyBubbleSize();
+    }, { passive: true });
+    /* 编辑器内按下鼠标 = 用户要重新选择（点了就取消记住的选区） */
+    document.addEventListener('mousedown', function(ev) {
+      var ed = document.getElementById('editor');
+      self._edDown = !!(ed && ed.contains(ev.target));
+      /* 底纹笔/颜色笔/标记笔：这次拖选要上色 */
+      if (self._edDown) self._paintArmed = self.shadePaint || self.colorPaint || self.tagPaint;
+    }, true);
+    /* 底纹笔/颜色笔/标记笔：拖选/双击选中一松手就上色（每下拖选只上一次，不重复套） */
+    document.addEventListener('mouseup', function(ev) {
+      if (!self._paintArmed) return;
+      self._paintArmed = false;
+      if (!self.shadePaint && !self.colorPaint && !self.tagPaint) return;
+      var ed = document.getElementById('editor');
+      if (!ed || !ed.contains(ev.target)) return;
+      /* 慢一拍：双击选词在 mouseup 之后才定型，等它选完再上色 */
+      setTimeout(function() {
+        if (self.shadePaint) self.paintShadeNow();
+        else if (self.colorPaint) self.paintColorNow();
+        else if (self.tagPaint) self.paintTagNow();
+      }, 0);
     });
     /* 输入法组字状态回报给 Java：组字期间别转发 Esc/Ctrl，免得打断候选框 */
     document.addEventListener('compositionstart', function() {
@@ -1699,6 +1888,31 @@ var app = Vue.createApp({
          样式/右键/工具条里选"XX（导入）"就能直接用） */
       try { this.importedFonts = JSON.parse(this.host('listImportedFonts') || '[]'); }
       catch (e) { this.importedFonts = []; }
+      try { this.fontsDir = this.host('getFontsDir') || ''; } catch (e0) { this.fontsDir = ''; }
+      /* 字体下拉只列"本机真的装了"的字体：主机用 JDK 的系统字体清单报上来，
+         那些本机没有的（隶书/幼圆…）直接不在列表里，选了就不会"毫无反应" */
+      try {
+        var sysf = JSON.parse(this.host('listSystemFonts') || '[]');
+        this.fontList = (sysf && sysf.length) ? sysf
+          : ['微软雅黑', '宋体', '黑体', '楷体', '仿宋', 'Segoe UI', 'Arial', 'Times New Roman'];
+      } catch (e2) {
+        this.fontList = ['微软雅黑', '宋体', '黑体', '楷体', '仿宋', 'Segoe UI', 'Arial', 'Times New Roman'];
+      }
+      /* 样式里存的字体本机已经没有（换了电脑 / 导入字体删了）→ 清回默认，
+         否则设置里的字体下拉会显示空白，看着像"字体丢了" */
+      var okFont = (function(a) {
+        return function(n) {
+          if (!n) return false;
+          if (a.fontList.indexOf(n) >= 0) return true;
+          if (a.fontFamily && n === a.fontFamily) return true;
+          for (var i = 0; i < a.importedFonts.length; i++)
+            if (a.importedFonts[i].name === n) return true;
+          return false;
+        };
+      })(this);
+      var fkeys = ['pFont', 'h1Font', 'h2Font', 'h3Font', 'wFont', 'fontUi', 'fontWest'];
+      for (var fi = 0; fi < fkeys.length; fi++)
+        if (this.cfg[fkeys[fi]] && !okFont(this.cfg[fkeys[fi]])) this.cfg[fkeys[fi]] = '';
       this.registerImportedFaces();
       /* 旧配置没有标签定义：给一组常用默认（改了会持久化） */
       if (!this.cfg.tagDefs || !this.cfg.tagDefs.length)
@@ -1715,7 +1929,11 @@ var app = Vue.createApp({
       this.initClouds();
       var draft = this.host('getDraft') || '';
       var ed = document.getElementById('editor');
-      ed.innerText = draft;
+      /* 优先加载伴生 HTML（有格式）；没有就按纯文本进编辑器 */
+      var savedHtml = this.host('getDraftHtml') || '';
+      if (savedHtml) ed.innerHTML = savedHtml;
+      else ed.innerText = draft;
+      this.docLink = this.host('getDocLink') || '';
       this.refreshStats();
       try {
         var r = document.createRange();
@@ -1725,6 +1943,7 @@ var app = Vue.createApp({
         ed.focus();
       } catch (e) {}
       this._ready = true;
+      this.syncCaretFormat();
       this.syncSidewords();
     },
 
@@ -1773,7 +1992,11 @@ var app = Vue.createApp({
     refreshStats: function() {
       var t = (this.getText() || '').replace(/\s/g, '');
       this.stats.total = t.length;
-      if (this.cfg.autoSave) this.host('saveDraft', this.getText());
+      if (this.cfg.autoSave) {
+        var ed = document.getElementById('editor');
+        /* a2 = 编辑器 HTML：格式（标题/底纹/标签/颜色）持久化到伴生 .html，重启不丢 */
+        this.host('saveDraft', this.getText(), ed ? ed.innerHTML : '');
+      }
     },
 
     /* ---------- 冻结窗口 / 保存 ---------- */
@@ -1784,32 +2007,38 @@ var app = Vue.createApp({
     },
     /** 手动保存（Ctrl+S）：关掉自动保存后靠它 */
     saveNow: function() {
-      this.host('saveNow', this.getText());
+      var ed = document.getElementById('editor');
+      this.host('saveNow', this.getText(), ed ? ed.innerHTML : '');
       this.docUnsaved = false;
       this.toast('已保存：' + this.cfg.docName);
     },
 
     onInput: function(ev) {
       var self = this;
+      /* 打字时间戳：气泡的"向上翻看"判定要放过正在打字的这 600ms
+         （不然窗口一重排、光标行刚掉出去 2px 就被当成翻看，弹成大窗再缩回来，一闪一闪） */
+      this._lastInputAt = Date.now();
       /* 兜底：keydown 通道没接到（输入法/事件顺序等场景）时，
          只要光标前恰好是「前缀+数字」也要触发词库一键插入 */
       if (ev && ev.isTrusted) this._quickWord();
       this.pulse();
       this.refreshStats();
-      if (this.navShow) this.refreshNav();   // 导航面板开着：标题/标签/重点列表跟着正文变
+      if (this.navShow || this.navPopped) this.refreshNav();   // 导航开着手：标题/标记/重点跟着正文变
       /* 查找开着时正文变了：防抖重建高亮（refreshFind 会保住光标位置） */
       if (this.showFind && this.findText) this.onFindInput();
       if (!this.cfg.autoSave) this.docUnsaved = true;
       if (this.mode === 'bubble') {
-        /* 气泡跟着字数长高 / 缩回 */
-        if (this.cfg.bubbleAutoSize) this.applyBubbleSize();
-        if (this.caretAtEnd()) {
-          var ed = document.getElementById('editor');
-          ed.scrollTop = ed.scrollHeight;
-        }
+        /* 气泡跟着字数变宽 / 缩回 */
+        this.applyBubbleSize();
+        var ed0 = document.getElementById('editor');
+        if (ed0 && this.caretAtEnd()) ed0.scrollTop = ed0.scrollHeight;
+        /* 宽度变了文字重排，光标行可能已经掉出框外 —— 补一次滚动 */
+        this.queueCaretFix();
       }
       clearTimeout(this._saveTimer);
       this._saveTimer = setTimeout(function() { self.refreshStats(); }, 1200);
+      /* 段落变了（回车/套标题/改字号）：工具条上的字体字号跟着刷新 */
+      this.syncCaretFormat();
     },
 
     /** 输入兜底：光标前是「前缀+数字」或「前缀+自定义码」时替换为词条。
@@ -1905,7 +2134,19 @@ var app = Vue.createApp({
     /* ---------- 气泡模式 ---------- */
     enterBubble: function() {
       this.mode = 'bubble';
-      this._bw = 0; this._bh = 0;          // 重置尺寸缓存，进来要按当前文字重算一次
+      this._bw = 0; this._bh = 0;          // 重置尺寸缓存，进来按当前这一行的文字重算
+      this._bszCorr = 0;                   // 重排校正从零开始
+      this._selfScroll = false;
+      this._lastInputAt = 0;               // 进来不算"正在打字"
+      /* ★ 进气泡只留词库：其它弹窗一律关掉（气泡就这么大，弹窗叠着全是遮挡） */
+      this.ctxShow = false;
+      this.markPop = '';
+      this.tagPickerShow = false;
+      this.showMore = false;
+      this.showChars = false;
+      this.showFind = false;
+      this.navShow = false;
+      if (this.navPopped) { this.navPopped = false; this.host('closeNav'); }
       if (!this.wordsVisible) this.showWords = false;
       this.showDocs = false;
       this.showSettings = false;
@@ -1913,18 +2154,148 @@ var app = Vue.createApp({
       this.host('enterBubble');
       var self = this;
       setTimeout(function() {
-        self.applyBubbleSizeNow();
+        /* ★ 先把光标行滚到可视区再量尺寸：以前是先量后滚 —— 进来那一瞬间
+           光标行还在可视区外，被当成"向上翻看"直接展开成大窗（自适应失效）。 */
         var ed = document.getElementById('editor');
-        ed.scrollTop = ed.scrollHeight;
-        ed.focus();
+        self.scrollCaretIntoView();
+        self.applyBubbleSizeNow();
+        self.queueCaretFix();      // 尺寸缩成一行高之后，光标行可能又被挤出去了
+        if (ed) ed.focus();
       }, 60);
+    },
+    /** 把光标所在行滚进编辑区可视范围（不动 DOM，纯算坐标再滚）。
+     *  ★ 只走"最小位移"：露出来多少就补多少，绝不把光标行顶到中间。
+     *    以前是按 clientHeight/2 居中 —— 气泡只有一行高时这一下会把整行推来推去，
+     *    视觉上就是"输入后画面跳到别的文字那里"。 */
+    scrollCaretIntoView: function() {
+      var ed = document.getElementById('editor');
+      if (!ed) return;
+      try {
+        /* ★ 用真实光标位置（caretRect → caretRectRange），绝不能用 _caretInfo()：
+           它在光标挂元素边界时会退回上一行末尾 —— 滚到上一行去了，
+           气泡里显示的就是"上一行有字的那行"，不是正在打字的行 */
+        var cb = this.caretRect();
+        if (!cb) return;
+        var eb = ed.getBoundingClientRect();
+        /* 横向不许留残 scroll：排版宽比窗口宽（自适应气泡钉成"每行字数"宽），
+           WebView 偶尔会自己横滚去露光标 —— 左边的内容就被裁掉了。内容行
+           永远从编辑区左缘起排，横滚只可能是误滚，一律拉回 0。 */
+        if (ed.scrollLeft) ed.scrollLeft = 0;
+        var bdoc = ed.ownerDocument;
+        if (bdoc.documentElement && bdoc.documentElement.scrollLeft)
+          bdoc.documentElement.scrollLeft = 0;
+        if (bdoc.body && bdoc.body.scrollLeft) bdoc.body.scrollLeft = 0;
+        var delta = 0;
+        if (this._bub3) {
+          /* 上下文三行：光标行居中 —— 上一行、这一行、下一行都要看得见 */
+          delta = (cb.top + cb.height / 2) - (eb.top + eb.height / 2);
+        }
+        /* 行顶在框上方 → 往下滚；行底在框下方 → 往上滚。
+           行比可视区还高（标题行）时先保证行顶可见（光标在行内偏下也能打到字）。 */
+        else if (cb.top < eb.top - 1) delta = cb.top - eb.top - 2;
+        else if (cb.bottom > eb.bottom + 1) delta = cb.bottom - eb.bottom + 2;
+        if (Math.abs(delta) < 1) return;
+        var top = Math.max(0, ed.scrollTop + delta);
+        if (Math.abs(top - ed.scrollTop) < 1) return;
+        this._selfScroll = true;          // 这下的滚动别再触发"翻看"判定
+        this._selfScrollAt = Date.now();
+        ed.scrollTop = top;
+        var self = this;
+        requestAnimationFrame(function() { self._selfScroll = false; });
+      } catch (e) {}
+    },
+    /** 窗口尺寸变过之后把光标行重新滚回框里。
+     *  WebView 在程序化改窗口尺寸后会保留旧的 scrollTop：宽度一变文字重排，
+     *  光标行就跑到框外去了 —— 这就是"输入后跳到别的文字那里"的主因。
+     *  30ms / 130ms 各补一次，等 JavaFX 与 WebKit 都重排完。 */
+    queueCaretFix: function() {
+      var self = this;
+      /* 补滚没跑完之前不算"翻看"：内容刚换/窗口刚缩，光标行暂时在框外是
+         正常过程，等 260ms 的兜底滚完再看 —— 不然每次换行都被当成
+         "向上翻看"直接弹成大窗再缩回来（一闪一闪）。 */
+      this._caretFixPending = true;
+      clearTimeout(this._cfxTimer);
+      clearTimeout(this._cfxTimer2);
+      clearTimeout(this._cfxTimer3);
+      this._cfxTimer = setTimeout(function() { self.scrollCaretIntoView(); }, 30);
+      this._cfxTimer2 = setTimeout(function() { self.scrollCaretIntoView(); }, 130);
+      /* 第三次兜底：WebView 尺寸重排偶尔要 200ms 才落定，这一次保证最终帧是对的 */
+      this._cfxTimer3 = setTimeout(function() {
+        self._caretFixPending = false;
+        self.scrollCaretIntoView();
+      }, 260);
+    },
+    /** 光标处的「真实」折叠 Range —— 不做任何"往前找文本节点"的兜底。
+     *  ★ _caretInfo() 在光标挂在元素边界时（刚回车、新行还是空的，或 span 边界）
+     *    会回退到**上一行末尾**的文本节点 —— 滚动定位/溢出检测全拿上一行算，
+     *    气泡就"指向了不是正在打字的那一行"。这里必须用光标本来的位置：
+     *    浏览器对元素偏移处的折叠 Range 会给出正确坐标（空行也有行盒）。 */
+    caretRectRange: function() {
+      try {
+        var ed = document.getElementById('editor');
+        var sel = window.getSelection();
+        if (!ed || !sel || !sel.rangeCount || !sel.isCollapsed) return null;
+        var r = sel.getRangeAt(0);
+        if (!r.startContainer || !ed.contains(r.startContainer)) return null;
+        var max = r.startContainer.nodeType === 3
+                ? r.startContainer.textContent.length
+                : r.startContainer.childNodes.length;
+        var rg = document.createRange();
+        rg.setStart(r.startContainer, Math.min(r.startOffset, max));
+        rg.collapse(true);
+        return rg;
+      } catch (e) { return null; }
+    },
+    /** 光标处的可用矩形：真实光标位置 → 文本节点兜底 → null。
+     *  ★ WebKit 对"元素偏移"处的折叠 Range 有时不给行盒（0x0 的空矩形），
+     *    直接拿它算会把光标当成在 (0,0) —— 溢出量恒负、永远判成"向上翻看"，
+     *    气泡宽高全部卡死在满窗。必须把空矩形当"没有"。 */
+    caretRect: function() {
+      var cb = null;
+      try {
+        var r = this.caretRectRange();
+        if (r) {
+          var cr = r.getClientRects();
+          cb = (cr && cr.length) ? cr[0] : r.getBoundingClientRect();
+        }
+      } catch (e) {}
+      if (!cb || !(cb.height > 0 || cb.top > 0 || cb.left > 0)) {
+        try {                       // 兜底：_caretInfo 的文本节点位置
+          var ci = this._caretInfo();
+          if (ci && ci.node) {
+            var r2 = document.createRange();
+            r2.setStart(ci.node, Math.min(ci.off || 0, ci.node.textContent.length));
+            r2.collapse(true);
+            var cr2 = r2.getClientRects();
+            cb = (cr2 && cr2.length) ? cr2[0] : r2.getBoundingClientRect();
+          }
+        } catch (e) {}
+      }
+      return (cb && (cb.height > 0 || cb.top > 0 || cb.left > 0)) ? cb : null;
+    },
+    /** 光标行相对可视区的溢出量（px）：负数=在框上方，正数=在框下方，0=在框内 */
+    caretOverflowPx: function() {
+      try {
+        var ed = document.getElementById('editor');
+        var cb = this.caretRect();
+        if (!cb || !ed) return null;
+        var eb = ed.getBoundingClientRect();
+        if (cb.top < eb.top) return cb.top - eb.top;
+        if (cb.bottom > eb.bottom) return cb.bottom - eb.bottom;
+        return 0;
+      } catch (e) { return null; }
     },
     exitBubble: function() {
       this.mode = 'full';
       this._bw = 0; this._bh = 0;
+      this._bszCorr = 0;
       this.host('exitBubble');
       var ed = document.getElementById('editor');
-      if (ed) ed.focus();
+      if (ed) {
+        /* 自适应气泡里编辑区是"钉死排版宽"的，还原完整界面要放回铺满 */
+        ed.style.width = ''; ed.style.flex = '';
+        ed.focus();
+      }
     },
     /** 气泡尺寸（两态）：
      *  输入态（光标在文末）—— 小胶囊：一个字起步，宽随当前行字数变长，一行高；
@@ -1940,6 +2311,7 @@ var app = Vue.createApp({
          以前每敲/删一个字都要 setWidth+setHeight，Windows 上这种连续的程序化
          改窗口尺寸会打断 WebView 的输入会话（开着输入法时更明显），
          用户体感就是"打着打着删不掉字了"。 */
+      this._bszCorr = 0;          // 新的一轮输入：重排校正重新计数
       clearTimeout(this._bszTimer);
       this._bszTimer = setTimeout(function() { self.applyBubbleSizeNow(); }, 90);
     },
@@ -1947,26 +2319,64 @@ var app = Vue.createApp({
       if (this.mode !== 'bubble') return;
       if (this._composing) return;      // 组字中不动窗口，等 compositionend 再补
       if (this._rsz) return;            // 用户正在拉伸边缘：拖完再算，别跟手抢
-      var perLine = Math.max(10, Math.min(40, this.cfg.bubbleCharsPerLine | 0));
-      var maxLines = Math.max(1, Math.min(12, this.cfg.bubbleLines | 0));
-      var fs = this.cfg.fontSize;
+      var perLine = Math.max(6, Math.min(40, this.cfg.bubbleCharsPerLine | 0 || 20));
+      var maxLines = Math.max(1, Math.min(12, this.cfg.bubbleLines | 0 || 3));
       var side = this.wordsVisible ? 214 : 0;
       var pad = this._bpad === undefined ? 26 : this._bpad;
-      var atEnd = this.caretAtEnd();
-      /* ══ 窗口内边距（app 的 --bpad + 编辑器的 padding）必须真的算进去 ══
-         以前只加了个固定 16px，实际内边距 40px 上下 —— 文字区比算出来的宽度窄 20 多像素，
-         一行只塞得下一个字，看着就是"气泡永远只显示一个字"。
-         现在按真实计算样式取，宽度涨多少就是多少。 */
-      var sp = atEnd ? Math.min(pad, 8) : pad;
-      document.documentElement.style.setProperty('--bpad', sp + 'px');
+      /* ══ 内边距在两种状态下都是设置值 ══
+         以前输入态把 --bpad 压到 8px（想让胶囊贴边），结果环绕元素那一圈
+         整个躲进输入框白底里 —— 看起来就是"自适应模式不显示元素"。 */
+      document.documentElement.style.setProperty('--bpad', pad + 'px');
       var padH = this.bubblePadH(), padV = this.bubblePadV();
-      var fullW = Math.ceil(perLine * fs) + padH + 6 + side;
+      /* ══ 全部按"光标处真实字号 / 行高"量 ══
+         "每行字数"个汉字在当前字号下有多宽，这一行最多就排多宽：
+         14px 的 20 字 ≈ 290px，29px 的 20 字 ≈ 590px —— 一行能装几个字完全跟着字号走，
+         不会再出现"29px 不到 20 字就换行"（以前宽度是按 16px 的死数字算的）。 */
+      var met = this.caretMetrics();
+      var fs = met.fs || this.cfg.fontSize || 16;
+      var capInner = this.measureLineWidth(new Array(perLine + 1).join('字'), fs) + 2;
+      /* ══ 自适应模式：先把编辑区的「排版宽」钉死，再量行宽 ══
+         ★ 关键：窗口宽要跟着"光标这一行的文字"走，可窗口一窄文字就重新换行，
+           换出来的行又决定窗口宽 —— 越量越窄（缩成一字宽的死循环）。
+           所以排版宽必须和窗口解耦：固定成"每行字数"宽（+滚动条余量），
+           窗口再怎么缩，文字都按这个宽换行，量到的行才是稳定、可复现的。
+         窗口最后只裁到"光标这一行"的宽度 —— 就是"显示这一行，长度=文字长度"。 */
+      var edLayout = document.getElementById('editor');
+      var capActual = capInner;
+      if (edLayout) {
+        try {
+          /* 词库常驻时窗口里有侧栏，编辑区不能钉死宽（会把词库挤出窗外），
+             退回模型量宽 */
+          if (this.cfg.bubbleAutoSize && !this.cfg.bubbleManualSize && !this.wordsVisible) {
+            var ecs = getComputedStyle(edLayout);
+            var epl = parseFloat(ecs.paddingLeft) || 0, epr = parseFloat(ecs.paddingRight) || 0;
+            var ebl = parseFloat(ecs.borderLeftWidth) || 0, ebr = parseFloat(ecs.borderRightWidth) || 0;
+            /* 竖向滚动条真出现才留 8px：这样"排版宽"恒等于每行字数宽，
+               不会因为没滚动条就多出 8px 松量（行能多装半个字，和模型对不上） */
+            var sbRes = edLayout.scrollHeight > edLayout.clientHeight + 1 ? 8 : 0;
+            var wantW = Math.ceil(capInner) + epl + epr + ebl + ebr + sbRes;
+            if (Math.abs((parseFloat(edLayout.style.width) || 0) - wantW) > 1) {
+              edLayout.style.flex = '0 0 auto';
+              edLayout.style.width = wantW + 'px';
+            }
+            /* 真正能排字的宽度（有滚动条时会被吃掉 8px）——按它算上限，别凭空多算半个字 */
+            capActual = Math.max(40, edLayout.clientWidth - epl - epr);
+          } else if (edLayout.style.width) {
+            edLayout.style.width = '';          // 固定大小模式：编辑区重新铺满窗口
+            edLayout.style.flex = '';
+          }
+        } catch (e) {}
+      }
+      var capNow2 = Math.min(capInner, capActual);
+      /* +10：给滚动条和边框留位置 —— 否则"刚好装下 20 字"
+         会因为滚动条一冒出来就变成 19 字换行 */
+      var fullW = Math.ceil(capNow2) + padH + 10 + side;
       var w, h;
       /* ══ 用户手动定大小：完全听用户的，不再随字数/光标位置变 ══ */
       if (this.cfg.bubbleManualSize) {
-        document.documentElement.style.setProperty('--bpad', pad + 'px');
         w = Math.round(Math.max(120, Math.min(2000, this.cfg.bubbleW || 420))) + side;
         h = Math.round(Math.max(50, Math.min(1200, this.cfg.bubbleH || 132)));
+        this._bub3 = false;
         this.bubbleTiny = (w - side) < 340;
         var bw0 = document.querySelector('.bctrl-wrap');
         if (bw0 && bw0.classList) bw0.classList.toggle('tiny', this.bubbleTiny);
@@ -1975,29 +2385,65 @@ var app = Vue.createApp({
         this.host('resizeBubble', w, h);
         return;
       }
-      if (atEnd) {
-        /* ══ 输入态：一行高的小胶囊，宽度 = 这一行真实写出来的文字宽度 ══ */
-        var line = this.caretLineText();
-        if (!line) {
-          var raw = (this.getText() || '').replace(/\s+$/, '');
-          var arr = raw ? raw.split('\n') : [];
-          line = arr.length ? arr[arr.length - 1] : '';
+      /* ══ 自适应（默认）：框就是"光标所在这一行" ══
+         宽 = 这一整行（含光标之后的字）的实测宽度，打字变长、删字变短，最窄一个字；
+         高 = 正常永远 1 行，指向当前正在输入（光标所在）的那一行；
+              只有向上翻看（光标那一行被滚出可视区）才展开成"显示行数"，
+              滚回来 / 接着打字就缩回 1 行。
+         ★ 宽度必须包含光标之后的文字！以前只取到光标（caretLineText）——
+           光标在行中间时框只包住前半截，后半截被挤到下一行，而框只有一行高，
+           用户看到的就是"输入后画面跳到别的文字那里 / 输入的字跑到框外"。 */
+      if (this.cfg.bubbleAutoSize) {
+        /* ★ 行宽 = 光标所在「视觉行」的宽度（打字机模型：换行后新行从短变长）。
+           以前模型的切行宽（"每行字数"）和窗口实际换行宽不一致，模型行和渲染行
+           不是同一行，框比这一行的文字宽出一大截 —— 现在排版宽已钉死成
+           capNow2（见上），模型切出来的行就是真实渲染的行，两者必然一致。
+           不直接量渲染行（Range.getClientRects）：行尾光标的行盒偶尔会挂在
+           上一行末尾，量到的是上一行。 */
+        var vl = this.caretVisualLine(capNow2);
+        var lineW = vl.width || 0;
+        var inner;
+        inner = Math.min(lineW + fs * 0.5, capNow2);
+        inner = Math.max(inner, fs * 1.05);       // 空行 / 一个字：约一个字的宽度
+        /* 翻看检测：光标那一行被滚出编辑区可视范围 = 用户在向上查东西。
+           ★ 两个"不判"：
+             1) 正在打字（600ms 内有输入）—— 打字时永远跟着光标行走，绝不展开；
+             2) 位移小于 0.6 行高 —— 框只有一行高，重排的亚像素误差天天超出 2px，
+                以前按 2px 判会把"打一个字"当成"向上翻看"，直接弹成大窗再缩回来。
+             这两个就是"输入时框乱跳/一闪一闪"的真凶。 */
+        var browsing = false;
+        var typing = (Date.now() - (this._lastInputAt || 0)) < 600;
+        if (!typing && !this._selfScroll && !this._caretFixPending) {
+          var of = this.caretOverflowPx();
+          if (of !== null && Math.abs(of) > Math.max(6, met.lh * 0.6)) browsing = true;
         }
-        var textW = this.measureLineWidth(line, fs);
-        /* 上限 = 每行字数（超了就换行，胶囊不再变长）；下限 = 两个字的宽度 */
-        var wantW = Math.min(textW + fs * 0.7, perLine * fs);
-        w = Math.round(Math.max(fs * 2, wantW)) + padH + 2 + side;
-        if (w > fullW) w = fullW;
-        h = Math.ceil(fs * 1.9) + padV + 2;
-      } else {
-        /* ══ 检查态：展开成大窗（原来的默认大小），看完自动缩回去 ══ */
-        w = fullW;
-        if (this.cfg.bubbleAutoSize) {
-          var rows = Math.max(1, this.bubbleNeedLines(perLine, maxLines));
-          h = Math.ceil(rows * fs * 1.9 + 8) + padV;
+        if (browsing) {
+          this._bub3 = false;             // 翻看态走"最小位移"滚动，不居中
+          w = fullW;
+          h = Math.ceil(maxLines * met.lh + 4) + padV;
         } else {
-          h = Math.ceil(maxLines * fs * 1.9 + 10) + padV;
+          /* ★ 光标不在最后一行 = 这一行后面还有内容：显示三行
+             （上一行、这一行、下一行），宽度=整行宽 —— 光标停在段落中间时
+             看得到上下文，不再是孤零零一条窄框（用户：不显示左边的内容不对）。
+             光标在最后一行才用"一行贴字"的窄框。 */
+          var onLast = this.caretOnLastRow();
+          this._bub3 = (onLast === false);
+          if (this._bub3) {
+            w = fullW;
+            h = Math.ceil(met.lh * 3) + padV;
+          } else {
+            w = Math.round(inner) + padH + 10 + side;
+            if (w > fullW) w = fullW;
+            /* ★ 高度恒 1 行：指向当前正在输入的这一行（向上取整不留缝，
+               上面的行只漏进来不到 1px）。长段落换行后也只显示"光标这一行"，
+               多出来的行靠滚动看，不能按整段行数撑高（一打字框就变高再缩回）。 */
+            h = Math.ceil(met.lh) + padV;
+          }
         }
+      } else {
+        /* 关掉自适应 = 固定大小：按"每行字数 × 显示行数"给个稳定大窗，超出滚动 */
+        w = fullW;
+        h = Math.ceil(maxLines * met.lh + 10) + padV;
       }
       /* 小胶囊：控制钮让开（不然 23px 的圆钮比气泡还大，正好压在字上）。
          顺手直接改一次 DOM 类名：窗口尺寸是同步改的，Vue 的 :class 要等下一个 tick，
@@ -2005,10 +2451,192 @@ var app = Vue.createApp({
       this.bubbleTiny = (w - side) < 340;
       var bw = document.querySelector('.bctrl-wrap');
       if (bw && bw.classList) bw.classList.toggle('tiny', this.bubbleTiny);
-      /* 尺寸没变就别碰窗口（这才是"删字删不动"的真凶） */
-      if (w === this._bw && h === this._bh) return;
+      /* 尺寸没变就别碰窗口（这才是"删字删不动"的真凶）；
+         2px 内的抖动也合并掉 —— 量宽的亚像素误差不该让窗口每敲一字跳一下。
+         但"尺寸没变"不等于"画面没问题"：光标可能刚被点到框外，还得补一次滚动。 */
+      if (Math.abs(w - (this._bw || 0)) < 2 && Math.abs(h - (this._bh || 0)) < 2) {
+        var ov2 = this.caretOverflowPx();
+        if (ov2 !== null && Math.abs(ov2) > 1) this.queueCaretFix();
+        else if (this._bub3) this.queueCaretFix();   // 三行态：光标行要居中（挪行了就重新居中）
+        return;
+      }
       this._bw = w; this._bh = h;
       this.host('resizeBubble', w, h);
+      /* ★ 窗口尺寸动过，WebView 一定会重排：立刻安排把光标行滚回框里 */
+      this.queueCaretFix();
+      /* ══ 换行重排后按"真实渲染行"再校一次尺寸 ══
+         这次量出来的行宽是在旧窗口宽度下排的；窗口一缩/一涨，全文重新换行，
+         光标所在的那一行可能变成另一段文字（比如刚换行时只有 1 个字，框先缩到
+         一个字宽，重排后又该长到整行）—— 不补这一次，框就会一直宽出/窄进一截。
+         只补 2 跳（每次真改了尺寸才续），用户下一次输入会把计数清零。 */
+      if (this.cfg.bubbleAutoSize) {
+        var ncorr = (this._bszCorr || 0);
+        if (ncorr < 2) {
+          this._bszCorr = ncorr + 1;
+          var self3 = this;
+          clearTimeout(this._bszCorrTimer);
+          this._bszCorrTimer = setTimeout(function() { self3.applyBubbleSizeNow(); }, 150);
+        }
+      }
+    },
+
+    /** 光标是否在全文最后一行（最后一个有内容/行盒的视觉行）。
+     *  true=在最后一行（用"一行贴字"窄框）；false=后面还有行（上下文三行）；
+     *  null=量不出来（按最后一行处理，保守）。 */
+    caretOnLastRow: function() {
+      try {
+        var ed = document.getElementById('editor');
+        var cb = this.caretRect();
+        if (!ed || !cb || !(cb.height > 0)) return null;
+        var rr = document.createRange();
+        rr.selectNodeContents(ed);
+        var rects = rr.getClientRects();
+        var maxBottom = 0;
+        for (var i = 0; i < rects.length; i++) {
+          var t = rects[i];
+          if (!(t.height > 0) && !(t.width > 0)) continue;
+          if (t.bottom > maxBottom) maxBottom = t.bottom;
+        }
+        if (!maxBottom) return true;              // 空文档：光标就是最后一行
+        return cb.bottom >= maxBottom - Math.max(2, cb.height * 0.5);
+      } catch (e) { return null; }
+    },
+
+    /** 光标所在「实际渲染视觉行」的矩形（宽 = 行右端 − 编辑区内容左缘，首行缩进也算）。
+     *  Range.getClientRects() 每个视觉行给一个矩形；同一行里跨 span 会被切成几段，
+     *  所以取"纵向盖住光标的所有矩形"的最右端 —— 这才是这一行真正占的宽度。
+     *  ★ 以前用离屏贪心切行猜宽度：猜出来的行和 WebKit 真正排出来的行差一个字，
+     *    框就比文字宽出一大截（"长度和这一行文字的长度不一样"）。 */
+    caretRowRect: function() {
+      try {
+        var ed = document.getElementById('editor');
+        var sel = window.getSelection();
+        if (!ed || !sel || !sel.rangeCount || !sel.isCollapsed) return null;
+        var r = sel.getRangeAt(0);
+        if (!r.startContainer || !ed.contains(r.startContainer)) return null;
+        /* 找光标所在的块（段落/标题）；文字直接挂在编辑区上时就用编辑区 */
+        var blk = r.startContainer.nodeType === 1 ? r.startContainer
+                : r.startContainer.parentNode;
+        while (blk && blk !== ed && blk.parentNode &&
+               !/^(DIV|P|LI|H[1-6]|BLOCKQUOTE|PRE)$/.test(blk.tagName || '')) {
+          blk = blk.parentNode;
+        }
+        if (!blk || blk === ed) blk = ed;
+        var cb = this.caretRect();
+        if (!cb) return null;
+        var rr = document.createRange();
+        rr.selectNodeContents(blk);
+        var rects = rr.getClientRects();
+        if (!rects || !rects.length) return null;
+        var mid = cb.top + cb.height / 2;
+        var right = -1, left = 1e9, top = null, topAll = 1e9;
+        for (var i0 = 0; i0 < rects.length; i0++) {
+          var ta = rects[i0];
+          if (!(ta.height > 0) && !(ta.width > 0)) continue;
+          if (ta.top < topAll) topAll = ta.top;
+        }
+        for (var i = 0; i < rects.length; i++) {
+          var t = rects[i];
+          if (!(t.height > 0) && !(t.width > 0)) continue;
+          if (mid >= t.top - 1 && mid <= t.top + t.height + 1) {
+            if (t.right > right) { right = t.right; top = t.top; }
+            if (t.left < left) left = t.left;
+          }
+        }
+        /* 光标落在行盒缝隙里（margin 区）：取光标上方最近的一行 */
+        if (right < 0) {
+          var bestTop = -1e9;
+          for (var j = 0; j < rects.length; j++) {
+            var t2 = rects[j];
+            if (!(t2.height > 0) && !(t2.width > 0)) continue;
+            if (t2.top <= cb.top + 1 && t2.top > bestTop) {
+              bestTop = t2.top; right = t2.right; left = t2.left; top = t2.top;
+            }
+          }
+          if (right < 0) return null;
+          /* 同一行可能有几段（跨 span）：把这一行的左右两端都收齐 */
+          for (var k2 = 0; k2 < rects.length; k2++) {
+            var t4 = rects[k2];
+            if (!(t4.height > 0) && !(t4.width > 0)) continue;
+            if (Math.abs(t4.top - bestTop) < 2) {
+              if (t4.right > right) right = t4.right;
+              if (t4.left < left) left = t4.left;
+            }
+          }
+        }
+        var cs = getComputedStyle(ed);
+        var cl = ed.getBoundingClientRect().left + ed.clientLeft +
+                 (parseFloat(cs.paddingLeft) || 0);
+        /* 首行缩进（text-indent）是"行首的空白"，getClientRects 给的是文字起点的
+           左缘 —— 不把这 2em 算进来的话，框会比这一行窄，文字立刻重新换行。
+           居中对齐时行左缘在中间，按"行左缘"量才不会被多算。 */
+        var rowTop = top === null ? topAll : top;
+        var isFirstRow = Math.abs(rowTop - topAll) < 2;
+        if (isFirstRow) {
+          try {
+            var ind = parseFloat(getComputedStyle(blk).textIndent) || 0;
+            if (ind > 0 && left - ind < cl) left = Math.max(cl, left - ind);
+          } catch (e2) {}
+        }
+        return { width: Math.max(0, right - left), top: rowTop, height: cb.height };
+      } catch (e) { return null; }
+    },
+
+    /** 光标所在"排版行"的文字：从光标往前按宽度回推，不超过"每行字数宽"的那段
+        就是当前这一行（自动换行也算，不是按 <br> 分段）。气泡宽度就按它算。 */
+    lastWrapLine: function(text, capInner) {
+      if (!text) return '';
+      if (!capInner || capInner < 8) return text;
+      if (this.measureLineWidth(text) <= capInner) return text;
+      var st = text.length, guard = 0;
+      while (st > 0 && guard++ < 400) {
+        st--;
+        if (this.measureLineWidth(text.slice(st)) > capInner) { st++; break; }
+      }
+      return text.slice(st);
+    },
+    /** 这段文字按"每行字数宽"排出来要几行（一次量宽，向上取整） */
+    wrapRowCount: function(text, capInner) {
+      if (!text || !capInner || capInner < 8) return 1;
+      var tw = this.measureLineWidth(text);
+      return Math.max(1, Math.ceil(tw / capInner - 0.02));
+    },
+
+    /** 光标处的真实字号 / 行高 / 字体族（标题、行内大字都算进来） */
+    caretMetrics: function() {
+      var out = { fs: this.cfg.fontSize || 16, lh: (this.cfg.fontSize || 16) * 1.9, family: '' };
+      try {
+        var info = this._caretInfo();
+        var node = info && info.node ? info.node : null;
+        var host = node ? (node.nodeType === 3 ? node.parentNode : node) : null;
+        if (!host || host.id === 'app' || host === document.body)
+          host = this.ctxBlockEl() || document.getElementById('editor');
+        var cs = getComputedStyle(host);
+        out.fs = parseFloat(cs.fontSize) || out.fs;
+        var lhv = cs.lineHeight;
+        if (!lhv || lhv === 'normal') out.lh = out.fs * 1.9;
+        else if (String(lhv).indexOf('px') >= 0) out.lh = parseFloat(lhv) || out.fs * 1.9;
+        else out.lh = out.fs * (parseFloat(lhv) || 1.9);
+        out.family = cs.fontFamily || '';
+      } catch (e) {}
+      if (!out.lh || out.lh < out.fs) out.lh = out.fs * 1.9;
+      return out;
+    },
+
+    /** 光标所在段落「段首 → 光标」的文字（气泡按它算宽度，换行回流都不影响） */
+    paraTextToCaret: function() {
+      try {
+        var ed = document.getElementById('editor');
+        var sel = window.getSelection();
+        if (!ed || !sel || !sel.rangeCount) return '';
+        var blk = this.ctxBlockEl();
+        if (!blk || blk === ed) return this.caretLineText() || '';
+        var r = sel.getRangeAt(0);
+        var rr = document.createRange();
+        rr.selectNodeContents(blk);
+        rr.setEnd(r.endContainer, r.endOffset);
+        return rr.toString();
+      } catch (e) { return this.caretLineText() || ''; }
     },
 
     /** 气泡的水平内边距（app 的 --bpad 左右 + 编辑器左右 padding） */
@@ -2047,9 +2675,13 @@ var app = Vue.createApp({
         var host = node.nodeType === 3 ? node.parentNode : node;
         var cs = getComputedStyle(host);
         el.style.fontFamily = cs.fontFamily;
-        el.style.fontSize = cs.fontSize || (fs + 'px');
+        el.style.fontSize = (fs ? fs + 'px' : cs.fontSize);
         el.style.fontWeight = cs.fontWeight;
+        el.style.fontStyle = cs.fontStyle || 'normal';
         el.style.letterSpacing = cs.letterSpacing;
+        el.style.wordSpacing = cs.wordSpacing;
+        el.style.fontVariant = cs.fontVariant || 'normal';
+        el.style.textTransform = cs.textTransform || 'none';
       } catch (e) { el.style.fontSize = fs + 'px'; }
       el.textContent = text;
       return el.getBoundingClientRect().width;
@@ -2069,8 +2701,112 @@ var app = Vue.createApp({
       } catch (e) { return true; }
     },
 
+    /** 光标所在"这一整行"的文本 + 实测宽度（含光标之后的字）。
+     *
+     *  为什么要重写：以前用 caretLineText（段首 → 光标）量宽，光标停在行中间时
+     *  只包住前半截，后半截被挤出框外折到下一行，而框只有一行高 ——
+     *  用户看到的就是"输入的字跑到框外 / 画面跳到别的文字那里"。
+     *
+     *  ★ 这里取的是「段内硬行」（段首/回车 到 段末/回车 的一整行），
+     *    不是"光标往前那一截"。但也不能取"光标所在视觉行"：
+     *    刚敲满 20 字换行时那一段只有 1 个字，框会缩成一字宽 →
+     *    框一窄又重排 → 越缩越短（塌缩死循环）。
+     *    所以宽度用整硬行，超过"每行字数宽"时由调用方封成满行宽。 */
+    caretLineFull: function() {
+      var sp = this.caretParaSplit();
+      var before = sp.before || '', after = sp.after || '';
+      /* 当前硬行 = 光标前最后一段 + 光标后第一段（\n 是回车/<br>/块级边界） */
+      var p = before.lastIndexOf('\n');
+      var pre = p < 0 ? before : before.slice(p + 1);
+      var q = after.indexOf('\n');
+      var post = q < 0 ? after : after.slice(0, q);
+      var hard = pre + post;
+      return { text: hard, pre: pre, width: this.measureLineWidth(hard) };
+    },
+
+    /** 光标所在"排版行"的文本（保留给调用方做视觉行判断） */
+    caretVisualLine: function(capInner) {
+      var hl = this.caretLineFull();
+      if (!capInner || capInner < 8 || hl.width <= capInner) return hl;
+      var hard = hl.text, pre = hl.pre, head = 0, tail = 0, guard = 0;
+      while (head < hard.length && guard++ < 600) {
+        tail = head;
+        while (tail < hard.length &&
+               this.measureLineWidth(hard.slice(head, tail + 1)) <= capInner) tail++;
+        if (tail === head) tail = head + 1;          // 一个字就超宽：至少吞一个字，避免死循环
+        if (pre.length >= head && pre.length <= tail) {
+          var seg = hard.slice(head, tail);
+          return { text: seg, pre: pre, width: this.measureLineWidth(seg) };
+        }
+        head = tail;
+      }
+      var last = hard.slice(head, tail);
+      return { text: last, pre: pre, width: this.measureLineWidth(last) };
+    },
+
+    /** 光标所在段落的内容拆成「光标前 / 光标后」两段（块内换行统一记成 \n）。
+     *  Range.toString() 不把 <br> 当换行，直接拿它算行会把整段粘成一行。 */
+    caretParaSplit: function() {
+      var res = { before: '', after: '', ok: false };
+      try {
+        var ed = document.getElementById('editor');
+        var sel = window.getSelection();
+        if (!ed || !sel || !sel.rangeCount) return res;
+        var r = sel.getRangeAt(0);
+        var endNode = r.startContainer, endOff = r.startOffset;
+        if (endNode !== ed && !ed.contains(endNode)) return res;
+        var hit = false;
+        var put = function(s) { if (!s) return; if (hit) res.after += s; else res.before += s; };
+        var nodeText = function(n) {
+          if (n.nodeType === 3) return n.nodeValue;
+          if (n.nodeType !== 1) return '';
+          return n.tagName.toLowerCase() === 'br' ? '\n' : n.textContent;
+        };
+        /* 光标挂在编辑区元素本身：前 endOff 个子节点算"前"，其余算"后" */
+        if (endNode === ed) {
+          for (var s0 = 0; s0 < ed.childNodes.length; s0++) {
+            var t0 = nodeText(ed.childNodes[s0]);
+            if (s0 < endOff) res.before += t0; else res.after += t0;
+          }
+          res.ok = true;
+          return res;
+        }
+        var walk = function(node) {
+          var kids = node.childNodes;
+          for (var i = 0; i < kids.length; i++) {
+            var n = kids[i];
+            if (n === endNode) {
+              hit = true;
+              if (n.nodeType === 3) {
+                res.before += n.nodeValue.slice(0, endOff);
+                res.after += n.nodeValue.slice(endOff);
+              } else if (n.nodeType === 1) {
+                /* 光标挂在元素上（span 边界/空段落）：前 endOff 个子节点归"前" */
+                var off = Math.min(endOff, n.childNodes.length);
+                for (var k = 0; k < n.childNodes.length; k++) {
+                  var t = nodeText(n.childNodes[k]);
+                  if (k < off) res.before += t; else res.after += t;
+                }
+              }
+              continue;                       // 收完"光标前"，继续往后收"光标后"
+            }
+            if (n.nodeType === 3) { put(n.nodeValue); continue; }
+            if (n.nodeType !== 1) continue;
+            if (n.tagName.toLowerCase() === 'br') { put('\n'); continue; }
+            walk(n);
+            /* 块级边界（段落/标题/div）也是一次换行 */
+            if (/^(DIV|P|LI|H[1-6]|BLOCKQUOTE|PRE)$/.test(n.tagName)) put('\n');
+          }
+        };
+        walk(ed);
+        res.ok = true;
+      } catch (e) {}
+      return res;
+    },
+
     /** 光标所在行的文本（改中间时气泡要按那一行的宽度长）。
-        注意 Range.toString() 不把 <br> 当换行，必须自己走 DOM。 */
+        注意 Range.toString() 不把 <br> 当换行，必须自己走 DOM。
+        （气泡宽度现在走 caretVisualLine；这里保留给"段首→光标"的场景用） */
     caretLineText: function() {
       try {
         var ed = document.getElementById('editor');
@@ -2092,7 +2828,18 @@ var app = Vue.createApp({
             for (var i = 0; i < kids.length; i++) {
               var n = kids[i];
               if (n === endNode) {
+                /* ★ 以前只判文本节点，元素节点时 n.nodeValue 是 null，
+                   out 里会拼进一个字面 "null" —— 量出来的宽度直接翻倍，
+                   气泡就是"输入一下突然变宽/跳到别处"。 */
                 if (n.nodeType === 3) out += n.nodeValue.slice(0, endOff);
+                else if (n.nodeType === 1) {
+                  var off2 = Math.min(endOff, n.childNodes.length);
+                  for (var k2 = 0; k2 < off2; k2++) {
+                    var sub = n.childNodes[k2];
+                    if (sub.nodeType === 3) out += sub.nodeValue;
+                    else if (sub.nodeType === 1) out += sub.textContent;
+                  }
+                }
                 hit = true;
                 return;
               }
@@ -2126,8 +2873,14 @@ var app = Vue.createApp({
     applyBubblePad: function() {
       var pad = (this.cfg.bubbleCloud && (this.cfg.cloudOpacity | 0) > 0)
             ? Math.max(0, Math.min(80, this.cfg.cloudMargin | 0)) : 0;
+      /* 元素是画在窗口边距这一圈里的（画布 z 在输入框之下）：边距小于 18px 时
+         元素正好躲到输入框的白底底下 —— 这就是"自适应/小胶囊状态看不到环绕元素"的根因。
+         开着环绕就至少留 18px，元素才露得出来。 */
+      if (pad > 0 && pad < 18) pad = 18;
       this._bpad = pad;
       document.documentElement.style.setProperty('--bpad', pad + 'px');
+      var el = document.getElementById('app');
+      if (el) el.classList.toggle('flat', pad < 4);   // 贴边态：阴影裁切会发灰，收掉
     },
     /** 气泡模式 + 词库常驻：给窗口右侧留出悬浮层位置（词库不压在输入框里） */
     syncSidewords: function() {
@@ -2319,7 +3072,14 @@ var app = Vue.createApp({
       var sel = window.getSelection().toString();
       this.insert(a + sel + b);
     },
-    indent: function() { this.insert('\u3000\u3000'); },
+    indent: function() {
+      /* 全文首行缩进开着时段落开头本来就空两格，再插全角空格就成四格了 */
+      if (this.cfg.indentFirst !== false) {
+        this.toast('已开启全文首行缩进，段落开头自动空两格（设置→外观可关）');
+        return;
+      }
+      this.insert('\u3000\u3000');
+    },
     exec: function(cmd) {
       var ed = document.getElementById('editor');
       if (ed) ed.focus();
@@ -2353,9 +3113,9 @@ var app = Vue.createApp({
       if (sel && sel.rangeCount && !sel.isCollapsed && ed
           && ed.contains(sel.getRangeAt(0).startContainer)) {
         r = sel.getRangeAt(0).cloneRange();
-      } else if (this._range && !this._range.collapsed && ed
-                 && ed.contains(this._range.startContainer)) {
-        r = this._range.cloneRange();      // 焦点被按钮抢走时用缓存选区
+      } else if (this._selRange && !this._selRange.collapsed && ed
+                 && ed.contains(this._selRange.startContainer)) {
+        r = this._selRange.cloneRange();   // 焦点被按钮/输入框抢走时用缓存选区
       }
       if (r && ed) {
         var n = r.toString().replace(/\s/g, '').length;
@@ -2381,70 +3141,168 @@ var app = Vue.createApp({
       this.onInput();
       return done;
     },
-    /** 工具条字体下拉：只给选中文字换字体（用完复位成占位提示） */
-    applySelFont: function() {
-      var v = this.tbFont; this.tbFont = '';
-      if (v === '__import__') { this.pickFont(); return; }
-      if (!v) return;
-      /* 导入的字体必须落到 @font-face 的族名上（execCommand 写原族名 = 没装就无效） */
-      if (this.fontFamily && v === this.fontFamily) {
-        var r = this.pickSelRange();
-        if (!r) { this.toast('请先选中要设置的文字'); return; }
-        this._styleRange({range: r, whole: false}, {fontFamily: "'SnapWriteCustom'"});
-        this.toast('选中文字已用「' + v + '」（导入字体）');
-        return;
-      }
-      if (this.applyInline('fontName', v)) this.toast('选中文字已用「' + v + '」');
+    /* ---------- 工具条：光标处字体 / 字号（默认＝正文样式） ---------- */
+    /** 西文兜底字体（没有中文字形，中文实际落在栈里后面的字体上）：
+        展示"光标处字体"时跳过它们，不然明明用的宋体却显示 Segoe UI。
+        写成函数返回 —— Vue 的 methods 里只保证函数能挂到实例上，裸字符串/对象
+        取出来是 undefined（本轮就是被这个坑到：字体显示一直静默失败）。 */
+    _latinOnlyList: function() {
+      return 'segoe ui,arial,times new roman,calibri,helvetica,verdana,georgia,' +
+             'tahoma,trebuchet ms,courier new,sans-serif,serif,monospace,system ui';
     },
-    /** 工具条字号下拉：只给选中文字换字号。
-     *  WebKit 没有按 px 的 fontSize 命令 —— 先用 7 号（xxx-large）打底，
-     *  再把生成的元素统一改成目标 px。 */
-    applySelSize: function() {
-      if (this.tbSize === '__custom__') {     // 自定义字号：弹输入框，8~200 随便填
-        this.tbSize = '';
-        var self = this;
-        this.askPrompt('自定义字号（px，8~200）', '', '例如 18',
-          function(v) {
-            var n = parseFloat(v);
-            if (!n || n < 8 || n > 200) { self.toast('字号要在 8~200 之间'); return; }
-            self.applySelPx(Math.round(n * 10) / 10);
-          });
-        return;
+    /** 中文字体名 ↔ 英文族名：CSS 里两个都写上，中英文写法哪个认都能命中 */
+    _fontAliasMap: function() {
+      return {
+        '宋体': 'SimSun', '新宋体': 'NSimSun', '黑体': 'SimHei', '微软雅黑': 'Microsoft YaHei',
+        '楷体': 'KaiTi', '仿宋': 'FangSong', '等线': 'DengXian', '隶书': 'LiSu',
+        '幼圆': 'YouYuan', '思源黑体': 'Source Han Sans SC', '思源宋体': 'Source Han Serif SC'
+      };
+    },
+    /** CSS 字体列表 → 展示名（导入字体注册成 SnapWriteCustom，要还原成原名） */
+    familyLabel: function(cssList) {
+      var parts = String(cssList || '').split(','), first = '';
+      for (var i = 0; i < parts.length; i++) {
+        var f = parts[i].replace(/['"]/g, '').trim();
+        if (!f) continue;
+        if (!first) first = f;
+        if (/^snapwritecustom$/i.test(f)) return this.fontFamily || '导入字体';
+        if (this._latinOnlyList().indexOf(f.toLowerCase()) < 0) return this._labelOf(f);
       }
-      var n = parseInt(this.tbSize, 10); this.tbSize = '';
-      if (!n) return;
-      this.applySelPx(n);
+      return this._labelOf(first);
+    },
+    /** 英文族名 → 字体下拉里的中文名（下拉写"微软雅黑"时别显示成 Microsoft YaHei，
+        否则下拉的 :value 匹配不上，看起来"没显示光标处字体"） */
+    _labelOf: function(f) {
+      var low = String(f).toLowerCase();
+      var m = this._fontAliasMap();
+      for (var cn in m) {
+        if (m[cn].toLowerCase() === low && this.fontList.indexOf(cn) >= 0)
+          return cn;
+      }
+      return f;
+    },
+    /**
+     * 工具条显示"光标处"的字体 / 字号 / 对齐。
+     * 光标在正文里就是正文样式，在标题里就是那个标题样式，行内改过的字就显示改过的值。
+     * 只做显示，不动任何设置（要改模板去右键"修改样式"）。
+     */
+    syncCaretFormat: function() {
+      var ed = document.getElementById('editor');
+      if (!ed) return;
+      var node = null;
+      try {
+        var sel = window.getSelection();
+        if (sel && sel.rangeCount && ed.contains(sel.getRangeAt(0).startContainer)) {
+          var c = sel.getRangeAt(0).startContainer;
+          node = (c.nodeType === 3) ? c.parentNode : c;
+        }
+      } catch (e) {}
+      if (!node || node === ed) {
+        var info = this._caretInfo();
+        if (info && info.node)
+          node = info.node.nodeType === 3 ? info.node.parentNode : info.node;
+      }
+      if (!node || node === ed || node === document.body) node = this.ctxBlockEl() || ed;
+      try {
+        var cs = getComputedStyle(node);
+        this.caretFont = this.familyLabel(cs.fontFamily);
+        var sz = Math.round(parseFloat(cs.fontSize));
+        this.caretSize = sz || this.styleSizeOf('p');
+        var al = String(cs.textAlign || 'left');
+        this.curAlign = (al === 'center') ? 'center'
+                      : (al === 'right' || al === 'end') ? 'right'
+                      : (al === 'justify' || al === 'justify-all') ? 'justify' : 'left';
+        /* B / I / U 也跟着光标/选区亮起来（WPS 手感）：选中几个字，
+           按钮显示的就是这几个字的实际格式；光标停在哪儿就显示哪儿的 */
+        var w = String(cs.fontWeight);
+        this.caretBold = (w === 'bold' || (parseInt(w, 10) || 400) >= 600);
+        this.caretItalic = (cs.fontStyle === 'italic');
+        this.caretUnder = String(cs.textDecorationLine || cs.textDecoration || '')
+                            .indexOf('underline') >= 0;
+      } catch (e) {}
+    },
+    /** 工具条字体下拉：只给选中文字换字体（模板样式一点不动） */
+    applySelFont: function(v) {
+      if (v === undefined || v === null) v = this.tbFont;
+      if (v === '__import__') { this.pickFont(); this.restoreTbSelect(); return; }
+      if (!v) { this.restoreTbSelect(); return; }
+      var r = this.pickSelRange();
+      if (!r) { this.toast('请先选中要设置的文字'); this.restoreTbSelect(); return; }
+      var fam = (this.fontFamily && v === this.fontFamily)
+              ? "'SnapWriteCustom'" : this.cssFamily(v);
+      /* ★ 只在选区上包一层内联 span，绝不走 execCommand('fontName')：
+         它会写到 <font face> 甚至整段块上，等于顺手把这一段的模板样式也改了。 */
+      if (!this._styleRange({range: r, whole: false}, {fontFamily: fam}, true)) {
+        this.toast('这段文字换不了字体，换个位置再试'); this.restoreTbSelect(); return;
+      }
+      this.syncCaretFormat();
+      this.restoreTbSelect();
+      this.toast('选中文字已用「' + v + '」（只改这几个字）');
+    },
+    /** 工具条字号下拉：只给选中文字换字号 */
+    applySelSize: function(v) {
+      if (v === undefined || v === null) v = this.tbSize;
+      var n = parseFloat(v);
+      if (!n || n < 8 || n > 200) { this.restoreTbSelect(); return; }
+      this.applySelPx(Math.round(n * 10) / 10);
+      this.restoreTbSelect();
+    },
+    /** 工具条下拉是 :value 绑定的（不受 v-model 缓存影响），选完把显示拉回"光标处"真实值 */
+    restoreTbSelect: function() {
+      var self = this;
+      this.$nextTick(function() {
+        var sels = document.querySelectorAll('.toolbar .tbsel');
+        if (sels && sels[0]) sels[0].value = self.caretFont || '';
+        if (sels && sels[1]) sels[1].value = self.caretSize ? String(self.caretSize) : '';
+      });
+    },
+    onTbFontChange: function(e) {
+      var v = e && e.target ? e.target.value : '';
+      this.applySelFont(v);
+    },
+    onTbSizeChange: function(e) {
+      var v = e && e.target ? e.target.value : '';
+      this.applySelSize(v);
+    },
+    /** 自定义字号输入框：回车 / 失焦生效（8~200 px，只改选中文字） */
+    applySizeInput: function() {
+      var raw = String(this.sizeInput === 0 ? '' : this.sizeInput).trim();
+      if (!raw) return;
+      var n = parseFloat(raw);
+      this.sizeInput = '';
+      if (!n || n < 8 || n > 200) { this.toast('字号要在 8~200 之间'); return; }
+      this.applySelPx(Math.round(n * 10) / 10);
     },
     /** 真正给选中文字设 px 字号（预设和自定义共用） */
     applySelPx: function(n) {
       if (!n) return;
-      if (!this.applyInline('fontSize', '7')) return;
-      var ed = document.getElementById('editor');
-      var els = ed.querySelectorAll('span[style*="xxx-large"], font[size="7"]');
-      for (var i = 0; i < els.length; i++) {
-        var el = els[i];
-        if (el.tagName === 'FONT') {
-          var sp = document.createElement('span');
-          sp.style.fontSize = n + 'px';
-          while (el.firstChild) sp.appendChild(el.firstChild);
-          el.parentNode.replaceChild(sp, el);
-        } else el.style.fontSize = n + 'px';
+      var r = this.pickSelRange();
+      if (!r) { this.toast('请先选中要设置的文字'); return; }
+      if (!this._styleRange({range: r, whole: false}, {fontSize: n + 'px'}, true)) {
+        this.toast('这段文字改不了字号，换个位置再试'); return;
       }
-      this.onInput();
-      this.toast('选中文字已设为 ' + n + 'px');
+      this.syncCaretFormat();
+      this.toast('选中文字已设为 ' + n + 'px（只改这几个字）');
+    },
+    /** 选区起点的某个计算样式值（B/I/U 状态判断用，比 queryCommandState 可靠） */
+    _selStyle: function(r, prop) {
+      try {
+        var n = r.startContainer;
+        n = (n.nodeType === 3) ? n.parentNode : n;
+        return getComputedStyle(n)[prop] || '';
+      } catch (e) { return ''; }
     },
     /**
-     * 加粗：只对选中文字生效（WPS 手感）。没选中不动作 ——
-     * 新打字的粗细由"正文样式"决定，不再有"整篇加粗开关"。
+     * 加粗：只对选中文字生效（WPS 手感），只在选区上包 span —— 段落模板不动。
      */
     toggleBold: function() {
       var r = this.pickSelRange();
       if (!r) { this.toast('请先选中要加粗的文字'); return; }
-      if (this.applyInline('bold', null)) {
-        var on = false;
-        try { on = document.queryCommandState('bold'); } catch (e) {}
-        this.toast(on ? '选中文字已加粗' : '选中文字已取消加粗');
+      var on = (parseInt(this._selStyle(r, 'fontWeight'), 10) || 400) >= 600;
+      if (!this._styleRange({range: r, whole: false}, {fontWeight: on ? '400' : '700'}, true)) {
+        this.toast('改不动，换个位置再试'); return;
       }
+      this.syncCaretFormat();          // 重复应用即取消，不再弹提示
     },
     insertChar: function(c) { this.insert(c); this.showChars = false; },
 
@@ -2452,25 +3310,110 @@ var app = Vue.createApp({
     toggleItalicSel: function() {
       var r = this.pickSelRange();
       if (!r) { this.toast('请先选中文字'); return; }
-      if (this.applyInline('italic', null)) {
-        var on = false;
-        try { on = document.queryCommandState('italic'); } catch (e) {}
-        this.toast(on ? '选中文字已斜体' : '选中文字已取消斜体');
+      var on = this._selStyle(r, 'fontStyle') === 'italic';
+      if (!this._styleRange({range: r, whole: false}, {fontStyle: on ? 'normal' : 'italic'}, true)) {
+        this.toast('改不动，换个位置再试'); return;
       }
+      this.syncCaretFormat();
     },
     toggleUnderlineSel: function() {
       var r = this.pickSelRange();
       if (!r) { this.toast('请先选中文字'); return; }
-      if (this.applyInline('underline', null)) {
-        var on = false;
-        try { on = document.queryCommandState('underline'); } catch (e) {}
-        this.toast(on ? '已加下划线' : '已取消下划线');
+      var on = (this._selStyle(r, 'textDecorationLine') || '').indexOf('underline') >= 0;
+      if (!this._styleRange({range: r, whole: false},
+                            {textDecoration: on ? 'none' : 'underline'}, true)) {
+        this.toast('改不动，换个位置再试'); return;
       }
+      this.syncCaretFormat();
     },
-    /** 选中区包一层带样式的 span（颜色/底纹/标签都用它） */
+
+    /* ---------- 对齐：左 / 中 / 右 / 两端（只改本段，不回写模板） ---------- */
+    /** 选区覆盖到的块元素（没选中就是光标所在块） */
+    selBlocks: function() {
+      var ed = document.getElementById('editor');
+      if (!ed) return [];
+      var sel = window.getSelection();
+      var r = null;
+      if (sel && sel.rangeCount && ed.contains(sel.getRangeAt(0).startContainer))
+        r = sel.getRangeAt(0);
+      else if (this._range && ed.contains(this._range.startContainer)) r = this._range;
+      if (!r) return [];
+      var out = [], kids = ed.childNodes;
+      for (var i = 0; i < kids.length; i++) {
+        var n = kids[i];
+        if (n.nodeType !== 1) continue;
+        if (!/^(div|p|h1|h2|h3|blockquote|pre|li)$/.test(n.tagName.toLowerCase())) continue;
+        var hit = true;
+        try { hit = r.intersectsNode ? r.intersectsNode(n) : true; } catch (e) { hit = true; }
+        if (hit) out.push(n);
+      }
+      if (!out.length) {
+        var b = this.ctxBlockEl();
+        if (b && b !== ed) out.push(b);
+      }
+      return out;
+    },
+    alignSel: function(mode) {
+      var ed = document.getElementById('editor');
+      if (!ed) return;
+      var name = {left:'左对齐', center:'居中对齐', right:'右对齐', justify:'两端对齐'}[mode] || mode;
+      /* 工具条按钮会抢焦点：先把选区还原回来 */
+      var sel = window.getSelection();
+      if (!sel.rangeCount || !ed.contains(sel.getRangeAt(0).startContainer)) {
+        if (this._range && ed.contains(this._range.startContainer)) {
+          sel.removeAllRanges(); sel.addRange(this._range);
+        }
+      }
+      var blks = this.selBlocks();
+      if (!blks.length) {
+        /* 纯文本稿（没有块元素）：让浏览器把这一行包成块，再统一写内联对齐 */
+        var cmd = {left:'justifyLeft', center:'justifyCenter',
+                   right:'justifyRight', justify:'justifyFull'}[mode];
+        try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
+        try { document.execCommand(cmd, false, null); } catch (e) {}
+        blks = this.selBlocks();
+        if (!blks.length) { this.toast('先把光标放到要排版的段落里'); return; }
+      }
+      for (var i = 0; i < blks.length; i++) {
+        blks[i].style.textAlign = mode;      // 内联：存 HTML 时跟着走
+        blks[i].removeAttribute('align');    // 老 align 属性清掉，别两套打架
+      }
+      this.curAlign = mode;
+      this.onInput();
+      this.toast('本段已' + name + '（回车后新段落默认左对齐）');
+    },
+    /** 回车新起的段落默认左对齐（对齐是段属性，别遗传给下一段） */
+    resetNewLineAlign: function() {
+      var ed = document.getElementById('editor');
+      var blk = this.ctxBlockEl();
+      if (ed && blk && blk !== ed) {
+        try {
+          var eff = blk.style.textAlign || getComputedStyle(blk).textAlign || 'left';
+          if (eff !== 'left' && eff !== 'start') blk.style.textAlign = 'left';
+        } catch (e) {}
+      }
+      this.syncCaretFormat();
+    },
+    /** 选中区包一层带样式的 span（颜色/底纹/标签都用它）。
+     *  ★ 重复应用=取消：选区已经是这个颜色/底纹时，再应用一次就拆掉，
+     *    恢复成"没有应用这个格式"（无底纹 / 字体颜色回系统默认）。 */
     applySelMark: function(css, cls) {
       var r = this.pickSelRange();
       if (!r) { this.toast('请先选中要设置的文字'); return false; }
+      /* toggle 检测：只带 color / backgroundColor 一个键时才有"重复=取消"语义 */
+      var keys = Object.keys(css);
+      if (keys.length === 1 && (keys[0] === 'color' || keys[0] === 'backgroundColor')) {
+        var el0 = r.startContainer.nodeType === 1 ? r.startContainer
+                : r.startContainer.parentElement;
+        var cur = '';
+        try { if (el0 && el0.id !== 'editor') cur = getComputedStyle(el0)[keys[0]] || ''; }
+        catch (e) {}
+        var want = this.normColor(css[keys[0]]);
+        if (want && cur && this.sameColor(cur, want)) {
+          this.removeSelFormat(keys[0], cls);
+          return true;
+        }
+      }
       var span = document.createElement('span');
       for (var k in css) span.style[k] = css[k];
       if (cls) span.className = cls;
@@ -2484,19 +3427,161 @@ var app = Vue.createApp({
       this.onInput();
       return true;
     },
+    /** #rrggbb / #rgb → "r,g,b" 数字串，供和 getComputedStyle 的 rgb() 比较 */
+    normColor: function(c) {
+      if (!c) return '';
+      c = (c || '').replace(/^\s+|\s+$/g, '');
+      var m = /^#([0-9a-f]{6})$/i.exec(c);
+      if (m) return parseInt(m[1].slice(0,2),16) + ',' + parseInt(m[1].slice(2,4),16) +
+                    ',' + parseInt(m[1].slice(4,6),16);
+      m = /^#([0-9a-f]{3})$/i.exec(c);
+      if (m) return parseInt(m[1][0]+m[1][0],16) + ',' + parseInt(m[1][1]+m[1][1],16) +
+                    ',' + parseInt(m[1][2]+m[1][2],16);
+      var m2 = /(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(c);
+      return m2 ? (m2[1] + ',' + m2[2] + ',' + m2[3]) : '';
+    },
+    sameColor: function(a, b) {
+      var na = this.normColor(a), nb = this.normColor(b);
+      if (!na || !nb) return false;
+      var pa = na.split(','), pb = nb.split(',');
+      for (var i = 0; i < 3; i++) {
+        var d = Math.abs((+pa[i]) - (+pb[i]));
+        if (d > 2) return false;           // 量化误差容忍 2/255
+      }
+      return true;
+    },
+    /** 光标（塌缩选区）所在的元素；光标不在编辑区里返回 null */
+    caretEl: function() {
+      var ed = document.getElementById('editor');
+      var sel = window.getSelection();
+      if (!ed || !sel || !sel.rangeCount) return null;
+      var c = sel.getRangeAt(0).startContainer;
+      if (!c || !ed.contains(c)) return null;
+      var el = c.nodeType === 1 ? c : c.parentElement;
+      return (el && el !== ed) ? el : null;
+    },
+    /** 拆掉选区所在的那层格式 span：去掉对应内联样式/类，
+     *  span 拆干净后（无类无样式）整个解包 —— 字体颜色回到系统默认。
+     *  ★ 没有选中文字时按光标所在位置拆：光标停在带底纹的字上 → 清除，
+     *    不用先选中也能拆掉（以前 pickSelRange 为空直接返回，点了没反应）。 */
+    removeSelFormat: function(prop, cls) {
+      var r = this.pickSelRange();
+      var el;
+      if (r) {
+        el = r.startContainer.nodeType === 1 ? r.startContainer
+           : r.startContainer.parentElement;
+      } else {
+        el = this.caretEl();
+        if (!el) return false;
+      }
+      var ed = document.getElementById('editor');
+      while (el && el !== ed) {
+        var hit = (cls && el.classList && el.classList.contains(cls)) ||
+                  (el.style && el.style[prop]);
+        if (hit) break;
+        el = el.parentElement;
+      }
+      if (!el || el === ed) return false;
+      try { el.style.removeProperty(prop.replace(/[A-Z]/g, function(ch) {
+              return '-' + ch.toLowerCase(); })); } catch (e) {}
+      if (cls === 'tagmark') { try { el.style.removeProperty('--tagc'); } catch (e) {} }
+      if (cls && el.classList) {
+        el.classList.remove(cls);
+        /* ★ 标记名也要摘掉：只摘类不摘 data-tag 的话，span 会被当成"还有格式"
+           而不解包 —— 导航里就留下一条"重要（空）"的残影。 */
+        if (el.getAttribute && el.getAttribute('data-tag')) el.removeAttribute('data-tag');
+      }
+      /* span 已经不带任何格式：整个解包，正文里不留空壳 */
+      if (el.tagName === 'SPAN' && !el.getAttribute('style') && !el.className &&
+          !el.getAttribute('data-tag')) {
+        var p = el.parentNode;
+        while (el.firstChild) p.insertBefore(el.firstChild, el);
+        p.removeChild(el);
+      }
+      this.onInput();
+      return true;
+    },
     setSelColor: function(c) {
-      if (this.applySelMark({ color: c })) this.toast('文字颜色已改');
+      this.lastColor = c;                 // 记住这次颜色：左键"A"直接套它
+      this.applySelMark({ color: c });    // 重复应用同色 = 取消颜色
       this.markPop = '';
     },
     setSelShade: function(c) {
-      if (this.applySelMark({ backgroundColor: c }, 'hlmark'))
-        this.toast('已标底纹（导航面板可跳转）');
+      this.lastShade = c;                 // 记住这次颜色：左键"纹"直接套它
+      this.applySelMark({ backgroundColor: c }, 'hlmark');   // 重复应用 = 取消底纹
       this.markPop = '';
     },
+    /**
+     * 左键"纹"＝底纹笔开关：点一下进入涂刷模式（当前有选中就先给它上色），
+     * 之后在编辑器里拖选/双击选中的文字都自动套上次的底纹色；
+     * 再点一下（或 Esc）关闭。以前"必须先选中再点"，想标几处就得选-点-选-点。
+     */
+    quickShade: function() {
+      this.shadePaint = !this.shadePaint;
+      if (this.shadePaint) {
+        this.colorPaint = false;
+        if (this.pickSelRange()) this.paintShadeNow();
+        this.toast('底纹笔已开启：接着选中的文字自动上底纹（再点一次关闭）');
+      } else {
+        this.toast('底纹笔已关闭');
+      }
+    },
+    /** 底纹笔本体：给当前选区（活选区或记住的选区）套上次的底纹色 */
+    paintShadeNow: function() {
+      var sel = window.getSelection();
+      var ed = document.getElementById('editor');
+      var ok = sel && !sel.isCollapsed && sel.rangeCount
+            && ed && ed.contains(sel.getRangeAt(0).startContainer);
+      if (!ok && !this.pickSelRange()) return;
+      this.applySelMark({ backgroundColor: this.lastShade || '#FACC15' }, 'hlmark');
+    },
+    /**
+     * 左键"A"＝颜色笔开关（和底纹笔一套逻辑）：点一下进入涂刷模式，
+     * 当前有选中就先变色；之后选中的文字自动套上次的文字色；右键"A"换颜色。
+     */
+    quickColor: function() {
+      this.colorPaint = !this.colorPaint;
+      if (this.colorPaint) {
+        this.shadePaint = false;                  // 两支笔互斥，免得同时上色
+        if (this.pickSelRange()) this.paintColorNow();
+        this.toast('颜色笔已开启：接着选中的文字自动变色（右键 A 换颜色，再点一次关闭）');
+      } else {
+        this.toast('颜色笔已关闭');
+      }
+    },
+    /** 颜色笔本体：给当前选区（活选区或记住的选区）套当前文字色 */
+    paintColorNow: function() {
+      var sel = window.getSelection();
+      var ed = document.getElementById('editor');
+      var ok = sel && !sel.isCollapsed && sel.rangeCount
+            && ed && ed.contains(sel.getRangeAt(0).startContainer);
+      if (!ok && !this.pickSelRange()) return;
+      this.applySelMark({ color: this.lastColor || '#E11D48' });
+    },
+    /** 右键菜单里直接给选中文字上色（不进涂刷模式） */
+    ctxColor: function() {
+      this.ctxShow = false;
+      if (!this.pickSelRange()) { this.toast('请先选中要改颜色的文字'); return; }
+      this.applySelMark({ color: this.lastColor || '#E11D48' });
+    },
+    /** 右键菜单里直接给选中文字标底纹（不进涂刷模式） */
+    ctxShade: function() {
+      this.ctxShow = false;
+      if (!this.pickSelRange()) { this.toast('请先选中要标底纹的文字'); return; }
+      this.applySelMark({ backgroundColor: this.lastShade || '#FACC15' }, 'hlmark');
+    },
     clearSelMark: function() {
-      if (this.markPop === 'fg') this.applySelMark({ color: 'inherit' });
-      else this.applySelMark({ backgroundColor: 'transparent' });
+      /* ★ 真正拆除格式层（拆 span/去类），不是盖上"透明"——
+         以前盖透明后 .hlmark 类还在，导航面板里依然显示这条"重点" */
+      if (this.markPop === 'fg') this.removeSelFormat('color');
+      else {
+        /* 底纹 / 标记是同一套视觉，两种壳都要拆干净（不然导航留下"重要（空）"） */
+        this.removeSelFormat('backgroundColor', 'hlmark');
+        this.removeSelFormat('backgroundColor', 'tagmark');
+      }
+      this.sweepEmptyMarks();
       this.markPop = '';
+      this.refreshNav();
     },
 
     /* ---------- 标签 / 导航 / 目录 ---------- */
@@ -2513,32 +3598,110 @@ var app = Vue.createApp({
     pushTagDefs: function() {
       this.host('setTagDefs', JSON.stringify(this.tagDefs));
     },
-    /** 套标签：选中文字包上彩色标记；没选中就在光标处插入标签名 */
-    applyTag: function(t) {
-      var r = this.pickSelRange();
-      if (r && !r.collapsed) {
-        var span = document.createElement('span');
-        span.className = 'tagmark';
-        span.setAttribute('data-tag', t.name);
-        span.style.setProperty('--tagc', t.color + '55');
-        span.style.boxShadow = 'inset 0 -1.5px 0 ' + t.color;
+    /** 让一个标记成为"当前标记"（和选颜色一样固定住），并进入标记笔状态 */
+    fixTag: function(t) {
+      this.curTag = t.name;
+      this.tagPaint = true;
+      this.shadePaint = false;                 // 三支笔互斥，免得同时上色
+      this.colorPaint = false;
+    },
+    /** 给记住的/活着的选区包一层带名字的彩色底纹（applyTag 和标记笔共用） */
+    wrapTagSpan: function(t, r) {
+      if (!t || !r || r.collapsed) return false;
+      var span = document.createElement('span');
+      span.className = 'tagmark';
+      span.setAttribute('data-tag', t.name);
+      span.style.setProperty('--tagc', t.color + '55');
+      try {
         span.appendChild(r.extractContents());
         r.insertNode(span);
-        var sel = window.getSelection();
-        var r2 = document.createRange(); r2.selectNodeContents(span);
-        sel.removeAllRanges(); sel.addRange(r2);
+      } catch (e) { return false; }
+      var sel = window.getSelection();
+      var r2 = document.createRange(); r2.selectNodeContents(span);
+      sel.removeAllRanges(); sel.addRange(r2);
+      return true;
+    },
+    /** 标记笔本体：给当前选区套"当前固定"的标记（选完不取消固定，可以连着标几处） */
+    paintTagNow: function() {
+      if (!this.curTag) return;
+      var t = null;
+      for (var i = 0; i < this.tagDefs.length; i++)
+        if (this.tagDefs[i].name === this.curTag) t = this.tagDefs[i];
+      if (!t) { this.tagPaint = false; this.curTag = ''; return; }
+      var r = this.pickSelRange();
+      if (!r || r.collapsed) return;
+      /* ★ 选区已经是这个标记 = 取消（toggle，和底纹/颜色一个逻辑：
+         同一个标记涂两次就变回没有格式的样子） */
+      var el0 = r.startContainer.nodeType === 1 ? r.startContainer
+              : r.startContainer.parentElement;
+      var cur = el0 && el0.getAttribute ? el0.getAttribute('data-tag') : null;
+      if (cur === t.name) {
+        this.removeSelFormat('backgroundColor', 'tagmark');
+        this.sweepEmptyMarks();
         this.onInput();
-        this.toast('已打标签「' + t.name + '」');
-      } else {
-        this.insert(t.name);
-        this.toast('已插入标签「' + t.name + '」（选中文字再点可套标记）');
+        this.refreshNav();
+        return;
       }
-      this.tagPickerShow = false;
+      if (this.wrapTagSpan(t, r)) { this.onInput(); this.refreshNav(); }
+    },
+    /** 套命名标记（原"标签"并入底纹）：★ 和选颜色一个逻辑 ——
+        面板里点了就固定这个标记（没选中文字也行），之后选中的文字自动套；
+        有选中就当场套上；选区已是这个标记 = 取消（toggle）。绝不往正文里插字。 */
+    applyTag: function(t) {
+      var r = this.pickSelRange();
+      if (!r || r.collapsed) {
+        /* 没选中：固定 / 取消固定（这正是"选颜色"的手感 —— 先定工具，再选字） */
+        if (this.tagPaint && this.curTag === t.name) {
+          this.tagPaint = false; this.curTag = '';
+          this.toast('已取消固定标记「' + t.name + '」');
+        } else {
+          this.fixTag(t);
+          this.toast('标记「' + t.name + '」已固定：接着选中的文字自动标记（再点一次取消）');
+        }
+        this.markPop = '';
+        return;
+      }
+      var el0 = r.startContainer.nodeType === 1 ? r.startContainer
+              : r.startContainer.parentElement;
+      var cur = el0 && el0.getAttribute ? el0.getAttribute('data-tag') : null;
+      if (cur === t.name) {
+        this.removeSelFormat('backgroundColor', 'tagmark');
+        this.tagPaint = false; this.curTag = '';
+        this.markPop = '';
+        this.refreshNav();
+        return;
+      }
+      if (!this.wrapTagSpan(t, r)) return;
+      this.fixTag(t);                     // 和颜色一样：套完就固定住
+      this.onInput();
+      this.markPop = '';
+      this.refreshNav();
     },
     toggleNav: function() {
       this.navShow = !this.navShow;
       this.tagPickerShow = false;
       if (this.navShow) this.navList = this.buildNavList();
+    },
+    /** 清掉"空壳"标记/底纹 span：文字被删掉或格式被拆掉后留下的空 span
+        会让导航里冒出"重要（空）""（空）"这种残影，扫到就直接移除。 */
+    sweepEmptyMarks: function() {
+      try {
+        var ed = document.getElementById('editor');
+        if (!ed) return 0;
+        var list = ed.querySelectorAll('.hlmark,.tagmark');
+        var n = 0;
+        var sel = window.getSelection();
+        var an = sel && sel.rangeCount ? sel.anchorNode : null;
+        for (var i = list.length - 1; i >= 0; i--) {
+          var el = list[i];
+          /* 光标就在这个空壳里 = 用户刚删到只剩壳、马上要接着打，绝不能拆掉 */
+          if (an && el.contains(an)) continue;
+          if ((el.textContent || '').replace(/\s/g, '') === '') {
+            if (el.parentNode) { el.parentNode.removeChild(el); n++; }
+          }
+        }
+        return n;
+      } catch (e) { return 0; }
     },
     /** 扫描正文：标题（H1/H2/H3）+ 标签标记 + 重点底纹，点击可跳转。
         DOM 变化 Vue 的 computed 感知不到，所以是手动刷新的列表（打开面板/打标签/生成目录时重建） */
@@ -2546,6 +3709,7 @@ var app = Vue.createApp({
       var ed = document.getElementById('editor');
       var out = [];
       if (!ed) return out;
+      this.sweepEmptyMarks();            // 先清残壳，再扫（导航里不许出现"（空）"）
       var hs = ed.querySelectorAll('h1,h2,h3');
       for (var i = 0; i < hs.length; i++) {
         var tg = hs[i].tagName.toLowerCase();
@@ -2554,19 +3718,51 @@ var app = Vue.createApp({
       }
       var ts = ed.querySelectorAll('.tagmark');
       for (var j = 0; j < ts.length; j++) {
+        var txt = (ts[j].innerText || '').trim();
+        if (!txt) continue;                  // 空壳不进步导航（"重要（空）"就是这么来的）
         var name = ts[j].getAttribute('data-tag') || '标签', c = '#6B7280';
         for (var k = 0; k < this.tagDefs.length; k++)
           if (this.tagDefs[k].name === name) c = this.tagDefs[k].color;
-        out.push({ type: 't', tag: name, color: c, lv: 1,
-                   text: (ts[j].innerText || '').trim() || name, el: ts[j] });
+        out.push({ type: 't', tag: name, color: c, lv: 1, text: txt, el: ts[j] });
       }
       var mk = ed.querySelectorAll('.hlmark');
-      for (var m = 0; m < mk.length; m++)
-        out.push({ type: 'm', tag: '重点', color: '#FACC15', lv: 1,
-                   text: (mk[m].innerText || '').trim().slice(0, 24) || '（空）', el: mk[m] });
+      for (var m = 0; m < mk.length; m++) {
+        /* 底纹被清掉（透明）的旧 span 不算"重点"：清除样式后导航里不能再显示 */
+        var bgc = '';
+        try { bgc = getComputedStyle(mk[m]).backgroundColor || ''; } catch (e) {}
+        if (bgc === 'transparent' || bgc === 'rgba(0, 0, 0, 0)') continue;
+        var mtxt = (mk[m].innerText || '').trim().slice(0, 24);
+        if (!mtxt) continue;                 // 同上：没字的底纹不占导航
+        out.push({ type: 'm', tag: '重点', color: '#FACC15', lv: 1, text: mtxt, el: mk[m] });
+      }
       return out;
     },
-    refreshNav: function() { if (this.navShow) this.navList = this.buildNavList(); },
+    refreshNav: function() {
+      /* 面板/悬浮窗格开着都要按当前正文重建（以前只重建面板，浮窗留着旧条目） */
+      if (this.navShow || this.navPopped) this.navList = this.buildNavList();
+      /* 悬浮窗格开着：正文变了同步刷（Java 端面板没开时自己会忽略） */
+      if (this.navPopped) this.host('updateNav', this.navPayload());
+    },
+    /* 条目压平成 \u0001/\u0002 编码（Java 端没有 JSON 解析器） */
+    navPayload: function() {
+      return this.navList.map(function(it) {
+        return [it.type, String(it.lv || 1), it.color || '#6B7280',
+                (it.text || '').replace(/[\u0001\u0002]/g, ' ')].join('\u0002');
+      }).join('\u0001');
+    },
+    /** 弹出导航悬浮窗格（独立置顶小窗，可钉屏幕最左/最右） */
+    popNav: function() {
+      this.navList = this.buildNavList();
+      this.navPopped = true;
+      this.host('popNav', this.navPayload());
+      this.toast('导航已弹出（‹ › 钉到屏幕最左/最右，✕ 收回）');
+    },
+    /** 悬浮窗格点条目：按当前正文重建列表后跳转（序号两边一致） */
+    gotoNavIndex: function(i) {
+      var l = this.buildNavList();
+      this.gotoNav(l[i]);
+    },
+    navPopClose: function() { this.navPopped = false; },
     /** 跳到某个标题/标签/重点：滚过去 + 闪一下蓝框 */
     gotoNav: function(it) {
       if (!it || !it.el) return;
@@ -2577,40 +3773,6 @@ var app = Vue.createApp({
         setTimeout(function() { el.classList.remove('flash'); }, 900);
       } catch (e) {}
     },
-    /** 一键生成目录：在光标处插入标题清单（可点击跳转，文字可再编辑） */
-    genToc: function() {
-      var ed = document.getElementById('editor');
-      if (!ed) return;
-      var hs = ed.querySelectorAll('h1,h2,h3');
-      if (!hs.length) { this.toast('还没有 H1/H2/H3 标题，先给段落设标题样式'); return; }
-      /* 给每个标题挂 id（重复生成时复用，目录链接才不失效） */
-      var rows = '';
-      for (var i = 0; i < hs.length; i++) {
-        if (!hs[i].id) hs[i].id = 'hd-' + (i + 1) + '-' + Date.now() % 100000;
-        var txt = (hs[i].innerText || '').trim();
-        var lv = hs[i].tagName === 'H1' ? 1 : hs[i].tagName === 'H2' ? 2 : 3;
-        rows += '<li style="margin-left:' + ((lv - 1) * 18) + 'px">' +
-                '<a href="#' + hs[i].id + '">' + (txt || '（空标题）') + '</a></li>';
-      }
-      var html = '<div class="toc"><div class="toc-h">目 录</div><ol>' + rows + '</ol></div><p><br></p>';
-      var sel = window.getSelection();
-      var r = (sel && sel.rangeCount && ed.contains(sel.getRangeAt(0).commonAncestorContainer))
-              ? sel.getRangeAt(0) : null;
-      if (!r) {                              // 没有光标位置：放最前面
-        r = document.createRange();
-        r.setStart(ed, 0); r.collapse(true);
-      }
-      var div = ed.ownerDocument.createElement('div');
-      div.innerHTML = html;
-      var frag = document.createDocumentFragment();
-      while (div.firstChild) frag.appendChild(div.firstChild);
-      r.deleteContents();
-      r.insertNode(frag);
-      try { ed.focus(); } catch (e) {}
-      this.onInput();
-      this.toast('目录已生成（文字可编辑，字号在导航面板调）');
-    },
-
     /* ---------- 词库 ---------- */
     /** Ctrl+K / 词库按钮：任何模式下都能开关（常驻被手动关掉后也能再打开） */
     toggleWords: function() {
@@ -2769,12 +3931,26 @@ var app = Vue.createApp({
         this._range = r.cloneRange();
       } catch (e) {}
     },
+    /** 按伴生 HTML 还原（有格式），否则退回纯文本 */
+    setEditorSmart: function(text) {
+      var html = this.host('getDraftHtml') || '';
+      var ed = document.getElementById('editor');
+      if (html) ed.innerHTML = html;
+      else ed.innerText = text || '';
+      try {
+        var r = document.createRange();
+        r.selectNodeContents(ed); r.collapse(false);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        this._range = r.cloneRange();
+      } catch (e) {}
+    },
     openDoc: function(name) {
       if (name === this.cfg.docName) { this.showDocs = false; return; }
       var txt = this.host('switchDoc', name);
       if (txt === '__ERR__' || txt === undefined) { this.toast('打开失败：' + name); return; }
       this.cfg.docName = name;
-      this.setEditorRaw(txt);
+      this.setEditorSmart(txt);
+      this.docLink = this.host('getDocLink') || '';
       this.showDocs = false;
       this.docUnsaved = false;
       this.refreshStats();
@@ -2811,7 +3987,8 @@ var app = Vue.createApp({
         self.host('deleteDoc', name);
         var now = self.host('getDocName') || '';
         self.cfg.docName = now;
-        self.setEditorRaw(self.host('getDraft') || '');
+        self.setEditorSmart(self.host('getDraft') || '');
+        self.docLink = self.host('getDocLink') || '';
         self.docUnsaved = false;
         self.refreshStats();
         self.refreshDocs();
@@ -2822,12 +3999,29 @@ var app = Vue.createApp({
       var n = this.host('importDocFile');
       if (!n) return;
       this.cfg.docName = n;
-      this.setEditorRaw(this.host('getDraft') || '');
+      this.setEditorSmart(this.host('getDraft') || '');
+      this.docLink = this.host('getDocLink') || '';
       this.showDocs = false;
       this.docUnsaved = false;
       this.refreshStats();
       this.refreshDocs();
       this.toast('已打开 ' + n);
+    },
+    /** 存到桌面：把当前文档关联到本地文件，之后每次修改实时写回 */
+    linkDoc: function() {
+      this.showMore = false; this.showDocs = false;
+      var ed = document.getElementById('editor');
+      var p = this.host('linkDocTo', ed ? ed.innerHTML : '');
+      if (p) {
+        this.docLink = p;
+        this.toast('已关联本地文件，修改会实时写回');
+        this.refreshDocs();
+      }
+    },
+    unlinkDoc: function() {
+      this.host('unlinkDoc');
+      this.docLink = '';
+      this.toast('已解除关联（文档仍在文档库）');
     },
 
     /* ---------- 通用输入框（替代 prompt） ---------- */
@@ -2971,6 +4165,13 @@ var app = Vue.createApp({
         return;
       }
 
+      /* 3.4) 回车换行：新起的这一段默认左对齐（对齐是段属性，不遗传） */
+      if (e.key === 'Enter' && !e.isComposing && !e.ctrlKey && !e.altKey
+          && e.target && e.target.id === 'editor') {
+        var selfNl = this;
+        setTimeout(function() { selfNl.resetNewLineAlign(); }, 0);
+      }
+
       /* 4) 前缀 + 数字 / 前缀 + 自定义快捷码：插入词条（仅编辑区）
             以前只认"前缀+序号"，用户给词条起了自己的码（如 cq）就完全用不上，
             看到的永远是 z1/z2。现在两种都认：z1（第 1 条）、zcq（码=cq 那条）。 */
@@ -3071,6 +4272,11 @@ var app = Vue.createApp({
         return true;                                            // 另一条通道已处理
       this._lastTabAt = now; this._lastTabSrc = src;
       if (this.expandShortcut()) return true;
+      /* 全文首行缩进开着时 Tab 不再插空格（段落开头已经空两格了） */
+      if (this.cfg.indentFirst !== false) {
+        this.toast('已开启全文首行缩进，段落开头自动空两格');
+        return true;
+      }
       this.insert('\u3000\u3000');            // 没命中码：当缩进（WPS 同款）
       return true;
     },
@@ -3108,6 +4314,9 @@ var app = Vue.createApp({
       this.showFind = false;
       this.promptShow = false; this._promptCb = null;
       this.tagPickerShow = false; this.markPop = ''; this.navShow = false;
+      this.shadePaint = false;      // Esc 顺手把底纹笔也关了
+      this.colorPaint = false;      // 颜色笔同理
+      this.tagPaint = false;        // 标记笔同理（curTag 留着，下次点面板还是它）
       this.showWords = false; this.wordsClosed = true; this.addingWord = false;
       this.showSettings = false;
       this.syncFrozen();
@@ -3136,7 +4345,8 @@ var app = Vue.createApp({
         case 'bubble': this.mode === 'bubble' ? this.exitBubble() : this.enterBubble(); return true;
         case 'settings': if (this.showSettings) this.closeSettings(); else this.openSettings(); return true;
         case 'pin': this.togglePin(); return true;
-        case 'tag': this.tagPickerShow = !this.tagPickerShow; this.navShow = false; return true;
+        case 'tag': this.markPop = (this.markPop === 'bg' ? '' : 'bg');
+                    this.navShow = false; return true;   // 标签并入底纹取色面板
         case 'nav': this.toggleNav(); return true;
       }
       return false;
@@ -3700,6 +4910,9 @@ var app = Vue.createApp({
       st.setProperty('--header-bg', this.cfg.themeMode === 'solid'
           ? a : 'linear-gradient(135deg,' + a + ',' + b + ')');
       st.setProperty('--fs', this.cfg.fontSize + 'px');
+      /* 全文首行缩进：段落级 CSS，所有段落（含回车新段）自动空两格，
+         不算"格式"——不用选中、不用套用，两端对齐/标题都不受影响 */
+      st.setProperty('--tind', this.cfg.indentFirst === false ? '0em' : '2em');
       /* 标题分级字号/加粗（工具栏 H1/H2/H3 用，设置里可调） */
       st.setProperty('--h1fs', (this.cfg.h1Size || 28) + 'px');
       st.setProperty('--h2fs', (this.cfg.h2Size || 22) + 'px');
@@ -3724,7 +4937,6 @@ var app = Vue.createApp({
       st.setProperty('--h1it', this.cfg.h1Italic ? 'italic' : 'normal');
       st.setProperty('--h2it', this.cfg.h2Italic ? 'italic' : 'normal');
       st.setProperty('--h3it', this.cfg.h3Italic ? 'italic' : 'normal');
-      st.setProperty('--tocfs', (this.cfg.tocSize || 16) + 'px');
       /* 字体栈（中西文分离）：浏览器按字符逐个找第一个有该字形的字体 ——
          西文字体放最前 → 英文/数字用它；中文字形它没有 → 落到后面的中文字体。
          中文部分：导入字体(SnapWriteCustom) > 工具栏选的系统字体 > 默认 */
@@ -3834,6 +5046,15 @@ var app = Vue.createApp({
       this.applyVars();
       this.host('setSkin', this.cfg.skin);
       this.toast(this.cfg.skin === 'dark' ? '已切换深色主题' : '已切换浅色主题');
+    },
+    /** 全文首行缩进开关：段落 CSS，不算格式（不用选中/套用，回车新段自动继承） */
+    toggleIndentFirst: function() {
+      this.cfg.indentFirst = (this.cfg.indentFirst === false);
+      this.applyVars();
+      this.host('setIndentCfg', this.cfg.indentFirst === false ? '0' : '1');
+      this.toast(this.cfg.indentFirst !== false
+        ? '全文段落已自动首行缩进两格（回车新段也是）'
+        : '已关闭首行缩进（可用「段首缩进」手动加）');
     },
 
     /* ---------- 外观：背景图 / 字体 / 音乐 ---------- */
@@ -4011,6 +5232,12 @@ var app = Vue.createApp({
           ed.contains(sel.getRangeAt(0).startContainer)) {
         return { range: sel.getRangeAt(0).cloneRange(), whole: false };
       }
+      /* 活选区没了（比如焦点刚被输入框抢走）就用记住的选区：右键/菜单点按
+         之间选区不该丢，丢了还按"整段"改就违背"只改选中"了 */
+      if (this._selRange && !this._selRange.collapsed && ed
+          && ed.contains(this._selRange.startContainer)) {
+        return { range: this._selRange.cloneRange(), whole: false };
+      }
       var blk = this.ctxBlockEl();
       if (!blk) return null;
       if (blk === ed) {
@@ -4061,14 +5288,17 @@ var app = Vue.createApp({
       } catch (e) {}
       return false;
     },
-    /** 给一段范围套内联样式（拆出来→包 span→放回去），heading 也照改不误 */
-    _styleRange: function(t, css) {
+    /** 给一段范围套内联样式（拆出来→包 span→放回去），heading 也照改不误。
+     *  mark=true 时给 span 打上 data-inl：标记"这几个字是手动改过的"，
+     *  只影响这几个字，绝不落到段落块 / 样式模板上。 */
+    _styleRange: function(t, css, mark) {
       var ed = document.getElementById('editor');
       var wasCollapsed = t.range.collapsed;
       var blk = t.el || this.ctxBlockEl();
       var off = wasCollapsed ? this._offsetInBlock(blk) : -1;
       var span = document.createElement('span');
       for (var k in css) span.style[k] = css[k];
+      if (mark) span.setAttribute('data-inl', '1');
       try {
         span.appendChild(t.range.extractContents());
         t.range.insertNode(span);
@@ -4098,7 +5328,14 @@ var app = Vue.createApp({
          别把 WebKit 兜底出来的首个 Latin 字体（Segoe UI）当"用户选的字体"。 */
       var blk = this.ctxBlockEl() || ed;
       try {
-        var cs = getComputedStyle(blk);
+        /* B/I/U 状态按"选中文字的起点"算（有选中时），别拿整段的样式糊弄人 */
+        var styleNode = blk;
+        if (hasSel) {
+          var c2 = sel.getRangeAt(0).startContainer;
+          styleNode = (c2.nodeType === 3) ? c2.parentNode : c2;
+          if (!styleNode || styleNode === ed) styleNode = blk;
+        }
+        var cs = getComputedStyle(styleNode);
         var inlF = this._inlineStyleVal(blk, 'fontFamily');
         this.ctxFontName = (inlF && inlF !== 'inherit') ? inlF
                          : (this.styleCfgFont(this.ctxCur) || '');
@@ -4156,7 +5393,9 @@ var app = Vue.createApp({
       if (!n) return '';
       if (this.fontFamily && n === String(this.fontFamily).replace(/['"]/g, '').trim())
         return "'SnapWriteCustom'";
-      return "'" + n + "'";
+      /* 中文名 + 英文族名一起写：有的机器只认 SimSun、有的只认"宋体" */
+      var alias = this._fontAliasMap()[n];
+      return alias ? ("'" + n + "','" + alias + "'") : ("'" + n + "'");
     },
     /* ---------- 样式模板（改一处，全文该级别一起变） ---------- */
     styleFontOf: function(k) { return this.cfg[(k === 'p' ? 'p' : k) + 'Font'] || ''; },
@@ -4270,6 +5509,12 @@ var app = Vue.createApp({
       else this.ctxUnder = !this.ctxUnder;
     },
     ctxIndent: function() {
+      /* 全文首行缩进开着时不用手动插（不然变成四格） */
+      if (this.cfg.indentFirst !== false) {
+        this.ctxShow = false;
+        this.toast('已开启全文首行缩进，段落开头自动空两格（设置→外观可关）');
+        return;
+      }
       var blk = this.ctxBlockEl();
       if (!blk || blk.id === 'editor') { this.ctxShow = false; return; }
       var sel = window.getSelection();
@@ -4322,6 +5567,7 @@ var app = Vue.createApp({
       try { document.execCommand('formatBlock', false, '<' + tag + '>'); } catch (e) {}
       this.onInput();
       this.pulse();
+      this.syncCaretFormat();
     },
     /* ---------- 样式设置（正文/H1/H2/H3 各自的字体+字号+加粗） ----------
        改样式 = 改所有该级别段落：全靠 CSS 变量，改完立即生效。 */
@@ -4602,6 +5848,10 @@ var app = Vue.createApp({
 });
 
 /* 挂载；mount 返回组件代理实例，Java 端 window.app.* 调用方式保持不变 */
+/* Vue 的渲染/监听错误走 console 而不进 window.onerror —— 收进 __errs 才能自测诊断 */
+app.config.errorHandler = function(err) {
+  window.__errs.push('VUE: ' + (err && err.message ? err.message : err));
+};
 try {
   var vm = app.mount('#app');
   window.app = vm;
