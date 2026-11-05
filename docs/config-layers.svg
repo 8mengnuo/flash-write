@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="382" viewBox="0 0 680 382" role="img" font-family="Segoe UI, Microsoft YaHei, sans-serif">
+<title>开发环境配置文件的分层模型</title>
+<desc>触发层、执行层、参数层、编辑器认知层与运行产物之间的关系，前四层只影响开发，不参与程序运行。</desc>
+<rect width="680" height="382" fill="#FFFFFF"/>
+<path d="M64 66 L64 322" fill="none" stroke="#B4B2A9" stroke-width="1"/>
+<circle cx="64" cy="66" r="12" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="64" y="66" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#0C447C">1</text>
+<rect x="90" y="44" width="550" height="44" rx="8" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="104" y="62" font-size="13" font-weight="500" fill="#0C447C">触发层 · 只是按钮</text>
+<text x="104" y="80" font-size="11" fill="#185FA5">.vscode/tasks.json · keybindings.json · .idea/runConfigurations/*.xml</text>
+<text x="626" y="66" text-anchor="end" dominant-baseline="central" font-size="11" fill="#5F5E5A">VSCode / IDEA 读</text>
+<circle cx="64" cy="130" r="12" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+<text x="64" y="130" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#042C53">2</text>
+<rect x="90" y="108" width="550" height="44" rx="8" fill="#B5D4F4" stroke="#185FA5" stroke-width="0.5"/>
+<text x="104" y="126" font-size="13" font-weight="500" fill="#042C53">执行层 · 唯一的机器</text>
+<text x="104" y="144" font-size="11" fill="#0C447C">build.ps1：六步构建全部在这里实现，两个 IDE 的按钮最终都调它</text>
+<text x="626" y="130" text-anchor="end" dominant-baseline="central" font-size="11" fill="#0C447C">PowerShell 读</text>
+<circle cx="64" cy="194" r="12" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="64" y="194" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#0C447C">3</text>
+<rect x="90" y="172" width="550" height="44" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="104" y="190" font-size="13" font-weight="500" fill="#2C2C2A">参数层 · 打包工具真正读取</text>
+<text x="104" y="208" font-size="11" fill="#5F5E5A">build/manifest.txt（Main-Class / Class-Path）· build/launch4j.xml（cp / jre / 版本 / 图标）</text>
+<text x="626" y="194" text-anchor="end" dominant-baseline="central" font-size="11" fill="#5F5E5A">jar / launch4j 读</text>
+<circle cx="64" cy="258" r="12" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="64" y="258" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#2C2C2A">4</text>
+<rect x="90" y="236" width="550" height="44" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="104" y="254" font-size="13" font-weight="500" fill="#2C2C2A">编辑器认知层 · 只管补全与索引</text>
+<text x="104" y="272" font-size="11" fill="#5F5E5A">闪写.iml · .idea/misc.xml · modules.xml · .vscode/settings.json · .gitignore</text>
+<text x="626" y="258" text-anchor="end" dominant-baseline="central" font-size="11" fill="#5F5E5A">IDE / git 读</text>
+<circle cx="64" cy="322" r="12" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text x="64" y="322" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#085041">5</text>
+<rect x="90" y="300" width="550" height="44" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text x="104" y="318" font-size="13" font-weight="500" fill="#085041">产物层 · 程序真正运行的东西</text>
+<text x="104" y="336" font-size="11" fill="#0F6E56">FlashWriteFx.jar · 闪写.exe · lib/ · runtime/（免安装版）</text>
+<text x="626" y="322" text-anchor="end" dominant-baseline="central" font-size="11" fill="#0F6E56">JVM 读</text>
+<text x="40" y="366" font-size="11" fill="#888780">删掉 1~4 层只影响开发；已生成的 exe 照常运行。只有产物层没了，程序才真的跑不起来。</text>
+</svg>

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="486" viewBox="0 0 680 486" role="img" font-family="Segoe UI, Microsoft YaHei, sans-serif">
+<title>闪写 Java 后端功能树</title>
+<desc>以 FxMain 到 FxApp 为根，向下分出启动与桥接、系统层、数据层、文件与资源、图标工具链、回归层六个模块。</desc>
+<rect width="680" height="486" fill="#FFFFFF"/>
+<rect x="40" y="28" width="600" height="40" rx="10" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="60" y="53" font-size="14" font-weight="500" fill="#0C447C">FxMain（启动空壳）→ FxApp（后端总控，src/ 共 7 个 Java 文件）</text>
+<path d="M70 68 L70 434" fill="none" stroke="#B4B2A9" stroke-width="1"/>
+<rect x="100" y="82" width="540" height="52" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<path d="M70 108 L100 108" fill="none" stroke="#B4B2A9" stroke-width="1"/>
+<text x="116" y="102" font-size="13" font-weight="500" fill="#2C2C2A">① 启动 · 生命周期 · 前后端桥</text>
+<text x="116" y="122" font-size="11" fill="#5F5E5A">main 参数解析 / 单实例 / start 装配 / hookJs / Bridge.js 100+ 命令 / forwardKeyToJs / evalJs / exitApp</text>
+<rect x="100" y="142" width="540" height="52" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<path d="M70 168 L100 168" fill="none" stroke="#B4B2A9" stroke-width="1"/>
+<text x="116" y="162" font-size="13" font-weight="500" fill="#2C2C2A">② 系统层</text>
+<text x="116" y="182" font-size="11" fill="#5F5E5A">Hooks（老板键·LLRRLL 手势·快捷键捕获）/ 托盘 / 透明置顶窗口 / 气泡模式 / VolumeMeter 音量律动</text>
+<rect x="100" y="202" width="540" height="52" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<path d="M70 228 L100 228" fill="none" stroke="#B4B2A9" stroke-width="1"/>
+<text x="116" y="222" font-size="13" font-weight="500" fill="#2C2C2A">③ 数据层</text>
+<text x="116" y="242" font-size="11" fill="#5F5E5A">config / draft / words / meta / 多文档 CRUD / 本地文件关联 / 导航窗 / 寻回快照 / 回收站</text>
+<rect x="100" y="262" width="540" height="52" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<path d="M70 288 L100 288" fill="none" stroke="#B4B2A9" stroke-width="1"/>
+<text x="116" y="282" font-size="13" font-weight="500" fill="#2C2C2A">④ 文件 · 导出 · 资源</text>
+<text x="116" y="302" font-size="11" fill="#5F5E5A">Exporter 六格式 / 导入 docx·doc·txt / 字体库 / 壁纸·图标·装饰图·BGM / 插件加载</text>
+<rect x="100" y="322" width="540" height="52" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<path d="M70 348 L100 348" fill="none" stroke="#B4B2A9" stroke-width="1"/>
+<text x="116" y="342" font-size="13" font-weight="500" fill="#2C2C2A">⑤ 图标工具链（离线生成，不参与运行）</text>
+<text x="116" y="362" font-size="11" fill="#5F5E5A">IconArt.render 绘制 BufferedImage / MakeIco 输出 16·24·32·48·64·256 六档 build/icon.ico</text>
+<rect x="100" y="382" width="540" height="52" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<path d="M70 408 L100 408" fill="none" stroke="#B4B2A9" stroke-width="1"/>
+<text x="116" y="402" font-size="13" font-weight="500" fill="#2C2C2A">⑥ 回归层</text>
+<text x="116" y="422" font-size="11" fill="#5F5E5A">--selftest 242 断言 / bosstest / keytest / gesttest / fonttest / plugtest / dragtest / --shot* 截图</text>
+<text x="40" y="462" font-size="11" fill="#888780">前端不计入后端：web/index.html（模板+脚本+CSS）、vue3.min.js（Vue 运行时）、selftest.js（断言）</text>
+</svg>

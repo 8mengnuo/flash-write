@@ -1,0 +1,5 @@
+[
+  { "key": "ctrl+alt+j", "command": "workbench.action.tasks.runTask", "args": "闪写：仅重打 jar（改 HTML/JS 用）" },
+  { "key": "ctrl+alt+b", "command": "workbench.action.tasks.runTask", "args": "闪写：完整构建（改 Java 后必跑）" },
+  { "key": "ctrl+alt+t", "command": "workbench.action.tasks.runTask", "args": "闪写：自测" }
+]

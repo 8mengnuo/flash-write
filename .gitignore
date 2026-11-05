@@ -10,9 +10,10 @@ out/
 shot.log
 shotb.log
 
-# build 目录只保留打包必需的 launch4j.xml 和 icon.ico，其余全是测试日志
+# build 目录只保留打包必需的 launch4j.xml / manifest.txt / icon.ico，其余全是测试日志
 build/*
 !build/launch4j.xml
+!build/manifest.txt
 !build/icon.ico
 !build/ico/
 
@@ -28,3 +29,10 @@ test/*.out
 Thumbs.db
 Desktop.ini
 *.lock
+
+# ---- 本机工作区状态与发行目录（.vscode/、.idea/ 静态配置入库共享）----
+dist/
+*.lnk
+.idea/workspace.xml
+.idea/shelf/
+.idea/httpRequests/

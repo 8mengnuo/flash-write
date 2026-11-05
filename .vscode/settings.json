@@ -1,0 +1,21 @@
+{
+  "java.project.sourcePaths": ["src"],
+  "java.project.outputPath": "target/vscode-out",
+  "java.project.referencedLibraries": ["jfx/*.jar", "lib/*.jar"],
+  "files.exclude": {
+    "**/out": true,
+    "**/runtime": true,
+    "**/dist": true,
+    "**/target": true,
+    "**/build/*.log": true,
+    "**/ui_*.png": true
+  },
+  "search.exclude": {
+    "**/jfx": true,
+    "**/lib": true,
+    "**/out": true,
+    "**/runtime": true,
+    "**/dist": true,
+    "**/tools": true
+  }
+}

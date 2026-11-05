@@ -1,0 +1,2 @@
+Main-Class: FxMain
+Class-Path: lib/jnativehook-2.2.2.jar lib/pdfbox-2.0.31.jar lib/fontbox-2.0.31.jar lib/commons-logging-1.2.jar jfx/javafx-base-21.0.5-win.jar jfx/javafx-graphics-21.0.5-win.jar jfx/javafx-controls-21.0.5-win.jar jfx/javafx-media-21.0.5-win.jar jfx/javafx-swing-21.0.5-win.jar jfx/javafx-web-21.0.5-win.jar

@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="344" viewBox="0 0 680 344" role="img" font-family="Segoe UI, Microsoft YaHei, sans-serif">
+<title>build.ps1 完整构建六步流水线</title>
+<desc>编译 Java、打 jar、launch4j 生成 exe、rcedit 写中文版本信息与图标、校验 exe、可选回归测试。</desc>
+<rect width="680" height="344" fill="#FFFFFF"/>
+<path d="M58 46 L58 306" fill="none" stroke="#B4B2A9" stroke-width="1"/>
+<circle cx="58" cy="60" r="12" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="58" y="60" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#0C447C">1</text>
+<rect x="82" y="42" width="558" height="36" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="96" y="60" dominant-baseline="central" font-size="13" font-weight="500" fill="#2C2C2A">javac 整组编译 src/*.java</text>
+<text x="626" y="60" text-anchor="end" dominant-baseline="central" font-size="11" fill="#5F5E5A">→ out/*.class</text>
+<circle cx="58" cy="106" r="12" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="58" y="106" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#0C447C">2</text>
+<rect x="82" y="88" width="558" height="36" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="96" y="106" dominant-baseline="central" font-size="13" font-weight="500" fill="#2C2C2A">jar 把 class + web/ 打进同一个包</text>
+<text x="626" y="106" text-anchor="end" dominant-baseline="central" font-size="11" fill="#5F5E5A">→ FlashWriteFx.jar</text>
+<circle cx="58" cy="152" r="12" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="58" y="152" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#0C447C">3</text>
+<rect x="82" y="134" width="558" height="36" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="96" y="152" dominant-baseline="central" font-size="13" font-weight="500" fill="#2C2C2A">launch4j 生成启动器 exe</text>
+<text x="626" y="152" text-anchor="end" dominant-baseline="central" font-size="11" fill="#5F5E5A">→ 闪写.exe</text>
+<circle cx="58" cy="198" r="12" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="58" y="198" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#0C447C">4</text>
+<rect x="82" y="180" width="558" height="36" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="96" y="198" dominant-baseline="central" font-size="13" font-weight="500" fill="#2C2C2A">rcedit 写中文版本信息 + 图标</text>
+<text x="626" y="198" text-anchor="end" dominant-baseline="central" font-size="11" fill="#5F5E5A">FileDescription 等</text>
+<circle cx="58" cy="244" r="12" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text x="58" y="244" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#0C447C">5</text>
+<rect x="82" y="226" width="558" height="36" rx="8" fill="#FFFFFF" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="96" y="244" dominant-baseline="central" font-size="13" font-weight="500" fill="#2C2C2A">读回 exe 的 VersionInfo 校验</text>
+<text x="626" y="244" text-anchor="end" dominant-baseline="central" font-size="11" fill="#5F5E5A">闪写 SnapWrite / 1.24.0</text>
+<circle cx="58" cy="290" r="12" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text x="58" y="290" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#2C2C2A">6</text>
+<rect x="82" y="272" width="558" height="36" rx="8" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="96" y="290" dominant-baseline="central" font-size="13" font-weight="500" fill="#2C2C2A">可选回归（加了参数才跑）</text>
+<text x="626" y="290" text-anchor="end" dominant-baseline="central" font-size="11" fill="#5F5E5A">-SelfTest / -AllTests / -Shot</text>
+</svg>

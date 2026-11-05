@@ -21,7 +21,9 @@ public final class VolumeMeter {
     private static volatile float peak = 0f;
     private static volatile boolean started = false;
 
-    /** 当前系统音频峰值（0~1），供 JS 轮询 */
+    /**
+     * 当前系统音频峰值（0~1），供 JS 轮询
+     */
     public static float peak() { return peak; }
 
     /** 惰性启动：第一次开启"跟随音乐"时调用，重复调用无害 */

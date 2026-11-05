@@ -1,0 +1,54 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "闪写：仅重打 jar（改 HTML/JS 用）",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/build.ps1", "-JarOnly"],
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "detail": "编译变化的 Java 源码 + 重打 jar。exe 是 dontWrapJar 启动器，读旁边最新的 jar，所以不用重打 exe。"
+    },
+    {
+      "label": "闪写：完整构建（改 Java 后必跑）",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/build.ps1"],
+      "group": "build",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "detail": "整组编译 src/*.java → jar → launch4j 重打 exe → rcedit 中文版本信息与图标 → 校验。"
+    },
+    {
+      "label": "闪写：自测",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/build.ps1", "-SelfTest"],
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "detail": "完整构建后跑 --selftest，断言有 FAIL 时任务失败。"
+    },
+    {
+      "label": "闪写：全部回归",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/build.ps1", "-AllTests"],
+      "group": "test",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "detail": "selftest + bosstest + keytest + gesttest（真机键盘鼠标，运行时不要动鼠标）。"
+    },
+    {
+      "label": "闪写：气泡截图",
+      "type": "shell",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/build.ps1", "-Shot"],
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
+      "detail": "输出 ui_hybrid.png，肉眼核对排版。"
+    }
+  ]
+}

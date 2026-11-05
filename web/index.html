@@ -9,437 +9,6 @@ window.__errs = [];
 window.addEventListener('error', function(e) {
   window.__errs.push((e.message || 'err') + ' @ ' + (e.lineno || '?'));
 });</script>
-<style>
-/* ═══════════════ 设计令牌（主题色由 Java 配置动态注入） ═══════════════ */
-:root{
-  --accent:#6366F1; --accent2:#22D3EE;
-  --header-bg:linear-gradient(135deg,#6366F1,#22D3EE);
-  --bg:#F6F7FB; --panel:#FFFFFF; --ink:#1F2430; --sub:#8A91A5;
-  --line:#E9EBF3; --fs:16px; --font:"Segoe UI","Microsoft YaHei",sans-serif;
-  --hover:#EEF0F8; --soft:#F2F4FB; --field:#FFFFFF; --modal-bg:rgba(255,255,255,.97);
-  --tb-ink:#4A5068; --switch-off:#D6DAE8; --dash:#EEF0F6; --ph:#B9BECD;
-}
-/* 深色皮肤（黑色主题）：整站令牌替换，组件只认变量，不需要逐条改样式 */
-html.dark{
-  --bg:#15161C; --panel:#1E1F27; --ink:#E9EAF2; --sub:#9BA1B6;
-  --line:#2C2E3A; --hover:#2A2C38; --soft:#262832; --field:#20222B;
-  --modal-bg:rgba(30,32,41,.98); --tb-ink:#C3C7D8; --switch-off:#3A3D4C;
-  --dash:#2C2E3A; --ph:#5A5F76;
-}
-*{margin:0;padding:0;box-sizing:border-box;-webkit-user-select:none;user-select:none}
-html,body{height:100%;overflow:hidden;font-family:"Segoe UI","Microsoft YaHei",sans-serif;
-  background:transparent}
-#app{display:flex;flex-direction:column;height:100%;background:var(--bg)}
-.appicon{width:19px;height:19px;margin-right:7px;border-radius:5px;flex:none;display:block}
-button{font-family:inherit;cursor:pointer;border:none;background:none}
-::-webkit-scrollbar{width:8px}
-::-webkit-scrollbar-thumb{background:var(--switch-off);border-radius:4px}
-
-/* ═══════════════ 标题栏：单色/渐变由 --header-bg 决定 ═══════════════ */
-.header{display:flex;align-items:center;gap:6px;padding:0 10px;height:46px;flex:none;
-  background:var(--header-bg);cursor:default}
-.logo{color:#fff;font-weight:800;font-size:15px;letter-spacing:1px;margin-right:4px;
-  text-shadow:0 1px 3px rgba(0,0,0,.15)}
-.pill{height:26px;padding:0 12px;border-radius:13px;color:rgba(255,255,255,.92);font-size:12px;
-  transition:all .15s;white-space:nowrap}
-.pill:hover{background:rgba(255,255,255,.18)}
-.pill.on{background:rgba(255,255,255,.92);color:var(--accent);font-weight:700}
-.chip{height:26px;padding:0 12px;border-radius:13px;background:rgba(255,255,255,.16);
-  color:#fff;font-size:12px;white-space:nowrap;
-  display:inline-flex;align-items:center;justify-content:center;line-height:1}
-.chip b{font-weight:800}
-.spacer{flex:1}
-.winbtn{width:34px;height:30px;color:#fff;border-radius:8px;transition:background .15s;
-  display:flex;align-items:center;justify-content:center}
-.winbtn:hover{background:rgba(255,255,255,.22)}
-.winbtn.close:hover{background:#FF5F57}
-
-/* ═══════════════ 写作工具条 ═══════════════ */
-.toolbar{display:flex;align-items:center;gap:3px;padding:7px 12px;background:var(--panel);
-  border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
-.tb{height:26px;padding:0 8px;border-radius:8px;color:var(--tb-ink);font-size:12px;
-  background:transparent;transition:all .12s}
-.tb:hover{background:var(--hover);color:var(--accent)}
-.tb:active{transform:scale(.94)}
-.tb.on{background:var(--accent);color:#fff}
-.tbdiv{width:1px;height:16px;background:var(--line);margin:0 3px;flex:none}
-/* 对齐钮：窄方钮 + 图标（四个一排不占地方） */
-.albtn{width:24px;padding:0;display:inline-flex;align-items:center;justify-content:center}
-.tbsel{height:26px;border-radius:8px;border:1px solid var(--line);background:var(--soft);
-  color:var(--ink);font-size:12px;padding:0 5px;max-width:150px}
-.fontsel{max-width:118px}
-/* 自定义字号：直接填数字的输入框（不再弹窗） */
-.tbnum{height:26px;width:54px;border-radius:8px;border:1px solid var(--line);
-  background:var(--soft);color:var(--ink);font-size:12px;padding:0 3px;text-align:center;
-  -webkit-appearance:none;appearance:none}
-.tbnum::-webkit-inner-spin-button,.tbnum::-webkit-outer-spin-button{
-  -webkit-appearance:none;appearance:none;margin:0}
-.tbnum:focus{outline:none;border-color:var(--accent)}
-
-/* ═══════════════ 主编辑区（背景图垫在文字之下，仅完整模式） ═══════════════ */
-.ed-wrap{position:relative;flex:1;display:flex;min-height:0}
-.edbg{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none}
-.editor{flex:1;overflow-y:auto;padding:22px 30px 40px;background:var(--panel);
-  -webkit-user-select:text;user-select:text;outline:none;
-  font-size:var(--fs);line-height:1.9;color:var(--ink);word-break:break-word;
-  font-family:var(--pff,var(--font));font-weight:var(--pbw,400);
-  font-style:var(--pit,normal)}
-.editor.bold{font-weight:700}
-.editor:empty:before{content:attr(data-ph);color:var(--ph)}
-.editor ::selection{background:rgba(99,102,241,.25)}
-.editor::selection{background:rgba(99,102,241,.25)}
-/* 标题分级：各级别字号/字体/加粗/斜体都是"样式"，设置里可改（--h*fs / --h*ff / --h*w / --h*it），
-   改样式 = 改所有该级别段落，和 WPS 的样式一个道理 */
-.editor h1{font-size:var(--h1fs);font-weight:var(--h1w);margin:16px 0 8px;line-height:1.5;
-  font-family:var(--h1ff,inherit);font-style:var(--h1it,normal)}
-.editor h2{font-size:var(--h2fs);font-weight:var(--h2w);margin:14px 0 6px;line-height:1.5;
-  font-family:var(--h2ff,inherit);font-style:var(--h2it,normal)}
-.editor h3{font-size:var(--h3fs);font-weight:var(--h3w);margin:12px 0 5px;line-height:1.5;
-  font-family:var(--h3ff,inherit);font-style:var(--h3it,normal)}
-.editor h1,.editor h2,.editor h3{color:var(--ink)}
-.editor p{margin:0}
-/* 全文首行缩进（--tind 由 applyVars 下发，设置→外观可关）：
-   挂在段落块上而不是插入全角空格 —— 换行新段自动继承，
-   两端对齐时首行也老老实实缩进，不会像行首空格那样被拉伸/吞掉 */
-.editor>p,.editor>div{text-indent:var(--tind,2em)}
-
-/* ═══════════════ 标签（tagmark）═══════════════ */
-/* 标签：包住一段文字的彩色小标记，data-tag 存名字，颜色走内联 --tagc。
-   和底纹（hlmark）同一套视觉：就是一块圆角色底 —— 标签=带名字的底纹 */
-.tagmark{background:var(--tagc,rgba(245,158,11,.28));border-radius:4px;padding:0 3px}
-.tagmark.flash{outline:2px solid var(--accent);outline-offset:2px;transition:outline .3s}
-/* 跳转定位闪框（导航跳转） */
-#editor .flash{outline:2px solid var(--accent);outline-offset:2px}
-/* 导航面板（标题+标签列表） */
-.navpop{width:250px;max-height:70vh;overflow-y:auto;padding:8px}
-.navsec{font-size:10.5px;color:var(--sub);padding:4px 6px 5px;letter-spacing:.05em}
-.navitem{display:flex;align-items:center;width:100%;text-align:left;padding:6px 8px;
-  border-radius:8px;font-size:12.5px;color:var(--ink);gap:6px}
-.navitem:hover{background:var(--soft);color:var(--accent)}
-.navitem .nvtxt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.navitem .nvtag{flex:none;font-size:10px;padding:1px 7px;border-radius:8px;color:#fff}
-/* 右键菜单的标签面板里也用同款小胶囊 */
-.ctxitem .nvtag{font-size:10px;padding:1px 7px;border-radius:8px;color:#fff;margin-right:6px}
-.navlv1{font-weight:700}.navlv2{padding-left:20px}.navlv3{padding-left:34px;font-size:12px}
-/* 标签选择小弹层 */
-.tagpick{width:190px;padding:8px}
-.tagpick .tagrow{display:flex;align-items:center;gap:6px;width:100%;padding:6px 8px;
-  border-radius:8px;font-size:12.5px}
-.tagpick .tagrow:hover{background:var(--soft)}
-
-/* ═══════════════ 弹层 ═══════════════ */
-.pop{position:absolute;background:var(--panel);border-radius:14px;z-index:50;
-  box-shadow:0 10px 40px rgba(25,35,80,.16);border:1px solid var(--line);
-  animation:popin .14s ease}
-@keyframes popin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
-.menu{min-width:190px;padding:6px}
-.mitem{display:block;width:100%;text-align:left;padding:9px 14px;border-radius:9px;
-  font-size:13px;color:var(--ink)}
-.mitem:hover{background:var(--soft);color:var(--accent)}
-.msep{height:1px;background:var(--line);margin:5px 8px}
-.ctxmark{color:var(--accent);font-weight:700}
-/* 右键菜单（WPS 式：样式套用 + 字体/字号/格式直改） */
-.ctxmenu{width:252px;padding:7px;max-height:78vh;overflow-y:auto}
-.ctxhd{font-size:10.5px;color:var(--sub);padding:2px 8px 6px;letter-spacing:.04em}
-.ctxhd-tip{font-size:9.5px;opacity:.75;margin-left:4px}
-.ctxtags{display:flex;gap:4px;padding:0 6px 6px;flex-wrap:wrap}
-.ctxtag{padding:4px 9px;border-radius:7px;font-size:11.5px;color:var(--ink);
-  background:var(--soft);border:1px solid transparent;transition:all .1s}
-.ctxtag:hover{color:var(--accent);border-color:var(--accent)}
-.ctxtag.on{background:var(--accent);color:#fff;border-color:var(--accent)}
-.ctxitem{display:flex;align-items:center;width:100%;text-align:left;gap:8px;
-  padding:7px 10px;border-radius:8px;font-size:12.5px;color:var(--ink)}
-.ctxitem:hover{background:var(--soft);color:var(--accent)}
-.ctxitem .kbd{margin-left:auto;color:var(--sub);font-size:11px;max-width:112px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ctxitem.on{color:var(--accent);font-weight:700}
-.ctxgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;padding:4px 6px 8px}
-.ctxgrid button{height:27px;border-radius:7px;font-size:12px;color:var(--ink);background:var(--soft)}
-.ctxgrid button:hover{background:var(--hover);color:var(--accent)}
-.ctxgrid button.on{background:var(--accent);color:#fff}
-.ctxback{display:flex;align-items:center;gap:6px;padding:4px 8px 8px;font-size:11.5px;
-  color:var(--sub);width:100%}
-.ctxback:hover{color:var(--accent)}
-.ctxlist{max-height:216px;overflow-y:auto;padding:0 2px}
-.mrow{display:flex;align-items:center;gap:8px;padding:8px 14px;font-size:13px;color:var(--ink)}
-.mrow input[type=range]{width:100px;accent-color:var(--accent)}
-.chargrid{display:grid;grid-template-columns:repeat(8,36px);gap:4px;padding:10px}
-.chargrid button{height:32px;border-radius:8px;font-size:15px;color:var(--ink)}
-.chargrid button:hover{background:var(--hover);color:var(--accent)}
-
-/* ═══════════════ 词库弹层 ═══════════════ */
-.wpop{width:262px;max-height:380px;overflow-y:auto;padding:8px}
-.wpop-h{display:flex;align-items:center;justify-content:space-between;padding:2px 6px 8px;
-  border-bottom:1px solid var(--line);margin-bottom:6px}
-.wpop-h span{font-weight:700;font-size:13px;color:var(--ink)}
-.wpop-h .add{color:var(--accent);font-size:17px;line-height:1;padding:2px 8px;border-radius:8px}
-.wpop-h .add:hover{background:var(--soft)}
-.wadd{background:var(--soft);border-radius:10px;padding:8px;margin-bottom:8px}
-.wadd input{width:100%;border:1px solid var(--line);border-radius:7px;padding:5px 8px;color:var(--ink);background:var(--field);
-  font-size:12.5px;outline:none;margin-bottom:5px;-webkit-user-select:text;user-select:text;
-  font-family:inherit}
-.wadd input:focus{border-color:var(--accent)}
-.wadd .save{width:100%;height:26px;border-radius:7px;background:var(--accent);color:#fff;
-  font-size:12.5px}
-.witem{padding:8px 46px 8px 10px;border-radius:10px;margin-bottom:6px;cursor:pointer;transition:background .12s;
-  position:relative}
-.witem:hover{background:var(--soft)}
-.wcode{display:inline-block;font-size:11px;color:var(--accent);background:rgba(99,102,241,.1);
-  border-radius:6px;padding:1px 7px;margin-bottom:3px;font-weight:700}
-.wcat{display:inline-block;font-size:10px;color:var(--sub);background:var(--soft);
-  border-radius:6px;padding:1px 6px;margin-left:5px;vertical-align:middle}
-.wcontent{font-size:12.5px;color:var(--ink);line-height:1.5;word-break:break-all}
-.wedit{position:absolute;right:26px;top:6px;color:var(--sub);font-size:12px;padding:0 4px;
-  line-height:1;opacity:.45;cursor:pointer}
-.wedit:hover{color:var(--accent);opacity:1}
-.witem.editing{background:var(--soft);cursor:default}
-.witem .wef{display:flex;gap:4px;margin-top:4px}
-.witem .wef input{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;padding:4px 6px;
-  color:var(--ink);background:var(--field);font-size:11.5px;outline:none;
-  -webkit-user-select:text;user-select:text;font-family:inherit}
-.witem .wef input:focus{border-color:var(--accent)}
-.witem .wef .wk{width:64px;flex:none}
-.wefbtns{display:flex;gap:5px;margin-top:5px}
-.wefbtns button{font-size:11px;padding:2px 9px;border-radius:6px}
-.wefbtns .ws{background:var(--accent);color:#fff}
-.wefbtns .wc{color:var(--sub)}
-.wtabs{display:flex;gap:4px;flex-wrap:wrap;padding:2px 2px 8px}
-.wtab{font-size:11px;padding:3px 10px;border-radius:10px;background:var(--soft);color:var(--sub)}
-.wtab.on{background:var(--accent);color:#fff;font-weight:700}
-.wdel{position:absolute;right:6px;top:6px;color:#C6CAD8;font-size:13px;padding:0 4px;
-  line-height:1;opacity:.45;cursor:pointer}
-.wdel:hover{color:#FF5F57;opacity:1}
-.wtip{font-size:11.5px;color:var(--sub);padding:6px 8px 2px;line-height:1.6}
-
-/* ═══════════════ 文件（多文档）╱常驻词库 ═══════════════ */
-.chip.docname{cursor:pointer;max-width:170px;overflow:hidden;text-overflow:ellipsis}
-.chip.docname:hover{background:rgba(255,255,255,.28)}
-.wpop.pinned{box-shadow:0 8px 28px rgba(25,35,80,.18)}
-.dpop{width:302px}
-.drow{cursor:pointer;position:relative}
-.drow.cur{background:rgba(99,102,241,.09)}
-
-/* ═══════════════ 气泡模式：词库常驻外置悬浮层 ═══════════════
-   以前词库用同一个 .wpop 定位（right/top），气泡窗口很小，面板直接压在输入框上，
-   字和词条叠在一起看不清。改成：窗口右侧留出 214px 空白，词库作为独立悬浮层
-   贴在输入框"外面"，视觉上是一层浮在气泡旁的小抽屉。 */
-#app.mode-bubble.sidewords{padding-right:214px}
-#app.mode-bubble .wpop.sideword{position:absolute;right:6px;top:6px;bottom:6px;
-  width:196px;max-height:none;
-  transform:none;animation:none;z-index:7;background:var(--panel);
-  box-shadow:0 10px 30px rgba(25,35,80,.24);border:1px solid var(--line)}
-#app.mode-bubble .wpop.sideword .wcontent{font-size:12px}
-/* 侧栏让位：拖动条和右上角控制钮挪到词库左边，别压在词库上 */
-#app.mode-bubble.sidewords .dragstrip{right:210px}
-#app.mode-bubble.sidewords .bctrl-wrap{right:206px}
-.dname{font-size:13px;color:var(--ink);font-weight:600;word-break:break-all;line-height:1.4}
-.dcur{font-size:10px;color:#fff;background:var(--accent);border-radius:6px;padding:1px 6px;
-  margin-left:6px;vertical-align:middle;font-weight:400}
-.dmeta{font-size:11px;color:var(--sub);margin-top:2px}
-.dprev{font-size:11.5px;color:var(--sub);margin-top:3px;overflow:hidden;
-  text-overflow:ellipsis;white-space:nowrap}
-.dacts{display:none;gap:6px;margin-top:5px}
-.drow:hover .dacts{display:flex}
-.dacts button{font-size:11px;color:var(--accent);padding:2px 7px;border-radius:6px}
-.dacts button:hover{background:var(--soft)}
-/* 文件面板：回收站（已删除文档找回） */
-.dsec{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)}
-.dsec-h{font-size:11.5px;color:var(--sub);font-weight:700;margin:2px 2px 6px}
-.drow.deleted{opacity:.75}
-.drow.deleted:hover{opacity:1}
-.dcur.del{background:#9CA3AF}
-
-/* 冻结窗口：设置 / 退出确认打开时，背后界面定格，只有弹窗可点。
-   ⚠ 千万别用 filter:blur() 做"虚化"——WebView(WebKit) 里带 filter 的祖先会让
-   滚动重栅格化整棵树，设置面板上下滑就一闪一闪。改成只降透明度 + 遮罩，纯合成层。 */
-#app.frozen > *:not(.mask):not(#cloudcv){opacity:.35;pointer-events:none}
-
-/* ═══════════════ 设置 / 弹窗 ═══════════════ */
-.mask{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(20,24,48,.5);z-index:90;display:flex;
-  align-items:center;justify-content:center;animation:fadein .15s ease}
-.prompt-input{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;
-  font-size:13px;outline:none;color:var(--ink);background:var(--field);font-family:inherit;
-  -webkit-user-select:text;user-select:text}
-.prompt-input:focus{border-color:var(--accent)}
-@keyframes fadein{from{opacity:0}to{opacity:1}}
-.modal{width:500px;max-height:84vh;overflow-y:auto;background:var(--modal-bg);
-  border-radius:18px;padding:0 24px 22px;box-shadow:0 24px 80px rgba(20,25,60,.25)}
-.modal.small{width:340px}
-/* 查找替换悬浮条：不遮罩、可拖动、开着也能编辑正文 */
-.fbar{position:fixed;top:14px;right:16px;width:330px;z-index:96;background:var(--modal-bg);
-  border-radius:14px;padding:10px 12px;box-shadow:0 18px 60px rgba(20,25,60,.32)}
-.fbar-h{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:8px;cursor:move;
-  display:flex;align-items:center;user-select:none}
-.fbar-h .x{margin-left:auto;color:var(--sub);font-size:15px;cursor:pointer;width:24px;height:24px;
-  line-height:24px;text-align:center;border-radius:7px;cursor:pointer}
-.fbar-h .x:hover{background:var(--hover);color:var(--ink)}
-/* 匹配高亮：黄色底=全部匹配，橙色底=当前定位的那个 */
-.fmark{background:#FFE066;color:#3A3000;border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.08)}
-.fmark.fcur{background:#FF9F43;color:#fff;box-shadow:0 0 0 2px rgba(255,159,67,.55)}
-/* 查找替换弹窗的输入行 */
-.frow{display:flex;gap:6px;margin-top:8px;align-items:center}
-.frow input[type=text]{flex:1;min-width:0;border:1px solid var(--line);border-radius:9px;
-  padding:7px 10px;font-size:13px;color:var(--ink);background:var(--field);outline:none;
-  -webkit-user-select:text;user-select:text;font-family:inherit}
-.frow input[type=text]:focus{border-color:var(--accent)}
-/* 标题栏冻结（sticky）：设置面板往下滚时 ✕ 仍然停在顶部，随时能关；
-   同时它也是拖动这个窗口的把手（见 mounted 里的 modal 拖动逻辑） */
-.modal h3{position:sticky;top:0;z-index:6;background:var(--modal-bg);
-  margin:0 -24px 16px;padding:20px 24px 12px;border-bottom:1px solid var(--line);
-  border-radius:18px 18px 0 0;cursor:move;
-  -webkit-user-select:none;user-select:none;
-  font-size:16px;color:var(--ink);display:flex;justify-content:space-between;align-items:center}
-.modal h3 .x{color:var(--sub);font-size:17px;cursor:pointer;line-height:26px;width:28px;height:26px;
-  text-align:center;border-radius:8px;flex:none;margin:-4px -4px 0 0;cursor:pointer}
-.modal h3 .x:hover{background:var(--hover);color:var(--ink)}
-.sec{margin-bottom:14px;padding:14px;border:1px solid var(--line);border-radius:12px}
-.sec h4{font-size:13px;color:var(--ink);margin-bottom:10px}
-.row{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink);margin-bottom:8px;flex-wrap:wrap}
-.row label{color:var(--sub);min-width:64px}
-.row input[type=text],.row input[type=number]{border:1px solid var(--line);border-radius:8px;color:var(--ink);background:var(--field);
-  padding:5px 10px;font-size:13px;width:130px;outline:none;-webkit-user-select:text;user-select:text;
-  font-family:inherit}
-.row input[type=text]:focus{border-color:var(--accent)}
-.row input[type=number]{width:72px}
-.row select{height:26px;border-radius:8px;border:1px solid var(--line);color:var(--ink);
-  background:var(--field);padding:0 6px;font-size:12px;outline:none}
-.capture-btn{background:var(--accent);color:#fff;border-radius:9px;padding:6px 14px;font-size:13px}
-.capture-btn.ghost{background:var(--hover);color:var(--tb-ink)}
-/* 已固定的标记（和"选颜色后固定"一个意思）：按钮高亮，一眼看出接下来套哪个 */
-.capture-btn.ghost.on{background:var(--accent);color:#fff}
-/* 取色面板色块亮起 = 当前选中的文字带这个颜色，再点一次就清除 */
-.pop i.on{outline:2px solid var(--accent);outline-offset:1px}
-.capture-btn:hover{filter:brightness(1.08)}
-.hint{font-size:12px;color:var(--sub);line-height:1.6}
-.combo-show{background:rgba(99,102,241,.1);color:var(--accent);border-radius:8px;
-  padding:4px 12px;font-size:13px;font-weight:700}
-.swatches{display:flex;gap:8px;flex-wrap:wrap}
-.sw{width:26px;height:26px;border-radius:50%;border:2px solid transparent;transition:transform .12s}
-.sw:hover{transform:scale(1.15)}
-.sw.on{border-color:var(--ink)}
-.switch{position:relative;width:38px;height:21px;border-radius:11px;background:var(--switch-off);
-  transition:background .18s;flex:none}
-.switch.on{background:var(--accent)}
-.switch:after{content:'';position:absolute;top:2.5px;left:2.5px;width:16px;height:16px;
-  border-radius:50%;background:#fff;transition:left .18s}
-.switch.on:after{left:19.5px}
-.icon-prev{width:38px;height:38px;border-radius:9px;border:1px solid var(--line);flex:none}
-input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-radius:7px;
-  background:var(--field);padding:1px;cursor:pointer}
-
-/* 快捷键列表 */
-.keyrow{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--dash)}
-.keyrow:last-child{border-bottom:none}
-.keyrow .kname{flex:1;font-size:12.5px;color:var(--ink)}
-.keyrow .kcombo{background:var(--soft);color:var(--tb-ink);border-radius:7px;padding:2px 9px;
-  font-size:11.5px;font-weight:700;min-width:58px;text-align:center}
-.keyrow .kedit{font-size:11.5px;color:var(--accent);padding:3px 8px;border-radius:7px}
-/* 快捷键冲突警示徽标：红底白字"!"，悬停/点击看原因 */
-.kwarn{min-width:17px;height:17px;line-height:17px;text-align:center;border-radius:50%;
-  background:#FF5F57;color:#fff;font-size:11.5px;font-weight:900;cursor:help;flex:none;
-  margin-left:6px;box-shadow:0 0 0 3px rgba(255,95,87,.18)}
-.keyrow .kedit:hover{background:var(--hover)}
-.keyrow.capturing .kcombo{background:var(--accent);color:#fff}
-
-/* ═══════════════ 导入 / 寻回弹窗 ═══════════════ */
-.doc-preview{width:100%;height:240px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;
-  padding:10px 12px;font-size:13px;line-height:1.7;color:var(--ink);white-space:pre-wrap;
-  word-break:break-all;margin:8px 0;-webkit-user-select:text;user-select:text;background:var(--soft)}
-.hist-item{padding:9px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;
-  border:1px solid var(--line);transition:all .12s}
-.hist-item:hover{border-color:var(--accent);background:var(--hover)}
-.hist-time{font-size:12px;color:var(--accent);font-weight:700}
-.hist-meta{font-size:11.5px;color:var(--sub);margin-left:8px}
-.hist-prev{font-size:12.5px;color:var(--ink);margin-top:3px;overflow:hidden;
-  text-overflow:ellipsis;white-space:nowrap}
-.hrow{display:flex;align-items:center;gap:8px;margin-top:8px}
-.hrow select{height:28px;border-radius:8px;border:1px solid var(--line);background:var(--soft);
-  color:var(--ink);font-size:12.5px;padding:0 8px;max-width:280px}
-
-/* ── 导出面板：格式卡片 ── */
-.expgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:12px 0 4px}
-.expcard{position:relative;text-align:left;padding:12px 12px 11px 46px;border-radius:12px;
-  border:1px solid var(--line);background:var(--panel);cursor:pointer;transition:all .13s;
-  display:block;width:100%;font-family:inherit}
-.expcard:hover{border-color:var(--accent);background:var(--hover);transform:translateY(-1px)}
-.expcard:active{transform:none}
-.exico{position:absolute;left:11px;top:12px;width:26px;height:26px;border-radius:8px;
-  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;
-  color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));letter-spacing:0}
-.exname{font-size:13.5px;font-weight:650;color:var(--ink);display:block}
-.exext{position:absolute;right:10px;top:13px;font-size:10.5px;color:var(--sub);
-  border:1px solid var(--line);border-radius:5px;padding:0 4px;line-height:15px}
-.exdesc{display:block;font-size:11.5px;color:var(--sub);margin-top:3px;line-height:1.5}
-.expck{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink);
-  margin-top:12px;cursor:pointer;user-select:none}
-.expck input{width:14px;height:14px;accent-color:var(--accent)}
-
-/* ═══════════════ 气泡悬浮模式（纯输入框 + 角落隐式控制 + 环绕元素） ═══════════════
-   边距 --bpad 由 JS 按设置写入：环绕元素关闭或浓度拉到 0 时归零，
-   气泡瞬间缩成贴边的小胶囊。 */
-#app.mode-bubble{background:transparent;padding:var(--bpad,26px);overflow:visible}
-.mode-bubble .ed-wrap{border-radius:16px;overflow:hidden;
-  box-shadow:0 8px 30px rgba(60,70,120,.26)}
-/* 边距为 0（无环绕元素/浓度 0）时：阴影会被窗口边缘裁切，圆角外那圈
-   就成了一坨"灰色填涂"—— 贴边态收掉阴影，圆角外恢复透明 */
-#app.mode-bubble.flat .ed-wrap{box-shadow:none}
-.mode-bubble .editor{padding:8px 12px 10px;background:var(--panel)}
-/* 气泡模式不放提示文字：小气泡里一行提示比正文还抢眼 */
-#app.mode-bubble .editor:empty:before{content:none}
-.mode-bubble .header,.mode-bubble .toolbar{display:none}
-/* 拖动条：气泡顶部隐形细条（拖动移动窗口，双击还原） */
-.dragstrip{position:absolute;top:2px;left:34px;right:96px;height:18px;z-index:5;cursor:move}
-/* ══ 小胶囊态拖动条：展开态的 left:34/right:96 在 120px 宽的胶囊上算出负宽度，
-   等于没有拖动条 —— 这就是"小胶囊拖不动、双击还原不了"的真凶。
-   小胶囊改成贴顶覆盖内边距区（0..16px 正好是 bpad 8 + 编辑器 padding-top 8，
-   文字从 16px 起，不挡点字）；右边留 50px 给悬浮出现的控制钮。 */
-#app.mode-bubble.bubbletiny .dragstrip{top:0;left:4px;right:50px;height:16px}
-/* 控制钮：鼠标不在窗口上时完全隐藏（不打视野），移上来才浮出 —— 自定义大小模式同理。
-   ★ 容器永远不拦点击（padding 区常把小胶囊顶部的拖动条盖住，"拖不动/双击无效"），
-   只有圆形按钮本体可点 */
-.bctrl-wrap{position:absolute;top:0;right:2px;z-index:8;display:flex;gap:5px;
-  padding:6px 6px 12px 16px;opacity:0;pointer-events:none;transition:opacity .16s}
-#app.mode-bubble:hover .bctrl-wrap{opacity:.92}
-.bctrl-wrap:hover,.bctrl-wrap:focus-within{opacity:1}
-.bctrl{pointer-events:none}
-#app.mode-bubble:hover .bctrl{pointer-events:auto}
-/* 滚动条同理：鼠标不在时占位 0，避免右侧一条常驻灰轨 */
-#app.mode-bubble .editor::-webkit-scrollbar{width:0;height:0}
-#app.mode-bubble:hover .editor::-webkit-scrollbar{width:8px}
-/* 小胶囊态：控制钮完全让开（不然 23px 的圆钮比气泡还大，把正文全挡住）。
-   鼠标移进气泡才浮出来 —— 想退出/还原时不需要先猜按钮在哪。 */
-.bctrl-wrap.tiny{opacity:0}
-#app:hover .bctrl-wrap.tiny{opacity:.92}
-.bctrl{width:23px;height:23px;border-radius:50%;background:var(--panel);
-  box-shadow:0 2px 8px rgba(60,70,120,.3);display:flex;align-items:center;justify-content:center;
-  color:var(--tb-ink);transition:all .12s}
-.bctrl:hover{background:var(--accent);color:#fff;transform:scale(1.08)}
-.mode-bubble .pop{border-radius:14px;box-shadow:0 8px 28px rgba(60,70,120,.25)}
-#cloudcv{position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none}
-/* 开启"元素侵入"时画布提到文本之上，元素才会飘进输入框里面 */
-#app.mode-bubble.intrude #cloudcv{z-index:6}
-/* 注意：这条得排除 .pop —— 弹层本来就要绝对定位，被改成 relative 后会掉进 flex 流里，
-   词库面板就直接落到输入框下方（用户看到的"词库跑到框里/框下"）。 */
-#app.mode-bubble>*:not(#cloudcv):not(.dragstrip):not(.bctrl-wrap):not(.pop):not(.rz){
-  position:relative;z-index:3}
-/* 气泡边缘拉伸热区：贴边 5px、底角 12px；z 低于控制钮(8)高于正文(3)，
-   顶部不设（顶部留给拖动条移动窗口） */
-.rz{position:absolute;z-index:7}
-.rz-w{left:0;top:0;bottom:0;width:5px;cursor:ew-resize}
-.rz-e{right:0;top:0;bottom:0;width:5px;cursor:ew-resize}
-.rz-s{left:0;right:0;bottom:0;height:5px;cursor:ns-resize}
-.rz-sw{left:0;bottom:0;width:12px;height:12px;cursor:nesw-resize}
-.rz-se{right:0;bottom:0;width:12px;height:12px;cursor:nwse-resize}
-
-/* ═══════════════ 轻提示 ═══════════════ */
-.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:99;
-  background:rgba(30,34,55,.88);color:#fff;font-size:13px;padding:9px 20px;border-radius:20px;
-  animation:toastin .2s ease}
-@keyframes toastin{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
-/* 气泡模式里 toast 必须收着点：小胶囊只有一两行高，默认那坨提示会把正文盖死 */
-#app.mode-bubble .toast{bottom:4px;max-width:calc(100vw - 20px);font-size:10.5px;
-  padding:3px 9px;border-radius:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-</style>
 </head>
 <body>
 <div id="app" style="position:relative">
@@ -6358,5 +5927,437 @@ document.addEventListener('mousedown', function(e) {
   }
 });
 </script>
+
+<style>
+/* ═══════════════ 设计令牌（主题色由 Java 配置动态注入） ═══════════════ */
+:root{
+  --accent:#6366F1; --accent2:#22D3EE;
+  --header-bg:linear-gradient(135deg,#6366F1,#22D3EE);
+  --bg:#F6F7FB; --panel:#FFFFFF; --ink:#1F2430; --sub:#8A91A5;
+  --line:#E9EBF3; --fs:16px; --font:"Segoe UI","Microsoft YaHei",sans-serif;
+  --hover:#EEF0F8; --soft:#F2F4FB; --field:#FFFFFF; --modal-bg:rgba(255,255,255,.97);
+  --tb-ink:#4A5068; --switch-off:#D6DAE8; --dash:#EEF0F6; --ph:#B9BECD;
+}
+/* 深色皮肤（黑色主题）：整站令牌替换，组件只认变量，不需要逐条改样式 */
+html.dark{
+  --bg:#15161C; --panel:#1E1F27; --ink:#E9EAF2; --sub:#9BA1B6;
+  --line:#2C2E3A; --hover:#2A2C38; --soft:#262832; --field:#20222B;
+  --modal-bg:rgba(30,32,41,.98); --tb-ink:#C3C7D8; --switch-off:#3A3D4C;
+  --dash:#2C2E3A; --ph:#5A5F76;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-user-select:none;user-select:none}
+html,body{height:100%;overflow:hidden;font-family:"Segoe UI","Microsoft YaHei",sans-serif;
+  background:transparent}
+#app{display:flex;flex-direction:column;height:100%;background:var(--bg)}
+.appicon{width:19px;height:19px;margin-right:7px;border-radius:5px;flex:none;display:block}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+::-webkit-scrollbar{width:8px}
+::-webkit-scrollbar-thumb{background:var(--switch-off);border-radius:4px}
+
+/* ═══════════════ 标题栏：单色/渐变由 --header-bg 决定 ═══════════════ */
+.header{display:flex;align-items:center;gap:6px;padding:0 10px;height:46px;flex:none;
+  background:var(--header-bg);cursor:default}
+.logo{color:#fff;font-weight:800;font-size:15px;letter-spacing:1px;margin-right:4px;
+  text-shadow:0 1px 3px rgba(0,0,0,.15)}
+.pill{height:26px;padding:0 12px;border-radius:13px;color:rgba(255,255,255,.92);font-size:12px;
+  transition:all .15s;white-space:nowrap}
+.pill:hover{background:rgba(255,255,255,.18)}
+.pill.on{background:rgba(255,255,255,.92);color:var(--accent);font-weight:700}
+.chip{height:26px;padding:0 12px;border-radius:13px;background:rgba(255,255,255,.16);
+  color:#fff;font-size:12px;white-space:nowrap;
+  display:inline-flex;align-items:center;justify-content:center;line-height:1}
+.chip b{font-weight:800}
+.spacer{flex:1}
+.winbtn{width:34px;height:30px;color:#fff;border-radius:8px;transition:background .15s;
+  display:flex;align-items:center;justify-content:center}
+.winbtn:hover{background:rgba(255,255,255,.22)}
+.winbtn.close:hover{background:#FF5F57}
+
+/* ═══════════════ 写作工具条 ═══════════════ */
+.toolbar{display:flex;align-items:center;gap:3px;padding:7px 12px;background:var(--panel);
+  border-bottom:1px solid var(--line);flex:none;flex-wrap:wrap}
+.tb{height:26px;padding:0 8px;border-radius:8px;color:var(--tb-ink);font-size:12px;
+  background:transparent;transition:all .12s}
+.tb:hover{background:var(--hover);color:var(--accent)}
+.tb:active{transform:scale(.94)}
+.tb.on{background:var(--accent);color:#fff}
+.tbdiv{width:1px;height:16px;background:var(--line);margin:0 3px;flex:none}
+/* 对齐钮：窄方钮 + 图标（四个一排不占地方） */
+.albtn{width:24px;padding:0;display:inline-flex;align-items:center;justify-content:center}
+.tbsel{height:26px;border-radius:8px;border:1px solid var(--line);background:var(--soft);
+  color:var(--ink);font-size:12px;padding:0 5px;max-width:150px}
+.fontsel{max-width:118px}
+/* 自定义字号：直接填数字的输入框（不再弹窗） */
+.tbnum{height:26px;width:54px;border-radius:8px;border:1px solid var(--line);
+  background:var(--soft);color:var(--ink);font-size:12px;padding:0 3px;text-align:center;
+  -webkit-appearance:none;appearance:none}
+.tbnum::-webkit-inner-spin-button,.tbnum::-webkit-outer-spin-button{
+  -webkit-appearance:none;appearance:none;margin:0}
+.tbnum:focus{outline:none;border-color:var(--accent)}
+
+/* ═══════════════ 主编辑区（背景图垫在文字之下，仅完整模式） ═══════════════ */
+.ed-wrap{position:relative;flex:1;display:flex;min-height:0}
+.edbg{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none}
+.editor{flex:1;overflow-y:auto;padding:22px 30px 40px;background:var(--panel);
+  -webkit-user-select:text;user-select:text;outline:none;
+  font-size:var(--fs);line-height:1.9;color:var(--ink);word-break:break-word;
+  font-family:var(--pff,var(--font));font-weight:var(--pbw,400);
+  font-style:var(--pit,normal)}
+.editor.bold{font-weight:700}
+.editor:empty:before{content:attr(data-ph);color:var(--ph)}
+.editor ::selection{background:rgba(99,102,241,.25)}
+.editor::selection{background:rgba(99,102,241,.25)}
+/* 标题分级：各级别字号/字体/加粗/斜体都是"样式"，设置里可改（--h*fs / --h*ff / --h*w / --h*it），
+   改样式 = 改所有该级别段落，和 WPS 的样式一个道理 */
+.editor h1{font-size:var(--h1fs);font-weight:var(--h1w);margin:16px 0 8px;line-height:1.5;
+  font-family:var(--h1ff,inherit);font-style:var(--h1it,normal)}
+.editor h2{font-size:var(--h2fs);font-weight:var(--h2w);margin:14px 0 6px;line-height:1.5;
+  font-family:var(--h2ff,inherit);font-style:var(--h2it,normal)}
+.editor h3{font-size:var(--h3fs);font-weight:var(--h3w);margin:12px 0 5px;line-height:1.5;
+  font-family:var(--h3ff,inherit);font-style:var(--h3it,normal)}
+.editor h1,.editor h2,.editor h3{color:var(--ink)}
+.editor p{margin:0}
+/* 全文首行缩进（--tind 由 applyVars 下发，设置→外观可关）：
+   挂在段落块上而不是插入全角空格 —— 换行新段自动继承，
+   两端对齐时首行也老老实实缩进，不会像行首空格那样被拉伸/吞掉 */
+.editor>p,.editor>div{text-indent:var(--tind,2em)}
+
+/* ═══════════════ 标签（tagmark）═══════════════ */
+/* 标签：包住一段文字的彩色小标记，data-tag 存名字，颜色走内联 --tagc。
+   和底纹（hlmark）同一套视觉：就是一块圆角色底 —— 标签=带名字的底纹 */
+.tagmark{background:var(--tagc,rgba(245,158,11,.28));border-radius:4px;padding:0 3px}
+.tagmark.flash{outline:2px solid var(--accent);outline-offset:2px;transition:outline .3s}
+/* 跳转定位闪框（导航跳转） */
+#editor .flash{outline:2px solid var(--accent);outline-offset:2px}
+/* 导航面板（标题+标签列表） */
+.navpop{width:250px;max-height:70vh;overflow-y:auto;padding:8px}
+.navsec{font-size:10.5px;color:var(--sub);padding:4px 6px 5px;letter-spacing:.05em}
+.navitem{display:flex;align-items:center;width:100%;text-align:left;padding:6px 8px;
+  border-radius:8px;font-size:12.5px;color:var(--ink);gap:6px}
+.navitem:hover{background:var(--soft);color:var(--accent)}
+.navitem .nvtxt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.navitem .nvtag{flex:none;font-size:10px;padding:1px 7px;border-radius:8px;color:#fff}
+/* 右键菜单的标签面板里也用同款小胶囊 */
+.ctxitem .nvtag{font-size:10px;padding:1px 7px;border-radius:8px;color:#fff;margin-right:6px}
+.navlv1{font-weight:700}.navlv2{padding-left:20px}.navlv3{padding-left:34px;font-size:12px}
+/* 标签选择小弹层 */
+.tagpick{width:190px;padding:8px}
+.tagpick .tagrow{display:flex;align-items:center;gap:6px;width:100%;padding:6px 8px;
+  border-radius:8px;font-size:12.5px}
+.tagpick .tagrow:hover{background:var(--soft)}
+
+/* ═══════════════ 弹层 ═══════════════ */
+.pop{position:absolute;background:var(--panel);border-radius:14px;z-index:50;
+  box-shadow:0 10px 40px rgba(25,35,80,.16);border:1px solid var(--line);
+  animation:popin .14s ease}
+@keyframes popin{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.menu{min-width:190px;padding:6px}
+.mitem{display:block;width:100%;text-align:left;padding:9px 14px;border-radius:9px;
+  font-size:13px;color:var(--ink)}
+.mitem:hover{background:var(--soft);color:var(--accent)}
+.msep{height:1px;background:var(--line);margin:5px 8px}
+.ctxmark{color:var(--accent);font-weight:700}
+/* 右键菜单（WPS 式：样式套用 + 字体/字号/格式直改） */
+.ctxmenu{width:252px;padding:7px;max-height:78vh;overflow-y:auto}
+.ctxhd{font-size:10.5px;color:var(--sub);padding:2px 8px 6px;letter-spacing:.04em}
+.ctxhd-tip{font-size:9.5px;opacity:.75;margin-left:4px}
+.ctxtags{display:flex;gap:4px;padding:0 6px 6px;flex-wrap:wrap}
+.ctxtag{padding:4px 9px;border-radius:7px;font-size:11.5px;color:var(--ink);
+  background:var(--soft);border:1px solid transparent;transition:all .1s}
+.ctxtag:hover{color:var(--accent);border-color:var(--accent)}
+.ctxtag.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.ctxitem{display:flex;align-items:center;width:100%;text-align:left;gap:8px;
+  padding:7px 10px;border-radius:8px;font-size:12.5px;color:var(--ink)}
+.ctxitem:hover{background:var(--soft);color:var(--accent)}
+.ctxitem .kbd{margin-left:auto;color:var(--sub);font-size:11px;max-width:112px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ctxitem.on{color:var(--accent);font-weight:700}
+.ctxgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;padding:4px 6px 8px}
+.ctxgrid button{height:27px;border-radius:7px;font-size:12px;color:var(--ink);background:var(--soft)}
+.ctxgrid button:hover{background:var(--hover);color:var(--accent)}
+.ctxgrid button.on{background:var(--accent);color:#fff}
+.ctxback{display:flex;align-items:center;gap:6px;padding:4px 8px 8px;font-size:11.5px;
+  color:var(--sub);width:100%}
+.ctxback:hover{color:var(--accent)}
+.ctxlist{max-height:216px;overflow-y:auto;padding:0 2px}
+.mrow{display:flex;align-items:center;gap:8px;padding:8px 14px;font-size:13px;color:var(--ink)}
+.mrow input[type=range]{width:100px;accent-color:var(--accent)}
+.chargrid{display:grid;grid-template-columns:repeat(8,36px);gap:4px;padding:10px}
+.chargrid button{height:32px;border-radius:8px;font-size:15px;color:var(--ink)}
+.chargrid button:hover{background:var(--hover);color:var(--accent)}
+
+/* ═══════════════ 词库弹层 ═══════════════ */
+.wpop{width:262px;max-height:380px;overflow-y:auto;padding:8px}
+.wpop-h{display:flex;align-items:center;justify-content:space-between;padding:2px 6px 8px;
+  border-bottom:1px solid var(--line);margin-bottom:6px}
+.wpop-h span{font-weight:700;font-size:13px;color:var(--ink)}
+.wpop-h .add{color:var(--accent);font-size:17px;line-height:1;padding:2px 8px;border-radius:8px}
+.wpop-h .add:hover{background:var(--soft)}
+.wadd{background:var(--soft);border-radius:10px;padding:8px;margin-bottom:8px}
+.wadd input{width:100%;border:1px solid var(--line);border-radius:7px;padding:5px 8px;color:var(--ink);background:var(--field);
+  font-size:12.5px;outline:none;margin-bottom:5px;-webkit-user-select:text;user-select:text;
+  font-family:inherit}
+.wadd input:focus{border-color:var(--accent)}
+.wadd .save{width:100%;height:26px;border-radius:7px;background:var(--accent);color:#fff;
+  font-size:12.5px}
+.witem{padding:8px 46px 8px 10px;border-radius:10px;margin-bottom:6px;cursor:pointer;transition:background .12s;
+  position:relative}
+.witem:hover{background:var(--soft)}
+.wcode{display:inline-block;font-size:11px;color:var(--accent);background:rgba(99,102,241,.1);
+  border-radius:6px;padding:1px 7px;margin-bottom:3px;font-weight:700}
+.wcat{display:inline-block;font-size:10px;color:var(--sub);background:var(--soft);
+  border-radius:6px;padding:1px 6px;margin-left:5px;vertical-align:middle}
+.wcontent{font-size:12.5px;color:var(--ink);line-height:1.5;word-break:break-all}
+.wedit{position:absolute;right:26px;top:6px;color:var(--sub);font-size:12px;padding:0 4px;
+  line-height:1;opacity:.45;cursor:pointer}
+.wedit:hover{color:var(--accent);opacity:1}
+.witem.editing{background:var(--soft);cursor:default}
+.witem .wef{display:flex;gap:4px;margin-top:4px}
+.witem .wef input{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;padding:4px 6px;
+  color:var(--ink);background:var(--field);font-size:11.5px;outline:none;
+  -webkit-user-select:text;user-select:text;font-family:inherit}
+.witem .wef input:focus{border-color:var(--accent)}
+.witem .wef .wk{width:64px;flex:none}
+.wefbtns{display:flex;gap:5px;margin-top:5px}
+.wefbtns button{font-size:11px;padding:2px 9px;border-radius:6px}
+.wefbtns .ws{background:var(--accent);color:#fff}
+.wefbtns .wc{color:var(--sub)}
+.wtabs{display:flex;gap:4px;flex-wrap:wrap;padding:2px 2px 8px}
+.wtab{font-size:11px;padding:3px 10px;border-radius:10px;background:var(--soft);color:var(--sub)}
+.wtab.on{background:var(--accent);color:#fff;font-weight:700}
+.wdel{position:absolute;right:6px;top:6px;color:#C6CAD8;font-size:13px;padding:0 4px;
+  line-height:1;opacity:.45;cursor:pointer}
+.wdel:hover{color:#FF5F57;opacity:1}
+.wtip{font-size:11.5px;color:var(--sub);padding:6px 8px 2px;line-height:1.6}
+
+/* ═══════════════ 文件（多文档）╱常驻词库 ═══════════════ */
+.chip.docname{cursor:pointer;max-width:170px;overflow:hidden;text-overflow:ellipsis}
+.chip.docname:hover{background:rgba(255,255,255,.28)}
+.wpop.pinned{box-shadow:0 8px 28px rgba(25,35,80,.18)}
+.dpop{width:302px}
+.drow{cursor:pointer;position:relative}
+.drow.cur{background:rgba(99,102,241,.09)}
+
+/* ═══════════════ 气泡模式：词库常驻外置悬浮层 ═══════════════
+   以前词库用同一个 .wpop 定位（right/top），气泡窗口很小，面板直接压在输入框上，
+   字和词条叠在一起看不清。改成：窗口右侧留出 214px 空白，词库作为独立悬浮层
+   贴在输入框"外面"，视觉上是一层浮在气泡旁的小抽屉。 */
+#app.mode-bubble.sidewords{padding-right:214px}
+#app.mode-bubble .wpop.sideword{position:absolute;right:6px;top:6px;bottom:6px;
+  width:196px;max-height:none;
+  transform:none;animation:none;z-index:7;background:var(--panel);
+  box-shadow:0 10px 30px rgba(25,35,80,.24);border:1px solid var(--line)}
+#app.mode-bubble .wpop.sideword .wcontent{font-size:12px}
+/* 侧栏让位：拖动条和右上角控制钮挪到词库左边，别压在词库上 */
+#app.mode-bubble.sidewords .dragstrip{right:210px}
+#app.mode-bubble.sidewords .bctrl-wrap{right:206px}
+.dname{font-size:13px;color:var(--ink);font-weight:600;word-break:break-all;line-height:1.4}
+.dcur{font-size:10px;color:#fff;background:var(--accent);border-radius:6px;padding:1px 6px;
+  margin-left:6px;vertical-align:middle;font-weight:400}
+.dmeta{font-size:11px;color:var(--sub);margin-top:2px}
+.dprev{font-size:11.5px;color:var(--sub);margin-top:3px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.dacts{display:none;gap:6px;margin-top:5px}
+.drow:hover .dacts{display:flex}
+.dacts button{font-size:11px;color:var(--accent);padding:2px 7px;border-radius:6px}
+.dacts button:hover{background:var(--soft)}
+/* 文件面板：回收站（已删除文档找回） */
+.dsec{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)}
+.dsec-h{font-size:11.5px;color:var(--sub);font-weight:700;margin:2px 2px 6px}
+.drow.deleted{opacity:.75}
+.drow.deleted:hover{opacity:1}
+.dcur.del{background:#9CA3AF}
+
+/* 冻结窗口：设置 / 退出确认打开时，背后界面定格，只有弹窗可点。
+   ⚠ 千万别用 filter:blur() 做"虚化"——WebView(WebKit) 里带 filter 的祖先会让
+   滚动重栅格化整棵树，设置面板上下滑就一闪一闪。改成只降透明度 + 遮罩，纯合成层。 */
+#app.frozen > *:not(.mask):not(#cloudcv){opacity:.35;pointer-events:none}
+
+/* ═══════════════ 设置 / 弹窗 ═══════════════ */
+.mask{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(20,24,48,.5);z-index:90;display:flex;
+  align-items:center;justify-content:center;animation:fadein .15s ease}
+.prompt-input{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 11px;
+  font-size:13px;outline:none;color:var(--ink);background:var(--field);font-family:inherit;
+  -webkit-user-select:text;user-select:text}
+.prompt-input:focus{border-color:var(--accent)}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+.modal{width:500px;max-height:84vh;overflow-y:auto;background:var(--modal-bg);
+  border-radius:18px;padding:0 24px 22px;box-shadow:0 24px 80px rgba(20,25,60,.25)}
+.modal.small{width:340px}
+/* 查找替换悬浮条：不遮罩、可拖动、开着也能编辑正文 */
+.fbar{position:fixed;top:14px;right:16px;width:330px;z-index:96;background:var(--modal-bg);
+  border-radius:14px;padding:10px 12px;box-shadow:0 18px 60px rgba(20,25,60,.32)}
+.fbar-h{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:8px;cursor:move;
+  display:flex;align-items:center;user-select:none}
+.fbar-h .x{margin-left:auto;color:var(--sub);font-size:15px;cursor:pointer;width:24px;height:24px;
+  line-height:24px;text-align:center;border-radius:7px;cursor:pointer}
+.fbar-h .x:hover{background:var(--hover);color:var(--ink)}
+/* 匹配高亮：黄色底=全部匹配，橙色底=当前定位的那个 */
+.fmark{background:#FFE066;color:#3A3000;border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.08)}
+.fmark.fcur{background:#FF9F43;color:#fff;box-shadow:0 0 0 2px rgba(255,159,67,.55)}
+/* 查找替换弹窗的输入行 */
+.frow{display:flex;gap:6px;margin-top:8px;align-items:center}
+.frow input[type=text]{flex:1;min-width:0;border:1px solid var(--line);border-radius:9px;
+  padding:7px 10px;font-size:13px;color:var(--ink);background:var(--field);outline:none;
+  -webkit-user-select:text;user-select:text;font-family:inherit}
+.frow input[type=text]:focus{border-color:var(--accent)}
+/* 标题栏冻结（sticky）：设置面板往下滚时 ✕ 仍然停在顶部，随时能关；
+   同时它也是拖动这个窗口的把手（见 mounted 里的 modal 拖动逻辑） */
+.modal h3{position:sticky;top:0;z-index:6;background:var(--modal-bg);
+  margin:0 -24px 16px;padding:20px 24px 12px;border-bottom:1px solid var(--line);
+  border-radius:18px 18px 0 0;cursor:move;
+  -webkit-user-select:none;user-select:none;
+  font-size:16px;color:var(--ink);display:flex;justify-content:space-between;align-items:center}
+.modal h3 .x{color:var(--sub);font-size:17px;cursor:pointer;line-height:26px;width:28px;height:26px;
+  text-align:center;border-radius:8px;flex:none;margin:-4px -4px 0 0;cursor:pointer}
+.modal h3 .x:hover{background:var(--hover);color:var(--ink)}
+.sec{margin-bottom:14px;padding:14px;border:1px solid var(--line);border-radius:12px}
+.sec h4{font-size:13px;color:var(--ink);margin-bottom:10px}
+.row{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--ink);margin-bottom:8px;flex-wrap:wrap}
+.row label{color:var(--sub);min-width:64px}
+.row input[type=text],.row input[type=number]{border:1px solid var(--line);border-radius:8px;color:var(--ink);background:var(--field);
+  padding:5px 10px;font-size:13px;width:130px;outline:none;-webkit-user-select:text;user-select:text;
+  font-family:inherit}
+.row input[type=text]:focus{border-color:var(--accent)}
+.row input[type=number]{width:72px}
+.row select{height:26px;border-radius:8px;border:1px solid var(--line);color:var(--ink);
+  background:var(--field);padding:0 6px;font-size:12px;outline:none}
+.capture-btn{background:var(--accent);color:#fff;border-radius:9px;padding:6px 14px;font-size:13px}
+.capture-btn.ghost{background:var(--hover);color:var(--tb-ink)}
+/* 已固定的标记（和"选颜色后固定"一个意思）：按钮高亮，一眼看出接下来套哪个 */
+.capture-btn.ghost.on{background:var(--accent);color:#fff}
+/* 取色面板色块亮起 = 当前选中的文字带这个颜色，再点一次就清除 */
+.pop i.on{outline:2px solid var(--accent);outline-offset:1px}
+.capture-btn:hover{filter:brightness(1.08)}
+.hint{font-size:12px;color:var(--sub);line-height:1.6}
+.combo-show{background:rgba(99,102,241,.1);color:var(--accent);border-radius:8px;
+  padding:4px 12px;font-size:13px;font-weight:700}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
+.sw{width:26px;height:26px;border-radius:50%;border:2px solid transparent;transition:transform .12s}
+.sw:hover{transform:scale(1.15)}
+.sw.on{border-color:var(--ink)}
+.switch{position:relative;width:38px;height:21px;border-radius:11px;background:var(--switch-off);
+  transition:background .18s;flex:none}
+.switch.on{background:var(--accent)}
+.switch:after{content:'';position:absolute;top:2.5px;left:2.5px;width:16px;height:16px;
+  border-radius:50%;background:#fff;transition:left .18s}
+.switch.on:after{left:19.5px}
+.icon-prev{width:38px;height:38px;border-radius:9px;border:1px solid var(--line);flex:none}
+input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-radius:7px;
+  background:var(--field);padding:1px;cursor:pointer}
+
+/* 快捷键列表 */
+.keyrow{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--dash)}
+.keyrow:last-child{border-bottom:none}
+.keyrow .kname{flex:1;font-size:12.5px;color:var(--ink)}
+.keyrow .kcombo{background:var(--soft);color:var(--tb-ink);border-radius:7px;padding:2px 9px;
+  font-size:11.5px;font-weight:700;min-width:58px;text-align:center}
+.keyrow .kedit{font-size:11.5px;color:var(--accent);padding:3px 8px;border-radius:7px}
+/* 快捷键冲突警示徽标：红底白字"!"，悬停/点击看原因 */
+.kwarn{min-width:17px;height:17px;line-height:17px;text-align:center;border-radius:50%;
+  background:#FF5F57;color:#fff;font-size:11.5px;font-weight:900;cursor:help;flex:none;
+  margin-left:6px;box-shadow:0 0 0 3px rgba(255,95,87,.18)}
+.keyrow .kedit:hover{background:var(--hover)}
+.keyrow.capturing .kcombo{background:var(--accent);color:#fff}
+
+/* ═══════════════ 导入 / 寻回弹窗 ═══════════════ */
+.doc-preview{width:100%;height:240px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;
+  padding:10px 12px;font-size:13px;line-height:1.7;color:var(--ink);white-space:pre-wrap;
+  word-break:break-all;margin:8px 0;-webkit-user-select:text;user-select:text;background:var(--soft)}
+.hist-item{padding:9px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;
+  border:1px solid var(--line);transition:all .12s}
+.hist-item:hover{border-color:var(--accent);background:var(--hover)}
+.hist-time{font-size:12px;color:var(--accent);font-weight:700}
+.hist-meta{font-size:11.5px;color:var(--sub);margin-left:8px}
+.hist-prev{font-size:12.5px;color:var(--ink);margin-top:3px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.hrow{display:flex;align-items:center;gap:8px;margin-top:8px}
+.hrow select{height:28px;border-radius:8px;border:1px solid var(--line);background:var(--soft);
+  color:var(--ink);font-size:12.5px;padding:0 8px;max-width:280px}
+
+/* ── 导出面板：格式卡片 ── */
+.expgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:12px 0 4px}
+.expcard{position:relative;text-align:left;padding:12px 12px 11px 46px;border-radius:12px;
+  border:1px solid var(--line);background:var(--panel);cursor:pointer;transition:all .13s;
+  display:block;width:100%;font-family:inherit}
+.expcard:hover{border-color:var(--accent);background:var(--hover);transform:translateY(-1px)}
+.expcard:active{transform:none}
+.exico{position:absolute;left:11px;top:12px;width:26px;height:26px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;
+  color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));letter-spacing:0}
+.exname{font-size:13.5px;font-weight:650;color:var(--ink);display:block}
+.exext{position:absolute;right:10px;top:13px;font-size:10.5px;color:var(--sub);
+  border:1px solid var(--line);border-radius:5px;padding:0 4px;line-height:15px}
+.exdesc{display:block;font-size:11.5px;color:var(--sub);margin-top:3px;line-height:1.5}
+.expck{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink);
+  margin-top:12px;cursor:pointer;user-select:none}
+.expck input{width:14px;height:14px;accent-color:var(--accent)}
+
+/* ═══════════════ 气泡悬浮模式（纯输入框 + 角落隐式控制 + 环绕元素） ═══════════════
+   边距 --bpad 由 JS 按设置写入：环绕元素关闭或浓度拉到 0 时归零，
+   气泡瞬间缩成贴边的小胶囊。 */
+#app.mode-bubble{background:transparent;padding:var(--bpad,26px);overflow:visible}
+.mode-bubble .ed-wrap{border-radius:16px;overflow:hidden;
+  box-shadow:0 8px 30px rgba(60,70,120,.26)}
+/* 边距为 0（无环绕元素/浓度 0）时：阴影会被窗口边缘裁切，圆角外那圈
+   就成了一坨"灰色填涂"—— 贴边态收掉阴影，圆角外恢复透明 */
+#app.mode-bubble.flat .ed-wrap{box-shadow:none}
+.mode-bubble .editor{padding:8px 12px 10px;background:var(--panel)}
+/* 气泡模式不放提示文字：小气泡里一行提示比正文还抢眼 */
+#app.mode-bubble .editor:empty:before{content:none}
+.mode-bubble .header,.mode-bubble .toolbar{display:none}
+/* 拖动条：气泡顶部隐形细条（拖动移动窗口，双击还原） */
+.dragstrip{position:absolute;top:2px;left:34px;right:96px;height:18px;z-index:5;cursor:move}
+/* ══ 小胶囊态拖动条：展开态的 left:34/right:96 在 120px 宽的胶囊上算出负宽度，
+   等于没有拖动条 —— 这就是"小胶囊拖不动、双击还原不了"的真凶。
+   小胶囊改成贴顶覆盖内边距区（0..16px 正好是 bpad 8 + 编辑器 padding-top 8，
+   文字从 16px 起，不挡点字）；右边留 50px 给悬浮出现的控制钮。 */
+#app.mode-bubble.bubbletiny .dragstrip{top:0;left:4px;right:50px;height:16px}
+/* 控制钮：鼠标不在窗口上时完全隐藏（不打视野），移上来才浮出 —— 自定义大小模式同理。
+   ★ 容器永远不拦点击（padding 区常把小胶囊顶部的拖动条盖住，"拖不动/双击无效"），
+   只有圆形按钮本体可点 */
+.bctrl-wrap{position:absolute;top:0;right:2px;z-index:8;display:flex;gap:5px;
+  padding:6px 6px 12px 16px;opacity:0;pointer-events:none;transition:opacity .16s}
+#app.mode-bubble:hover .bctrl-wrap{opacity:.92}
+.bctrl-wrap:hover,.bctrl-wrap:focus-within{opacity:1}
+.bctrl{pointer-events:none}
+#app.mode-bubble:hover .bctrl{pointer-events:auto}
+/* 滚动条同理：鼠标不在时占位 0，避免右侧一条常驻灰轨 */
+#app.mode-bubble .editor::-webkit-scrollbar{width:0;height:0}
+#app.mode-bubble:hover .editor::-webkit-scrollbar{width:8px}
+/* 小胶囊态：控制钮完全让开（不然 23px 的圆钮比气泡还大，把正文全挡住）。
+   鼠标移进气泡才浮出来 —— 想退出/还原时不需要先猜按钮在哪。 */
+.bctrl-wrap.tiny{opacity:0}
+#app:hover .bctrl-wrap.tiny{opacity:.92}
+.bctrl{width:23px;height:23px;border-radius:50%;background:var(--panel);
+  box-shadow:0 2px 8px rgba(60,70,120,.3);display:flex;align-items:center;justify-content:center;
+  color:var(--tb-ink);transition:all .12s}
+.bctrl:hover{background:var(--accent);color:#fff;transform:scale(1.08)}
+.mode-bubble .pop{border-radius:14px;box-shadow:0 8px 28px rgba(60,70,120,.25)}
+#cloudcv{position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;pointer-events:none}
+/* 开启"元素侵入"时画布提到文本之上，元素才会飘进输入框里面 */
+#app.mode-bubble.intrude #cloudcv{z-index:6}
+/* 注意：这条得排除 .pop —— 弹层本来就要绝对定位，被改成 relative 后会掉进 flex 流里，
+   词库面板就直接落到输入框下方（用户看到的"词库跑到框里/框下"）。 */
+#app.mode-bubble>*:not(#cloudcv):not(.dragstrip):not(.bctrl-wrap):not(.pop):not(.rz){
+  position:relative;z-index:3}
+/* 气泡边缘拉伸热区：贴边 5px、底角 12px；z 低于控制钮(8)高于正文(3)，
+   顶部不设（顶部留给拖动条移动窗口） */
+.rz{position:absolute;z-index:7}
+.rz-w{left:0;top:0;bottom:0;width:5px;cursor:ew-resize}
+.rz-e{right:0;top:0;bottom:0;width:5px;cursor:ew-resize}
+.rz-s{left:0;right:0;bottom:0;height:5px;cursor:ns-resize}
+.rz-sw{left:0;bottom:0;width:12px;height:12px;cursor:nesw-resize}
+.rz-se{right:0;bottom:0;width:12px;height:12px;cursor:nwse-resize}
+
+/* ═══════════════ 轻提示 ═══════════════ */
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:99;
+  background:rgba(30,34,55,.88);color:#fff;font-size:13px;padding:9px 20px;border-radius:20px;
+  animation:toastin .2s ease}
+@keyframes toastin{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+/* 气泡模式里 toast 必须收着点：小胶囊只有一两行高，默认那坨提示会把正文盖死 */
+#app.mode-bubble .toast{bottom:4px;max-width:calc(100vw - 20px);font-size:10.5px;
+  padding:3px 9px;border-radius:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style>
 </body>
 </html>
