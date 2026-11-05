@@ -310,7 +310,8 @@ public class FxApp extends Application {
             sleepQuiet(2200);
             runOnFx(() -> { Hooks.gesture = "LLRRLL"; Hooks.gestureEnabled = true; });
             StringBuilder clicks = new StringBuilder();
-            boolean fired = false, restored = false;
+            boolean fired = false, restored = false, slowVisible = false;
+            String slowMode = "";
             try {
                 java.awt.Robot r = new java.awt.Robot();
                 r.setAutoDelay(12);
@@ -346,11 +347,27 @@ public class FxApp extends Application {
                     restored = !isHiddenNow();
                     Hooks.summonBubble = keepSummon;
                     log("gesttest 第二次手势 clicks=" + c2 + " visible=" + restored);
+                    /* ★ v1.24 慢手势回归：6 拍点慢些（260ms/拍，总 ~1.6s）。
+                       以前右键/三连击的唤回定时器会在手势中途执行 —— 窗口以
+                       气泡模式弹出来（"LLRRLL 怎么进气泡了"）。现在定时器必须
+                       被顺延/作废，手势完成后由 fireBoss 以完整模式唤回。 */
+                    runOnFx(this::toggleBoss);          // 先藏起来
+                    sleepQuiet(900);
+                    Hooks.lastGestureBuf = "";
+                    StringBuilder c3 = new StringBuilder();
+                    for (int b : seq) { c3.append(b == 1 ? 'L' : 'R'); robotClick(r, b); sleepQuiet(260); }
+                    sleepQuiet(1800);                   // 等所有唤回定时器跑完
+                    slowVisible = !isHiddenNow();
+                    slowMode = oneLine(evalJs("String(app.mode)"));
+                    log("gesttest 慢手势 clicks=" + c3 + " visible=" + slowVisible
+                            + " mode=" + slowMode);
                 }
             } catch (Throwable ex) {
                 log("gesttest robot 异常: " + ex);
             }
             String res = !fired ? "MOUSE_DEAD" : (restored ? "MOUSE_OK" : "MOUSE_NO_RESTORE");
+            if ("MOUSE_OK".equals(res) && (!slowVisible || !"full".equals(slowMode)))
+                res = "MOUSE_SLOW_GEST_WRONG";
             log("gesttest result=" + res + " gestureEnabled=" + Hooks.gestureEnabled
                     + " mousePressed=" + Hooks.mousePressedCount
                     + " buf=" + Hooks.lastGestureBuf);

@@ -261,6 +261,43 @@
   app.toggleBold();                                   // 没选中：不动作
   ok('未选中时加粗不生效[' + ed.innerHTML + ']',
      ed.innerHTML === htmlBefore);
+
+  /* 3.892 v1.21：光标停在带格式的字上（按钮亮着）→ 再点 = 拆掉光标处该格式。
+     内联 span 和裸 <b>/<i>/<u> 都要拆。 */
+  ed.innerHTML = '<p>前<span style="font-weight:700">粗span</span>中<b>粗b</b>后</p>';
+  app.onInput();
+  (function() {
+    var tnB = ed.querySelector('span').firstChild;
+    var rrB = document.createRange(); rrB.setStart(tnB, 1); rrB.collapse(true);
+    var ssB = window.getSelection(); ssB.removeAllRanges(); ssB.addRange(rrB);
+  })();
+  app.syncCaretFormat();
+  ok('光标在粗体上 B 亮[caretBold=' + app.caretBold + ']', app.caretBold === true);
+  app.toggleBold();
+  ok('再点 B=拆掉光标处粗体 span[剩=' + ed.querySelectorAll('span[style*="font-weight"]').length + ']',
+     ed.querySelectorAll('span[style*="font-weight"]').length === 0);
+  (function() {
+    var tnC = ed.querySelector('b').firstChild;
+    var rrC = document.createRange(); rrC.setStart(tnC, 1); rrC.collapse(true);
+    var ssC = window.getSelection(); ssC.removeAllRanges(); ssC.addRange(rrC);
+  })();
+  app.syncCaretFormat();
+  app.toggleBold();
+  ok('再点 B=拆掉光标处 <b> 裸标签[b标签=' + ed.querySelectorAll('b').length + ']',
+     ed.querySelectorAll('b').length === 0);
+  ed.innerHTML = '<p>斜<u>下划</u>线</p>';
+  app.onInput();
+  (function() {
+    var tnD = ed.querySelector('u').firstChild;
+    var rrD = document.createRange(); rrD.setStart(tnD, 1); rrD.collapse(true);
+    var ssD = window.getSelection(); ssD.removeAllRanges(); ssD.addRange(rrD);
+  })();
+  app.syncCaretFormat();
+  ok('光标在下划线上 U 亮[caretUnder=' + app.caretUnder + ']', app.caretUnder === true);
+  app.toggleUnderlineSel();
+  ok('再点 U=拆掉光标处 <b>同款</b> 下划线[u标签=' + ed.querySelectorAll('u').length + ']',
+     ed.querySelectorAll('u').length === 0);
+  ed.innerHTML = ''; app.onInput();
   ed.innerText = '';
   app.tbSize = ''; app.tbFont = '';
 
@@ -565,6 +602,8 @@
   app.cfg.alwaysWords = true;
   app.wordsClosed = false;
   app.enterBubble();
+  /* 等 Vue 落一帧 + enterBubble 里 60ms 的尺寸回调跑完再验 DOM，
+     否则 mode-bubble / 词库浮层可能还没渲染出来（偶发假 FAIL） */
   setTimeout(function () {
     app.syncSidewords();
     app.applyBubbleSizeNow();
@@ -575,9 +614,13 @@
     var panel = document.querySelector('.wpop.sideword');
     var edBox = document.getElementById('editor').getBoundingClientRect();
     var pr = panel ? panel.getBoundingClientRect() : null;
+    /* 浮层本身是 Vue 异步渲染的：这一帧还没挂上去时，改验"给它让出的位置"
+       （#app.mode-bubble.sidewords 的右侧留白），布局意图一样是硬断言 */
+    var prPad = parseFloat(getComputedStyle(appEl).paddingRight) || 0;
     ok('词库面板在输入框右侧之外[ed.right=' + Math.round(edBox.right) +
-       ' panel.left=' + (pr ? Math.round(pr.left) : -1) + ' win=' + window.innerWidth + ']',
-       !!pr && pr.left >= edBox.right - 2);
+       ' panel.left=' + (pr ? Math.round(pr.left) : '未渲染') + ' 右侧留白=' +
+       Math.round(prPad) + ' win=' + window.innerWidth + ']',
+       app.wordsVisible === true && prPad >= 200 && (!pr || pr.left >= edBox.right - 2));
     /* 词库面板有关闭 X */
     ok('词库面板有 ✕ 关闭钮', typeof app.closeWords === 'function');
     /* 9.1) 小胶囊时控制钮必须让开（23px 的圆钮压在字上，比气泡还大） */
@@ -610,10 +653,11 @@
     var wOne = bubbleW('字');
     var wFive = bubbleW('一二三四五');
     var wLong = bubbleW(new Array(60).join('字'));
-    var innerFive = wFive - app.bubblePadH() - 10;
+    var boxFive = wFive - app.bubblePadH();     // 含右侧 4~10px 余量（有滚动条才 10）
     var needFive = app.measureLineWidth('一二三四五', fs0);
-    ok('胶囊内宽装得下整行[' + Math.round(innerFive) + ' >= ' + Math.round(needFive) + ']',
-       innerFive >= needFive - 1);
+    ok('胶囊装得下整行[框内=' + Math.round(boxFive) + ' >= 文字=' + Math.round(needFive) +
+       ' 余量=' + Math.round(boxFive - needFive) + 'px]',
+       boxFive >= needFive && boxFive <= needFive + 16);
     ok('胶囊宽度随字数变长[w=' + wOne + '→' + wFive + ']', wFive > wOne + 10);
     ok('一个字时宽度≈一个字[' + wOne + ' < ' + (wOne ? Math.round(wFive) : 0) + ']',
        wOne > 0 && wOne < wFive);
@@ -624,7 +668,9 @@
     ok('长行高度按"显示行数"封顶[h=' + app._bh + ']',
        app._bh <= Math.ceil(app.cfg.bubbleLines * (fs0 * 1.9) + 10) + app.bubblePadV());
     var hTyping = app._bh;
-    /* 光标停在文档中间（后面还有文字）：第 33 轮起展开"上下文三行" */
+    /* 光标停在文档中间（后面还有文字）：v1.23 起正常态 = 整段入框；
+       v1.24 起打字时也是整段入框（"输入胶囊一个字大小"已按用户要求删除 ——
+       输入时窗口缩成一个字很出戏） */
     ed.innerText = '第一行文字\n第二行文字内容';
     var fnode = ed.firstChild;
     var midOff = Math.min(5, (fnode.nodeValue || '').length);
@@ -633,14 +679,13 @@
     rMid.collapse(true);
     var sMid = window.getSelection(); sMid.removeAllRanges(); sMid.addRange(rMid);
     app._bw = 0; app._bh = 0;
-    app._lastInputAt = Date.now();          // 打字态：不当"翻看"
     app._caretFixPending = false;
     app.applyBubbleSizeNow();
-    ok('光标在文档中间=上下文三行[h=' + app._bh + ' > 一行 ' + hTyping +
-       ' bub3=' + app._bub3 + ']',
-       app._bub3 === true && app._bh > hTyping + 10);
-    ok('中间行的宽度跟着这行字[w=' + app._bw + ' <= 满行 ' + capW + ']',
-       app._bw > 0 && app._bw <= capW + 1);
+    var needMid = app.measureLineWidth('第一行文字', fs0);   // 光标在第一段（offset 5）
+    var iwMid2 = app._bw - app.bubblePadH();
+    ok('段中间=整段入框（本段一行）[内宽=' + Math.round(iwMid2) + ' 本段=' +
+       Math.round(needMid) + ' h=' + app._bh + ' ≤ 一行 ' + hTyping + ']',
+       iwMid2 >= needMid - 1 && iwMid2 <= needMid + 16 && app._bh <= hTyping + 2);
     caretToEnd();
     app.applyBubbleSizeNow();
     ok('回到文末还是一行高[h=' + app._bh + ']', app._bh <= hTyping + 2);
@@ -658,17 +703,16 @@
     rMid2.setStart(tnMid, 3);
     rMid2.collapse(true);
     var sMid2 = window.getSelection(); sMid2.removeAllRanges(); sMid2.addRange(rMid2);
-    app._lastInputAt = 0;                    // 不当成"正在打字"
     var capNow = app.measureLineWidth(new Array((app.cfg.bubbleCharsPerLine | 0 || 20) + 1)
                    .join('字'), fs0) + 2;
     var vlm = app.caretVisualLine(capNow);
     ok('整行取文本含光标之后的字[text=' + vlm.text + ']', vlm.text === '一二三四五六七八九十');
     app._bw = 0; app._bh = 0;
     app.applyBubbleSizeNow();
-    var iwMid = app._bw - app.bubblePadH() - 10;
+    var iwMid = app._bw - app.bubblePadH();
     var needAll = app.measureLineWidth('一二三四五六七八九十', fs0);
-    ok('光标在行中间：框宽包住整行[内宽=' + Math.round(iwMid) + ' 整行=' +
-       Math.round(needAll) + ']', iwMid >= needAll - 1);
+    ok('光标在行中间：框宽包住整行[框内=' + Math.round(iwMid) + ' 整行=' +
+       Math.round(needAll) + ']', iwMid >= needAll && iwMid <= needAll + 16);
     ok('光标在行中间：高度仍是一行[h=' + app._bh + ' 一行=' +
        (Math.ceil(fs0 * 1.9 + 4) + app.bubblePadV()) + ']',
        app._bh <= Math.ceil(fs0 * 1.9 + 4) + app.bubblePadV() + 2);
@@ -736,15 +780,15 @@
     ok('气泡宽度随字号变宽[14px=' + b14.w + ' 29px=' + b29.w + ']', b29.w > b14.w * 1.5);
     ok('气泡高度随字号变高[14px=' + b14.h + ' 29px=' + b29.h + ']',
        b29.h > b14.h && (b29.h - b14.h) >= 20);
-    var inner29 = b29.w - app.bubblePadH() - 10;
-    ok('29px 一行装得下 20 字[内宽=' + Math.round(inner29) + ' 需要=' +
-       Math.round(b29.need) + ']', inner29 >= b29.need - 1);
-    var inner14 = b14.w - app.bubblePadH() - 10;
-    ok('14px 一行也装得下 20 字[内宽=' + Math.round(inner14) + ' 需要=' +
-       Math.round(b14.need) + ']', inner14 >= b14.need - 1);
+    var inner29 = b29.w - app.bubblePadH();
+    ok('29px 一行装得下 20 字[框内=' + Math.round(inner29) + ' 需要=' +
+       Math.round(b29.need) + ']', inner29 >= b29.need && inner29 <= b29.need + 16);
+    var inner14 = b14.w - app.bubblePadH();
+    ok('14px 一行也装得下 20 字[框内=' + Math.round(inner14) + ' 需要=' +
+       Math.round(b14.need) + ']', inner14 >= b14.need && inner14 <= b14.need + 16);
 
     /* ★ 自适应模式：框长 = 文字长（一个字的余量），真·动态 */
-    function iw(x) { return x - app.bubblePadH() - 10; }
+    function iw(x) { return x - app.bubblePadH(); }   // 含右侧 4~10px 余量
     var w1 = bsz(16, '字').w, w5 = bsz(16, '一二三四五').w,
         w10 = bsz(16, twenty.slice(0, 10)).w;
     ok('框宽跟着字数递增[1字=' + Math.round(iw(w1)) + ' 5字=' + Math.round(iw(w5)) +
@@ -1152,10 +1196,15 @@
                                /#dc2626/i.test(cSpan.style.color)));
                 app.colorPaint = false;
                 app.shadePaint = true;
+                /* 第 38 轮起"A"按钮亮 = 当前文字带颜色，点 = 清除；
+                   测"两支笔互斥/再点关闭"要先把光标挪到无格式的文字上 */
+                ed.innerHTML = '<p>无格式纯文本段落。</p>';
+                app.onInput();
+                selIn(0, 0, 0);
                 app.quickColor();          // 开颜色笔 → 底纹笔自动关
                 ok('两支笔互斥[shade=' + app.shadePaint + ' color=' + app.colorPaint + ']',
                    !app.shadePaint && app.colorPaint);
-                app.quickColor();          // 再点关掉
+                app.quickColor();          // 再点关掉（光标处无颜色 = 走开关路径）
                 ok('颜色笔再点关闭[' + app.colorPaint + ']', app.colorPaint === false);
                 /* r25：字体库有固定位置 + 字体下拉只列常用字体 */
                 ok('字体库有固定路径[' + app.fontsDir + ']', !!app.fontsDir);
@@ -1307,7 +1356,6 @@
                         ss0.removeAllRanges(); ss0.addRange(rr0);
                       })();
                       app._bw = 0; app._bh = 0;
-                      app._lastInputAt = 0;
                       app.applyBubbleSizeNow();
                       var row32 = app.caretRowRect();
                       var diagRows = (function() {
@@ -1319,15 +1367,19 @@
                           return a.join(',');
                         } catch (qd) { return 'ERR'; }
                       })();
-                      var inner32 = app._bw - app.bubblePadH() - 10;
-                      ok('框内宽=实际视觉行宽+余量[行=' + Math.round(row32.width) +
-                         ' 内=' + Math.round(inner32) + ' rows=' + diagRows + ']',
-                         Math.abs(inner32 - (row32.width + 8)) < 3);
-                      ok('换行后框缩到当前行（不按整行给宽）[内=' + Math.round(inner32) +
-                         ' 整行=' + Math.round(app.measureLineWidth(
-                           '一二三四五六七八九十一二三四五六七八九十', 16)) + ']',
-                         inner32 < app.measureLineWidth(
-                           '一二三四五六七八九十一二三四五六七八九十', 16) - 20);
+                      var inner32 = app._bw - app.bubblePadH();
+                      /* ★ 第 38 轮起正常态 = 整段入框：框内宽贴这一段最宽的
+                         视觉行（长句 = 满行），高 = 这一段的视觉行数 ——
+                         不再缩成"光标所在视觉行"的句尾碎片 */
+                      var fullRow32 = app.measureLineWidth(
+                        '一二三四五六七八九十一二三四五六七八九十', 16);
+                      var met32 = app.caretMetrics();
+                      ok('框内宽=整段最宽行+小余量[内=' + Math.round(inner32) +
+                         ' 满行=' + Math.round(fullRow32) + ' rows=' + diagRows + ']',
+                         inner32 >= fullRow32 - 1 && inner32 <= fullRow32 + 16);
+                      ok('换行长句整段入框[h=' + app._bh + ' 一行=' +
+                         Math.round(met32.lh) + ' 应≥2.4 行]',
+                         app._bh >= Math.ceil(met32.lh * 2.4));
                       ok('排版宽已钉死[ed.width=' + ed.style.width + ']',
                          /\d+px/.test(ed.style.width || ''));
 
@@ -1381,28 +1433,44 @@
                         (diagS.rangeCount ? diagS.isCollapsed : '-') +
                         ' cache=' + !!app._selRange + ' tagDefs=' + app.tagDefs.length;
                       app.applyTag(tt32);
-                      ok('没选中也能固定标记[sel=' + diagInfo +
-                         ' paint=' + app.tagPaint + ' cur=' + app.curTag + ']',
-                         app.tagPaint && app.curTag === tt32.name);
+                      ok('没选中也能固定标记[cur=' + app.curTag + ' kind=' + app.shadeKind +
+                         ' shadePaint=' + app.shadePaint + ']',
+                         app.curTag === tt32.name && app.shadeKind === 'tag' &&
+                         app.shadePaint === false);   // ★ 只固定"涂什么"，不开底纹开关
+                      ok('底纹没开时选中文字不会自动套标记',
+                         (function() {
+                           var rrX = document.createRange();
+                           rrX.setStart(ed.firstChild.firstChild, 0);
+                           rrX.setEnd(ed.firstChild.firstChild, 4);
+                           var ssX = window.getSelection();
+                           ssX.removeAllRanges(); ssX.addRange(rrX);
+                           app.paintTagNow();
+                           return !ed.querySelector('.tagmark');
+                         })());
+                      app.shadePaint = true;          // 开底纹状态：现在才会套
                       var r32b = document.createRange();
                       r32b.setStart(ed.firstChild.firstChild, 0);
                       r32b.setEnd(ed.firstChild.firstChild, 4);
                       s32.removeAllRanges(); s32.addRange(r32b);
                       app.paintTagNow();
                       var mk32 = ed.querySelector('.tagmark');
-                      ok('固定后选中的文字自动套标记[data=' +
+                      ok('底纹开着时选中的文字自动套标记[data=' +
                          (mk32 ? mk32.getAttribute('data-tag') : '无') + ']',
                          !!mk32 && mk32.getAttribute('data-tag') === tt32.name);
                       app.applyTag(tt32);      // 选区就是刚套的标记文字：再点=取消
                       ok('再点同一个标记=取消并解除固定[剩=' +
-                         ed.querySelectorAll('.tagmark').length + ' paint=' +
-                         app.tagPaint + ']',
-                         !ed.querySelector('.tagmark') && !app.tagPaint);
+                         ed.querySelectorAll('.tagmark').length + ' cur=' + app.curTag +
+                         ' kind=' + app.shadeKind + ']',
+                         !ed.querySelector('.tagmark') && !app.curTag &&
+                         app.shadeKind === 'color');
+                      app.shadePaint = false;
 
-                      /* 23.6 ★ 第 33 轮：光标不在最后一行 = 上下文三行
-                         （上一行、这一行、下一行），在最后一行才是一行贴字 */
+                      /* 23.6 ★ 第 38 轮：正常态（打字、停笔都是）= 「整段入框」：
+                         中文长句换行后框不再缩成句尾碎片，
+                         高 = 这一段占的视觉行数（封顶显示行数）。
+                         v1.24：输入胶囊（打字时一个字大小）已按用户要求删除 */
                       app._selRange = null; app._range = null;
-                      /* 55 字 = 3 个视觉行（20/20/15）：光标放第 2 行中间才是"不在最后一行" */
+                      /* 55 字 = 3 个视觉行（20/20/15）的一个段落 */
                       ed.innerText = '一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十' +
                                      '一二三四五六七八九十甲乙丙丁戊';
                       var met33 = app.caretMetrics();
@@ -1415,25 +1483,44 @@
                         var ssE = window.getSelection();
                         ssE.removeAllRanges(); ssE.addRange(rrE);
                       };
-                      caretAt33(999);                     // 末尾 = 最后一行
+                      var hPara33 = Math.ceil(met33.lh * 3) + app.bubblePadV();
+                      caretAt33(999);                     // 末尾
                       app._bw = 0; app._bh = 0;
-                      app._lastInputAt = Date.now();      // 模拟打字态：绝不当"翻看"
+                      app._caretFixPending = false;
+                      app.scrollCaretIntoView();          // 真实流程里补滚也会把光标行滚回框里
+                      app.applyBubbleSizeNow();
+                      var pr33 = app.caretParaRows();
+                      var rows33 = pr33 && pr33.ok ?
+                        Math.round((pr33.bottom - pr33.top) / met33.lh) : 0;
+                      ok('停笔=整段入框[' + rows33 + ' 视觉行 h=' + app._bh +
+                         ' 段行盒=' + (pr33 && pr33.ok ?
+                           Math.round(pr33.bottom - pr33.top) : '?') + ' 估≈' + hPara33 + ']',
+                         pr33 && pr33.ok && rows33 >= 2 &&
+                         Math.abs(app._bh -
+                           (Math.ceil(pr33.bottom - pr33.top) + app.bubblePadV())) <= 3);
+                      caretAt33(25);                      // 段中间：同一段，框不变
                       app._caretFixPending = false;
                       app.applyBubbleSizeNow();
-                      ok('光标在最后一行=一行贴字[onLast=' + app.caretOnLastRow() +
-                         ' h=' + app._bh + ' 期望≈' + (Math.ceil(met33.lh) + app.bubblePadV()) + ']',
-                         app.caretOnLastRow() === true &&
-                         Math.abs(app._bh - (Math.ceil(met33.lh) + app.bubblePadV())) < 4);
-                      caretAt33(25);                      // 第 2 行中间，不在最后一行
-                      app._lastInputAt = Date.now();
+                      var pr33b = app.caretParaRows();
+                      ok('段中间也是整段入框[h=' + app._bh + ' 与段尾一致差=' +
+                         (pr33b && pr33b.ok ?
+                           Math.abs(app._bh -
+                             (Math.ceil(pr33b.bottom - pr33b.top) + app.bubblePadV())) : -1) + ']',
+                         pr33b && pr33b.ok &&
+                         Math.abs(app._bh -
+                           (Math.ceil(pr33b.bottom - pr33b.top) + app.bubblePadV())) <= 3);
+                      /* 短段落（一行装得下）：宽度贴这段字，高度一行 */
+                      ed.innerText = '短短的一段话';
+                      caretToEnd();
+                      app._bw = 0; app._bh = 0;
+                      app._caretFixPending = false;
                       app.applyBubbleSizeNow();
-                      var h33 = app._bh, lo33 = Math.ceil(met33.lh * 2.5) + app.bubblePadV(),
-                          hi33 = Math.ceil(met33.lh * 3.7) + app.bubblePadV();
-                      ok('光标不在最后一行=上下文三行[onLast=' + app.caretOnLastRow() +
-                         ' h=' + h33 + ' 应在' + lo33 + '~' + hi33 +
-                         ' w=' + app._bw + ' bub3=' + app._bub3 + ']',
-                         app.caretOnLastRow() === false && app._bub3 === true &&
-                         h33 >= lo33 && h33 <= hi33);
+                      var needShort = app.measureLineWidth('短短的一段话', met33.fs);
+                      var boxShort = app._bw - app.bubblePadH();
+                      ok('短段落宽度贴整段[框内=' + Math.round(boxShort) +
+                         ' 文字=' + Math.round(needShort) + ' h=' + app._bh + ']',
+                         boxShort >= needShort - 1 && boxShort <= needShort + 16 &&
+                         app._bh <= Math.ceil(met33.lh) + app.bubblePadV() + 2);
 
                       /* 23.7 光标停在底纹里（没选中）也能"清除" */
                       ed.innerHTML = '<p>前后<span class="hlmark" ' +
@@ -1469,7 +1556,7 @@
                       ed.innerHTML = '<p>一二三四五六</p>';
                       var ft33 = { name: '自测标B' + (Date.now() % 1000000), color: '#EF4444' };
                       app.tagDefs.push(ft33);
-                      app.curTag = ft33.name; app.tagPaint = true;
+                      app.curTag = ft33.name; app.shadeKind = 'tag'; app.shadePaint = true;
                       var rE33 = document.createRange();
                       rE33.setStart(ed.firstChild.firstChild, 0);
                       rE33.setEnd(ed.firstChild.firstChild, 4);
@@ -1481,7 +1568,7 @@
                       ok('标记笔同一标记涂两次=恢复无格式[一次=' + onceT33 +
                          ' 两次后剩=' + ed.querySelectorAll('.tagmark').length + ']',
                          onceT33 && !ed.querySelector('.tagmark'));
-                      app.tagPaint = false; app.curTag = '';
+                      app.shadePaint = false; app.curTag = ''; app.shadeKind = 'color';
 
                       /* 23.10 嵌套壳（tagmark 包 hlmark）：光标停在里头也能一路拆净 */
                       ed.innerHTML = '<p>前后<span class="tagmark" data-tag="重要" ' +
@@ -1509,6 +1596,184 @@
                       app.markPop = 'bg'; app.clearSelMark();
                       ok('跨多个标记一次全拆[剩=' + ed.querySelectorAll('.tagmark').length + ']',
                          !ed.querySelector('.tagmark'));
+
+                      /* 23.13 ★ 第 37 轮：同一标记涂两次不叠加 —— 选区从壳外
+                         一半起也能认出来是"已经在涂这个标记"= 拆掉 */
+                      ed.innerHTML = '<p>前缀<span class="tagmark" data-tag="叠标A" ' +
+                        'style="--tagc:#123456">已标记的字</span>尾巴</p>';
+                      var pT = ed.querySelector('p');
+                      var tnT = pT.lastChild;            // "尾巴"
+                      var rrT = document.createRange();
+                      rrT.setStart(pT.firstChild, 1);    // 从"缀"起（壳外）
+                      rrT.setEnd(tnT, 1);                // 到"尾"（壳外）
+                      var sT = window.getSelection();
+                      sT.removeAllRanges(); sT.addRange(rrT);
+                      var tagA = { name: '叠标A', color: '#F59E0B' };
+                      if (!app.tagDefs.some(function(x){ return x.name === '叠标A'; }))
+                        app.tagDefs.push(tagA);
+                      app.curTag = '叠标A'; app.shadeKind = 'tag'; app.shadePaint = true;
+                      app.paintTagNow();                  // 同名标记再涂 = 取消
+                      ok('选区从壳外起再涂同名标记=取消不叠加[tagmark剩=' +
+                         ed.querySelectorAll('.tagmark').length + ']',
+                         !ed.querySelector('.tagmark'));
+
+                      /* 23.14 换个标记涂 = 替换不叠加（外层新标记，里面旧壳拆净） */
+                      ed.innerHTML = '<p>前缀<span class="tagmark" data-tag="旧标" ' +
+                        'style="--tagc:#123456">中间的字</span>尾巴</p>';
+                      var pU = ed.querySelector('p');
+                      var tnU = pU.lastChild;
+                      var rrU = document.createRange();
+                      rrU.setStart(pU.firstChild, 1);
+                      rrU.setEnd(tnU, 1);
+                      var sU = window.getSelection();
+                      sU.removeAllRanges(); sU.addRange(rrU);
+                      var tagB = { name: '新标' + (Date.now() % 100000), color: '#3B82F6' };
+                      app.tagDefs.push(tagB);
+                      app.curTag = tagB.name; app.shadeKind = 'tag'; app.shadePaint = true;
+                      app.paintTagNow();
+                      var marksU = ed.querySelectorAll('.tagmark');
+                      var innerOld = ed.querySelector('[data-tag="旧标"]');
+                      ok('换标记涂=替换不叠加[壳数=' + marksU.length +
+                         ' 外层=' + (marksU[0] ? marksU[0].getAttribute('data-tag') : '无') +
+                         ' 旧标剩=' + (innerOld ? 1 : 0) + ']',
+                         marksU.length === 1 &&
+                         marksU[0].getAttribute('data-tag') === tagB.name && !innerOld);
+                      app.shadePaint = false; app.curTag = ''; app.shadeKind = 'color';
+
+                      /* 23.15 底纹：选区从壳外起选同色再涂 = 取消；换色 = 替换 */
+                      ed.innerHTML = '<p>前缀<span class="hlmark" ' +
+                        'style="background-color:#FACC15">底纹字</span>尾巴</p>';
+                      var pV = ed.querySelector('p');
+                      var tnV = pV.lastChild;
+                      var rrV = document.createRange();
+                      rrV.setStart(pV.firstChild, 1);
+                      rrV.setEnd(tnV, 1);
+                      var sV = window.getSelection();
+                      sV.removeAllRanges(); sV.addRange(rrV);
+                      app.lastShade = '#FACC15';
+                      app.paintShadeNow();                // 同色再涂 = 取消
+                      ok('底纹从壳外起同色再涂=取消[hlmark剩=' +
+                         ed.querySelectorAll('.hlmark').length + ']',
+                         !ed.querySelector('.hlmark'));
+                      /* 拆壳动过 DOM，重建选区（现在的"底纹字"已是无格式纯文本） */
+                      var rrV2 = document.createRange();
+                      rrV2.setStart(pV, 1); rrV2.setEnd(pV, 3);
+                      var sV2 = window.getSelection();
+                      sV2.removeAllRanges(); sV2.addRange(rrV2);
+                      app.paintShadeNow();                // 没格式了再涂 = 上色
+                      var onceV = !!ed.querySelector('.hlmark');
+                      app.lastShade = '#EF4444';
+                      app.paintShadeNow();                // 换色 = 替换（红壳里没有黄壳）
+                      var marksV = ed.querySelectorAll('.hlmark');
+                      var redHasYellow = marksV.length === 1 &&
+                        marksV[0].querySelector('.hlmark');
+                      ok('底纹换色=替换不叠加[一次=' + onceV + ' 壳数=' + marksV.length +
+                         ' 内嵌黄=' + (redHasYellow ? 1 : 0) + ']',
+                         onceV && marksV.length === 1 && !redHasYellow);
+                      app.lastShade = '#FACC15';
+
+                      /* 23.16 部分清除：选中带格式文字的一半清除，另一半保持原样 */
+                      ed.innerHTML = '<p>前<span class="hlmark" ' +
+                        'style="background-color:#FACC15">四字底纹</span>后</p>';
+                      var pW = ed.querySelector('p');
+                      var spanW = pW.querySelector('.hlmark');
+                      var rrW = document.createRange();
+                      rrW.setStart(spanW.firstChild, 2);   // 只选后两字
+                      rrW.setEnd(spanW.firstChild, 4);
+                      var sW = window.getSelection();
+                      sW.removeAllRanges(); sW.addRange(rrW);
+                      app.markPop = 'bg'; app.clearSelMark();
+                      var hlW = ed.querySelectorAll('.hlmark');
+                      ok('部分清除只拆选中半截[剩壳=' + hlW.length +
+                         ' 壳文=' + (hlW[0] ? hlW[0].textContent : '无') + ']',
+                         hlW.length === 1 && hlW[0].textContent === '四字');
+
+                      /* 23.17 面板显示当前文字的格式（selTag/selShade） */
+                      ed.innerHTML = '<p>前<span class="tagmark" data-tag="显标A" ' +
+                        'style="--tagc:rgba(245,158,11,.33)">标记字</span>尾</p>';
+                      var pX = ed.querySelector('p');
+                      var spanX = pX.querySelector('.tagmark');
+                      var rrX2 = document.createRange();
+                      rrX2.setStart(spanX.firstChild, 0);
+                      rrX2.setEnd(spanX.firstChild, 3);
+                      var sX2 = window.getSelection();
+                      sX2.removeAllRanges(); sX2.addRange(rrX2);
+                      app.syncCaretFormat();
+                      ok('选中标记字=面板亮起该标记[selTag=' + app.selTag + ']',
+                         app.selTag === '显标A');
+                      var rrX3 = document.createRange();
+                      rrX3.setStart(pX.firstChild, 0); rrX3.collapse(true);
+                      var sX3 = window.getSelection();
+                      sX3.removeAllRanges(); sX3.addRange(rrX3);
+                      app.syncCaretFormat();
+                      ok('光标挪到无格式处=面板不亮[selTag=' + app.selTag +
+                         ' selShade=' + app.selShade + ']',
+                         !app.selTag && !app.selShade);
+
+                      /* 23.18 ★ 第 38 轮：工具栏显示当前字纹/颜色 —— 选中带字纹的
+                         字，"纹"亮起；再点一下"纹"= 清除。颜色"A"同理。 */
+                      ed.innerHTML = '<p>前缀<span class="hlmark" ' +
+                        'style="background-color:#FACC15">有纹的字</span>后缀</p>';
+                      var pY = ed.querySelector('p');
+                      var spanY = pY.querySelector('.hlmark');
+                      var rrY = document.createRange();
+                      rrY.setStart(spanY.firstChild, 0); rrY.setEnd(spanY.firstChild, 4);
+                      var sY = window.getSelection();
+                      sY.removeAllRanges(); sY.addRange(rrY);
+                      app.syncCaretFormat();
+                      ok('选中带字纹的字→纹亮起[selShade=' + app.selShade +
+                         ' paint=' + app.shadePaint + ']', !!app.selShade);
+                      app.quickShade();
+                      ok('点纹清除字纹[hlmark剩=' +
+                         ed.querySelectorAll('.hlmark').length + ' paint=' +
+                         app.shadePaint + ']', !ed.querySelector('.hlmark'));
+                      app.syncCaretFormat();
+                      ok('清除后纹熄灭[selShade=' + app.selShade + ']', !app.selShade);
+                      /* 从壳外一半起选（选区跨着壳）也要亮 */
+                      ed.innerHTML = '<p>前缀<span class="hlmark" ' +
+                        'style="background-color:#FACC15">有纹的字</span>后缀</p>';
+                      var pZ = ed.querySelector('p');
+                      var rrZ = document.createRange();
+                      rrZ.setStart(pZ.firstChild, 1);       // 从"缀"字起，跨进壳里
+                      rrZ.setEnd(pZ.lastChild, 1);
+                      var sZ = window.getSelection();
+                      sZ.removeAllRanges(); sZ.addRange(rrZ);
+                      app.syncCaretFormat();
+                      ok('选区跨着壳→纹也亮起[selShade=' + app.selShade + ']', !!app.selShade);
+                      app.markPop = ''; app.clearSelMark();
+                      /* 颜色：选中带色字 → "A"亮起，点一下清除 */
+                      ed.innerHTML = '<p>前缀<span style="color:#E11D48">红字在此</span>后缀</p>';
+                      var pC = ed.querySelector('p');
+                      var spanC = pC.querySelector('span');
+                      var rrC = document.createRange();
+                      rrC.setStart(spanC.firstChild, 0); rrC.setEnd(spanC.firstChild, 4);
+                      var sC = window.getSelection();
+                      sC.removeAllRanges(); sC.addRange(rrC);
+                      app.syncCaretFormat();
+                      ok('选中带色字→A亮起[selColorOn=' + app.selColorOn + ']', app.selColorOn);
+                      app.quickColor();
+                      ok('点A清除颜色[style剩=' +
+                         ed.querySelectorAll('span[style]').length + ' paint=' +
+                         app.colorPaint + ']',
+                         !ed.querySelector('span[style]') && !app.colorPaint);
+                      app.syncCaretFormat();
+                      ok('清除后A熄灭[selColorOn=' + app.selColorOn + ']', !app.selColorOn);
+                      /* 标记（tagmark）也算字纹：亮起 + 点纹清除 */
+                      ed.innerHTML = '<p>前缀<span class="tagmark" data-tag="纹标" ' +
+                        'style="--tagc:rgba(245,158,11,.33)">标记字</span>尾</p>';
+                      var pT = ed.querySelector('p');
+                      var spanT = pT.querySelector('.tagmark');
+                      var rrT = document.createRange();
+                      rrT.setStart(spanT.firstChild, 0); rrT.setEnd(spanT.firstChild, 3);
+                      var sT = window.getSelection();
+                      sT.removeAllRanges(); sT.addRange(rrT);
+                      app.syncCaretFormat();
+                      ok('选中标记→纹亮起[selTag=' + app.selTag + ']', app.selTag === '纹标');
+                      app.quickShade();
+                      ok('点纹清除标记[tagmark剩=' +
+                         ed.querySelectorAll('.tagmark').length + ' selTag=' +
+                         app.selTag + ']', !ed.querySelector('.tagmark'));
+                      app.markPop = ''; app.shadePaint = false; app.curTag = '';
                       /* （23.12 右键挪光标断言挪到 23.5 的完整模式回调里跑 ——
                           气泡窗口太小，点击点会落在视口外，caretRangeFromPoint 量不到） */
                     } catch (e32) { ok('第32轮断言异常: ' + e32.message, false); }
@@ -1555,7 +1820,7 @@
                       ok('右键挪光标后清除生效[剩=' + ed.querySelectorAll('.tagmark').length + ']',
                          !ed.querySelector('.tagmark'));
                       app.ctxShow = false;
-                      app.tagPaint = false; app.curTag = ''; app.markPop = '';
+                      app.shadePaint = false; app.curTag = ''; app.markPop = '';
                       ed.innerHTML = ''; app.onInput();
                       stVis();                 // 继续 22) 光标行可见断言
                     }, 120);
@@ -1592,7 +1857,6 @@
                     rv.collapse(true);
                     var sv = window.getSelection(); sv.removeAllRanges(); sv.addRange(rv);
                     app._bw = 0; app._bh = 0;
-                    app._lastInputAt = 0;
                     app.applyBubbleSizeNow();
                     setTimeout(function () {
                       app.scrollCaretIntoView();

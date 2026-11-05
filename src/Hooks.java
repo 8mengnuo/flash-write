@@ -257,19 +257,19 @@ public final class Hooks {
 
         /* 右键：窗口隐藏时唤回气泡。延迟 600ms 执行：单击右键 = 稍等半秒唤回；
            但若这个右键其实是手势序列的第 3/4 拍（LLRRLL 里有 R），序列完成时
-           fireBoss 先 toggle，定时器看到 lastFireAt 很近就自动作废，不打架 */
+           fireBoss 先 toggle，定时器看到 lastFireAt 很近就自动作废，不打架。
+           ★ 顺延（v1.24）：6 拍手势点得稍慢（>1.2s）时，600ms 定时器会在手势
+             还没点完时就执行 —— 窗口以气泡模式弹出来（"LLRRLL 怎么进气泡了"）。
+             所以定时器触发时若 550ms 内还有过点击（手势仍在继续）就再等 550ms，
+             直到 fireBoss 作废它，或用户真的停手（孤立右键/三连击 → 召唤）。 */
         if (b == 'R' && summonBubble != null) {
-            if (summonTimer != null) summonTimer.cancel();
-            final Runnable sb = summonBubble;
-            summonTimer = new java.util.Timer("summon", true);
-            summonTimer.schedule(new java.util.TimerTask() {
-                public void run() {
-                    if (System.currentTimeMillis() - lastFireAt < 600) return;
-                    try { sb.run(); } catch (Exception ignored) {}
-                }
-            }, 600);
+            cancelSummon();
+            scheduleSummon(summonBubble, 600);
         }
-        /* 左键三连击（同一位置 ±10px、间隔 <700ms）也唤回气泡 */
+        /* 左键三连击（同一位置 ±10px、间隔 <700ms）也唤回气泡。
+           ★ 同样必须延迟+作废：LLRRLL 手势点快了（~110ms/拍），第 1/2/5 拍的
+             三次左键正好凑成三连击，第 5 拍瞬间唤回气泡、第 6 拍又把它藏回去 ——
+             这就是"手势变成了进气泡"的另一半真凶。统一走 600ms 延迟。 */
         if (b == 'L') {
             boolean sameSpot = Math.abs(e.getX() - lastLeftX) <= 10 && Math.abs(e.getY() - lastLeftY) <= 10;
             if (now - lastLeftAt < 700 && sameSpot) leftStreak++;
@@ -278,7 +278,8 @@ public final class Hooks {
             if (leftStreak >= 3) {
                 leftStreak = 0;
                 if (summonBubble != null) {
-                    try { summonBubble.run(); } catch (Exception ignored) {}
+                    cancelSummon();
+                    scheduleSummon(summonBubble, 600);
                 }
             }
         }
@@ -305,5 +306,30 @@ public final class Hooks {
         Runnable r = bossAction;
         if (r == null) return;
         try { r.run(); } catch (Throwable ignored) {}
+    }
+
+    private static void cancelSummon() {
+        if (summonTimer != null) { summonTimer.cancel(); summonTimer = null; }
+    }
+
+    /** 唤回气泡的延迟执行（右键单击 / 左键三连击共用）。
+     *  触发时三道闸：
+     *  1) lastFireAt 很近 → 手势刚好完成、fireBoss 已处理 → 作废；
+     *  2) 550ms 内还有过点击 → 手势仍在继续（6 拍点得慢）→ 顺延 550ms 再看；
+     *  3) 都不是 = 用户真的停手了（孤立右键 / 三连击）→ 召唤。 */
+    private static void scheduleSummon(final Runnable sb, long delay) {
+        if (summonTimer == null) summonTimer = new java.util.Timer("summon", true);
+        try {
+            summonTimer.schedule(new java.util.TimerTask() {
+                public void run() {
+                    try {
+                        long t = System.currentTimeMillis();
+                        if (t - lastFireAt < 600) return;
+                        if (t - lastClickAt < 550) { scheduleSummon(sb, 550); return; }
+                        sb.run();
+                    } catch (Exception ignored) {}
+                }
+            }, delay);
+        } catch (Exception ignored) {}   // timer 刚被 cancel 的竞态：下一次点击会重排
     }
 }
