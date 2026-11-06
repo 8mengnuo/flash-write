@@ -35,19 +35,19 @@
       <library><CLASSES><root url="jar://$MODULE_DIR$/jfx/javafx-web-21.0.5-win.jar!/" /></CLASSES><JAVADOC /><SOURCES /></library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library><CLASSES><root url="jar://$MODULE_DIR$/lib/jnativehook-2.2.2.jar!/" /></CLASSES><JAVADOC /><SOURCES /></library>
+      <library><CLASSES><root url="jar://$MODULE_DIR$/app/lib/jnativehook-2.2.2.jar!/" /></CLASSES><JAVADOC /><SOURCES /></library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library><CLASSES><root url="jar://$MODULE_DIR$/lib/pdfbox-2.0.31.jar!/" /></CLASSES><JAVADOC /><SOURCES /></library>
+      <library><CLASSES><root url="jar://$MODULE_DIR$/app/lib/pdfbox-2.0.31.jar!/" /></CLASSES><JAVADOC /><SOURCES /></library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library><CLASSES><root url="jar://$MODULE_DIR$/lib/fontbox-2.0.31.jar!/" /></CLASSES><JAVADOC /><SOURCES /></library>
+      <library><CLASSES><root url="jar://$MODULE_DIR$/app/lib/fontbox-2.0.31.jar!/" /></CLASSES><JAVADOC /><SOURCES /></library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library><CLASSES><root url="jar://$MODULE_DIR$/lib/commons-logging-1.2.jar!/" /></CLASSES><JAVADOC /><SOURCES /></library>
+      <library><CLASSES><root url="jar://$MODULE_DIR$/app/lib/commons-logging-1.2.jar!/" /></CLASSES><JAVADOC /><SOURCES /></library>
     </orderEntry>
     <orderEntry type="module-library">
-      <library><CLASSES><root url="jar://$MODULE_DIR$/FlashWriteFx.jar!/" /></CLASSES><JAVADOC /><SOURCES /></library>
+      <library><CLASSES><root url="jar://$MODULE_DIR$/app/FlashWriteFx.jar!/" /></CLASSES><JAVADOC /><SOURCES /></library>
     </orderEntry>
   </component>
 </module>

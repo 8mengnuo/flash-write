@@ -46,8 +46,8 @@ import java.util.Properties;
  * 数据文件与 Swing 版格式兼容（draft.txt / words.txt / meta.properties / config.properties）。
  *
  * 编译（JDK 1.8，JavaFX 运行时在 jre/lib/ext/jfxrt.jar 中自动可见）：
- *   javac -encoding UTF-8 -cp lib/jnativehook-2.2.2.jar -d out src/*.java
- *   jar cfm FlashWriteFx.jar build/manifest.txt -C out . -C web .
+ *   javac -encoding UTF-8 -cp app/lib/jnativehook-2.2.2.jar -d out src/*.java
+ *   jar cfm app/FlashWriteFx.jar build/manifest.txt -C out . -C web .
  */
 public class FxApp extends Application {
 
@@ -3355,7 +3355,7 @@ public class FxApp extends Application {
                 String msg = String.valueOf(ex.getMessage());
                 if (ex instanceof NoClassDefFoundError || ex instanceof ClassNotFoundException
                         || msg.contains("NoClassDefFound"))
-                    msg = "缺少 PDF 组件（lib/pdfbox 等），请重新下载完整安装包";
+                    msg = "缺少 PDF 组件（app/lib/pdfbox 等），请重新下载完整安装包";
                 return "err:" + msg.replace("\n", " ");
             }
         }

@@ -65,7 +65,7 @@ function Invoke-App($flag, $label) {
         '--module-path', (Join-Path $root 'jfx'),
         '--add-modules', 'javafx.web,javafx.controls,javafx.swing',
         '--add-opens', 'javafx.web/com.sun.javafx.webkit=ALL-UNNAMED',
-        '-cp', 'FlashWriteFx.jar;lib/*', 'FxMain', $flag
+        '-cp', 'app/FlashWriteFx.jar;app/lib/*', 'FxMain', $flag
     )
     Say $label
     $output = & $java @jargs 2>&1
@@ -107,7 +107,7 @@ if ($needCompile) {
         '--release', '21',
         '--module-path', (Join-Path $root 'jfx'),
         '--add-modules', 'javafx.web,javafx.controls,javafx.swing',
-        '-cp', 'lib/*', '-d', 'out'
+        '-cp', 'app/lib/*', '-d', 'out'
     ) + $javaFiles
     Invoke-Step $javac $javacArgs 'javac (all src/*.java)' | Out-Null
 } else {
@@ -115,7 +115,15 @@ if ($needCompile) {
 }
 
 # ---- 2. jar: Java classes + web resources ----
-$jarArgs = @('--create', '--file', 'FlashWriteFx.jar',
+# app/ holds the runnable jar + third-party jars. Recreate the folders on a
+# clean clone: launch4j.xml resolves <cp> from the exe folder, while the
+# jar's manifest Class-Path resolves from the jar's own folder (app/).
+foreach ($d in @('app', 'app/lib')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $root $d))) {
+        New-Item -ItemType Directory -Path (Join-Path $root $d) -Force | Out-Null
+    }
+}
+$jarArgs = @('--create', '--file', 'app/FlashWriteFx.jar',
              '--manifest', 'build/manifest.txt', '-C', 'out', '.', '-C', 'web', '.')
 Invoke-Step $jar $jarArgs 'jar (classes + web/)' | Out-Null
 
@@ -165,4 +173,4 @@ if ($AllTests) {
 }
 if ($Shot) { Invoke-App '--shot-bubble' 'shot-bubble' | Out-Null }
 
-Say ("BUILD OK  v" + $fileVer + "  ->  " + $exeName + " + FlashWriteFx.jar")
+Say ("BUILD OK  v" + $fileVer + "  ->  " + $exeName + " + app/FlashWriteFx.jar")

@@ -13,11 +13,13 @@
 │   ├── Exporter.java       TXT/MD/HTML/DOCX/RTF/PDF 导出
 │   └── ...
 ├── web/                前端界面（Vue 3 单页 + 自测脚本）
-├── lib/                第三方依赖（JNativeHook、PDFBox 等）
-├── build/              打包配置（launch4j.xml、icon.ico）
+├── app/                运行文件（exe 与 runtime 从这里检索）
+│   ├── FlashWriteFx.jar    程序主体（class + 前端资源）
+│   └── lib/                第三方依赖（JNativeHook、PDFBox 等）
+├── build/              打包配置（launch4j.xml、manifest.txt、icon.ico）
 ├── test/               托盘等测试代码
-├── FlashWriteFx.jar    程序主体（须与 lib/、jfx/ 同级）
-└── 闪写.exe            Windows 启动器（加载旁边的 jar）
+├── runtime/            免安装用的迷你 Java（jlink 产物，不入库）
+└── 闪写.exe            Windows 启动器（固定不变，读 app/ 里的 jar）
 ```
 
 ## 构建与运行
@@ -26,8 +28,8 @@
 # 编译 + 打 jar
 javac -encoding UTF-8 --release 21 --module-path jfx \
   --add-modules javafx.web,javafx.controls,javafx.swing \
-  -cp lib/jnativehook-2.2.2.jar -d out src/*.java
-jar cfm FlashWriteFx.jar build/manifest.txt -C out . -C web .
+  -cp app/lib/jnativehook-2.2.2.jar -d out src/*.java
+jar cfm app/FlashWriteFx.jar build/manifest.txt -C out . -C web .
 
 # 打包 exe（launch4j + rcedit 补中文版本信息）
 tools/launch4j/launch4jc.exe build/launch4j.xml
@@ -38,7 +40,7 @@ tools/launch4j/launch4jc.exe build/launch4j.xml
 ## 自测
 
 ```sh
-java -cp "FlashWriteFx.jar;lib/jnativehook-2.2.2.jar" -Dprism.order=sw FxMain --selftest
+java -cp "app/FlashWriteFx.jar;app/lib/jnativehook-2.2.2.jar" -Dprism.order=sw FxMain --selftest
 ```
 
 其他开关：`--keytest` / `--bosstest` / `--gesttest` / `--exporttest` / `--fonttest` / `--plugtest` / `--shot*`

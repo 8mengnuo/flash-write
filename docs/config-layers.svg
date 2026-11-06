@@ -31,7 +31,7 @@
 <text x="64" y="322" text-anchor="middle" dominant-baseline="central" font-size="12" font-weight="500" fill="#085041">5</text>
 <rect x="90" y="300" width="550" height="44" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
 <text x="104" y="318" font-size="13" font-weight="500" fill="#085041">产物层 · 程序真正运行的东西</text>
-<text x="104" y="336" font-size="11" fill="#0F6E56">FlashWriteFx.jar · 闪写.exe · lib/ · runtime/（免安装版）</text>
+<text x="104" y="336" font-size="11" fill="#0F6E56">闪写.exe · app/（jar + lib） · runtime/（免安装版）</text>
 <text x="626" y="322" text-anchor="end" dominant-baseline="central" font-size="11" fill="#0F6E56">JVM 读</text>
 <text x="40" y="366" font-size="11" fill="#888780">删掉 1~4 层只影响开发；已生成的 exe 照常运行。只有产物层没了，程序才真的跑不起来。</text>
 </svg>

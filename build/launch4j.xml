@@ -2,7 +2,7 @@
 <launch4jConfig>
   <dontWrapJar>true</dontWrapJar>
   <headerType>gui</headerType>
-  <jar>FlashWriteFx.jar</jar>
+  <jar>app/FlashWriteFx.jar</jar>
   <outfile>D:/WorkBuddyData/2026-10-30-14-40-10/flashwrite-hybrid/闪写.exe</outfile>
   <errTitle>闪写</errTitle>
   <cmdLine></cmdLine>
@@ -14,11 +14,11 @@
   <icon>D:/WorkBuddyData/2026-10-30-14-40-10/flashwrite-hybrid/build/icon.ico</icon>
   <classPath>
     <mainClass>FxMain</mainClass>
-    <cp>FlashWriteFx.jar</cp>
-    <cp>lib/jnativehook-2.2.2.jar</cp>
-    <cp>lib/pdfbox-2.0.31.jar</cp>
-    <cp>lib/fontbox-2.0.31.jar</cp>
-    <cp>lib/commons-logging-1.2.jar</cp>
+    <cp>app/FlashWriteFx.jar</cp>
+    <cp>app/lib/jnativehook-2.2.2.jar</cp>
+    <cp>app/lib/pdfbox-2.0.31.jar</cp>
+    <cp>app/lib/fontbox-2.0.31.jar</cp>
+    <cp>app/lib/commons-logging-1.2.jar</cp>
   </classPath>
   <jre>
     <path>runtime</path>
