@@ -9,6 +9,13 @@
    ════════════════════════════════════════════════════════════════ */
 (function () {
   var out = [];
+  /* 异步段里抛的异常不会变成 executeScript 的返回值 —— 兜底写进结果，
+     否则 Java 端只会打印一片空白，根本看不出是哪一步崩了。 */
+  window.addEventListener('error', function (e) {
+    if (window.__stResult && String(window.__stResult).indexOf('PASS') === 0) return;
+    window.__stResult = 'FAIL 自测脚本异常: ' + (e.message || e) +
+      ' @line ' + (e.lineno || '?');
+  });
   function ok(name, cond) { out.push((cond ? 'PASS  ' : 'FAIL  ') + name); }
   var app = window.app;
   if (!app) { window.__stResult = 'FAIL  前端未初始化（window.app 不存在）'; return 'PENDING'; }
@@ -34,6 +41,480 @@
   /* 0) 旧的"保存/询问"逻辑已彻底删掉 */
   ok('旧脏标记已删除', typeof app._dirty === 'undefined');
   ok('旧保存询问框已删除', typeof app.showSaveAsk === 'undefined');
+
+  /* 0.05) v1.30 中文斜体：壳被转成 inline-block，不能继承段落的 2em 段首缩进，
+     否则文字整体右推 32px，看上去像斜体前面凭空多了一块空白。 */
+  try {
+    ed.innerHTML = '<p>甲<b>加粗</b>、<i>斜体</i>、<u>下划线</u>乙</p>';
+    app.onInput(); app.syncCnItalic();
+    var iC = ed.querySelector('i'), pC = ed.querySelector('p'), commaC = null;
+    for (var ci = 0; ci < pC.childNodes.length; ci++) {
+      var nc = pC.childNodes[ci];
+      if (nc.nodeType === 3 && nc.nodeValue.indexOf('、') === 0) { commaC = nc; break; }
+    }
+    var rC = document.createRange();
+    rC.setStart(commaC, commaC.nodeValue.length - 1);
+    rC.setEnd(commaC, commaC.nodeValue.length);
+    var rI = document.createRange(); rI.selectNodeContents(iC);
+    var gapC = rI.getBoundingClientRect().left - rC.getBoundingClientRect().right;
+    ok('v1.30 含汉字的斜体壳打上 data-cnital', iC.getAttribute('data-cnital') === '1');
+    ok('v1.30 中文斜体不吃段首缩进（不会顶出空白）',
+       parseFloat(getComputedStyle(iC).textIndent) === 0 && Math.abs(gapC) < 8);
+  } catch (eC) {
+    ok('v1.30 含汉字的斜体壳打上 data-cnital', false);
+    ok('v1.30 中文斜体不吃段首缩进（不会顶出空白）', false);
+  }
+
+  /* 0.1) 外部网页（v1.25）：只测纯逻辑与桥接拒绝，不真打开浏览器、不写用户数据 */
+  ok('外部网页：最新版本只留 Gitee 一个入口', Array.isArray(app.officialWebs) &&
+     app.officialWebs.length === 1 &&
+     /^https:\/\/gitee\.com\/meng_nuo\/flash-write\/releases$/.test(app.officialWebs[0].url) &&
+     !/github/i.test(JSON.stringify(app.officialWebs)));
+  ok('外部网页：自定义列表是数组', Array.isArray(app.webLinks));
+  ok('外部网页：左键/右键/添加/删除方法齐全',
+     typeof app.toggleWeb === 'function' && typeof app.openWebEdit === 'function' &&
+     typeof app.addWeb === 'function' && typeof app.delWeb === 'function' &&
+     typeof app.openWebAt === 'function');
+  ok('外部网页：没写协议自动补 https', app.normWebUrl('example.com/a') === 'https://example.com/a');
+  ok('外部网页：拒绝 javascript/file 等危险链接',
+     app.normWebUrl('javascript:alert(1)') === '' &&
+     app.normWebUrl('file:///C:/x') === '' && app.normWebUrl('') === '');
+  ok('外部网页：Java 桥接拒绝空链接', String(app.host('openWeb','')).indexOf('ERR') === 0);
+  /* 配置往返：添加 -> Java 落盘 -> getConfig 读回 -> 立刻删掉（不留残留） */
+  try {
+    var wl0 = app.webLinks.length;
+    app.webName = 'stweb_' + Date.now();
+    app.webUrl = 'example.com/st';
+    app.addWeb();
+    var wcfg = JSON.parse(app.host('getConfig'));
+    ok('外部网页：添加后经 Java 配置往返', app.webLinks.length === wl0 + 1 &&
+       Array.isArray(wcfg.webLinks) && wcfg.webLinks.length === wl0 + 1);
+    app.delWeb(app.webLinks.length - 1);
+    app.webName = ''; app.webUrl = '';
+  } catch (e) {
+    ok('外部网页：添加后经 Java 配置往返', false);
+  }
+
+  /* 0.2) 拖拽排序 + 按钮位置（纯逻辑，写完立刻复位，不留残留） */
+  ok('外部网页：拖拽排序 / 按钮位置方法齐全',
+     typeof app.webBtnDown === 'function' && typeof app.webOrderAt === 'function' &&
+     typeof app.webLinkDown === 'function' && typeof app.moveWeb === 'function' &&
+     typeof app.setWebBtnOrder === 'function');
+  try {
+    var wlSave = app.webLinks.slice();
+    app.webLinks = [{name:'A',url:'https://a.example'},{name:'B',url:'https://b.example'},
+                    {name:'C',url:'https://c.example'}];
+    app.moveWeb(0, 3);
+    var mw = app.webLinks.map(function(x){return x.name}).join('');
+    app.webLinks = wlSave; app.saveWebLinks();
+    ok('外部网页：拖拽把第一项移到最后 → BCA', mw === 'BCA');
+  } catch (e) { ok('外部网页：拖拽把第一项移到最后 → BCA', false); }
+  try {
+    var wo0 = app.webBtnOrder, ld0 = app.linkDirectOpen;
+    app.setWebBtnOrder(25);
+    app.setLinkDirectOpen(true);
+    var c2 = JSON.parse(app.host('getConfig'));
+    ok('外部网页：按钮位置 / 直接打开开关经 Java 往返',
+       c2.webBtnOrder === 25 && c2.linkDirectOpen === true &&
+       app.webBtnOrder === 25 && app.linkDirectOpen === true);
+    app.setWebBtnOrder(wo0); app.setLinkDirectOpen(ld0);
+  } catch (e) { ok('外部网页：按钮位置 / 直接打开开关经 Java 往返', false); }
+
+  /* 0.2b) 拖拽事件链：模拟 mousedown→mousemove→mouseup，防「拖了没反应」 */
+  function stDragEvt(type, x, y) {
+    return new MouseEvent(type, {bubbles:true, cancelable:true, button:0,
+                                 clientX:x, clientY:y});
+  }
+  try {
+    var wl2 = app.webLinks.slice();
+    app.webLinks = [{name:'A',url:'https://a.example'},{name:'B',url:'https://b.example'},
+                    {name:'C',url:'https://c.example'}];
+    var holder2 = document.createElement('div');
+    holder2.className = 'pop webpop';
+    holder2.style.cssText = 'position:absolute;left:0;top:0;width:200px;max-height:none';
+    holder2.innerHTML = '<div data-wl="1" style="height:30px">A</div>' +
+                        '<div data-wl="1" style="height:30px">B</div>' +
+                        '<div data-wl="1" style="height:30px">C</div>';
+    document.body.appendChild(holder2);
+    app.webLinkDown(stDragEvt('mousedown', 5, 15), 0);
+    document.dispatchEvent(stDragEvt('mousemove', 5, 150));
+    document.dispatchEvent(stDragEvt('mouseup', 5, 150));
+    var dragRes = app.webLinks.map(function(x){return x.name}).join('');
+    holder2.parentNode.removeChild(holder2);
+    app.webLinks = wl2; app.saveWebLinks();
+    ok('外部网页：拖拽事件链把 A 移到末尾 → BCA', dragRes === 'BCA');
+  } catch (e) {
+    ok('外部网页：拖拽事件链把 A 移到末尾 → BCA', false);
+  }
+  try {
+    var wo2 = app.webBtnOrder;
+    app.webBtnDown(stDragEvt('mousedown', 200, 20));
+    document.dispatchEvent(stDragEvt('mousemove', 10, 20));
+    document.dispatchEvent(stDragEvt('mouseup', 10, 20));
+    var movedOrder = app.webBtnOrder;
+    app.setWebBtnOrder(wo2);
+    ok('外部网页：按住标题栏按钮拖动会改位置', movedOrder !== wo2 &&
+       movedOrder >= 5 && movedOrder <= 65);
+  } catch (e) {
+    ok('外部网页：按住标题栏按钮拖动会改位置', false);
+  }
+
+  /* 0.3) 正文超链接：只造 span，不造 <a href>；绝不真拉起浏览器 */
+  ok('超链接：方法齐全', typeof app.openLinkAdd === 'function' &&
+     typeof app.openLinkMgr === 'function' && typeof app.applyLink === 'function' &&
+     typeof app.scanLinks === 'function' && typeof app.onLinkClick === 'function' &&
+     typeof app.launchLink === 'function');
+  ok('超链接：目标校验拒绝危险协议',
+     app.normLinkTarget('javascript:alert(1)','url') === '' &&
+     app.normLinkTarget('file:///C:/x','url') === '' &&
+     app.normLinkTarget('example.com/a','url') === 'https://example.com/a' &&
+     app.normLinkTarget('https://x.example','file') === '');
+  ok('超链接：Java 桥接拒绝非法网址（不拉起浏览器）',
+     String(app.host('openLinkTarget','url','javascript:alert(1)')).indexOf('ERR') === 0 &&
+     String(app.host('openLinkTarget','url','ftp://x.example')).indexOf('ERR') === 0);
+  try {
+    var ld1 = app.linkDirectOpen;
+    app.setLinkDirectOpen(false);
+    ed.innerText = '超链接测试ABC';
+    var lr = document.createRange();
+    lr.setStart(ed.firstChild, 0); lr.setEnd(ed.firstChild, 5);
+    var ls = window.getSelection(); ls.removeAllRanges(); ls.addRange(lr);
+    app._range = lr.cloneRange(); app._selRange = lr.cloneRange();
+    app.openLinkAdd();                 // 先开面板（它会清空输入框）
+    app.linkKind = 'url'; app.linkTarget = 'example.com/x';
+    app.applyLink();
+    var lk = ed.querySelector('span.txtlink');
+    ok('超链接：选中文字被包成链接且页面里没有 <a href>',
+       !!lk && lk.getAttribute('data-href') === 'https://example.com/x' &&
+       lk.getAttribute('data-kind') === 'url' &&
+       ed.querySelectorAll('a[href]').length === 0 &&
+       app.getText().indexOf('超链接测试ABC') >= 0);
+    app.scanLinks();
+    ok('超链接：管理面板能列出全部链接', app.linkList.length === 1 &&
+       app.linkList[0].target === 'https://example.com/x');
+    app.setLinkTarget(0, 'https://gitee.com/meng_nuo/flash-write');
+    ok('超链接：管理面板能改导向位置',
+       ed.querySelector('span.txtlink').getAttribute('data-href') ===
+       'https://gitee.com/meng_nuo/flash-write');
+    app.onLinkClick(ed.querySelector('span.txtlink'));
+    ok('超链接：默认点击弹卡片而不是直接打开', app.linkCard.show === true &&
+       app.linkCard.target === 'https://gitee.com/meng_nuo/flash-write');
+    app.linkCard.show = false;
+    app.delLink(0);
+    ok('超链接：删除链接保留文字', !ed.querySelector('span.txtlink') &&
+       app.getText().indexOf('超链接测试ABC') >= 0);
+    app.setLinkDirectOpen(ld1);
+  } catch (e) {
+    ok('超链接：选中文字被包成链接且页面里没有 <a href>', false);
+  }
+  app.showLinkAdd = false; app.showLinkMgr = false; app.linkCard.show = false;
+
+  /* 0.4) 外部网站复制来的 <a href>「百度一下」：粘贴归一化 + 点击绝不留在应用内（v1.27） */
+  ok('外部粘贴链接：方法齐全', typeof app.onPaste === 'function' &&
+     typeof app.convertAnchors === 'function' && typeof app.pasteHref === 'function' &&
+     typeof app.linkAtCaret === 'function' && typeof app.openLinkEditEl === 'function' &&
+     typeof app.ctxLinkAction === 'function');
+  try {
+    var pb = document.createElement('div');
+    pb.innerHTML = '<a href="https://www.baidu.com">百度一下</a> · ' +
+                   '<a href="javascript:alert(1)">危险链接</a> · ' +
+                   '<a href="//example.com/x">协议相对</a>';
+    var pn = app.convertAnchors(pb, false);
+    var ptl = pb.querySelectorAll('span.txtlink');
+    ok('外部粘贴链接：a 全变成 span.txtlink，危险协议不成链',
+       pn === 3 && pb.querySelectorAll('a[href]').length === 0 &&
+       ptl.length === 2 && ptl[0].textContent === '百度一下' &&
+       ptl[0].getAttribute('data-href') === 'https://www.baidu.com' &&
+       ptl[1].getAttribute('data-href') === 'https://example.com/x' &&
+       pb.innerHTML.indexOf('危险链接') >= 0);
+  } catch (e) { ok('外部粘贴链接：a 全变成 span.txtlink，危险协议不成链', false); }
+  try {
+    var rb = document.createElement('div');
+    rb.innerHTML = '<a href="releases">最新版本</a>';
+    app.convertAnchors(rb, false, 'https://gitee.com/meng_nuo/flash-write/');
+    ok('外部粘贴链接：相对地址按 <base> 解析',
+       !!rb.querySelector('span.txtlink') &&
+       rb.querySelector('span.txtlink').getAttribute('data-href') ===
+       'https://gitee.com/meng_nuo/flash-write/releases');
+  } catch (e) { ok('外部粘贴链接：相对地址按 <base> 解析', false); }
+  try {
+    ed.innerHTML = '<p>粘贴处</p>';
+    var pr = document.createRange();
+    pr.selectNodeContents(ed.querySelector('p')); pr.collapse(false);
+    var ps = window.getSelection(); ps.removeAllRanges(); ps.addRange(pr);
+    var pe = new Event('paste', {bubbles:true, cancelable:true});
+    pe.clipboardData = { getData: function(t) {
+      return t === 'text/html' ? '<a href="https://www.baidu.com">百度一下</a>' : '百度一下';
+    }};
+    ed.dispatchEvent(pe);
+    ok('粘贴外部链接：正文落的是可管理 span.txtlink，不是 <a href>',
+       ed.querySelectorAll('a[href]').length === 0 &&
+       !!ed.querySelector('span.txtlink') &&
+       ed.querySelector('span.txtlink').textContent === '百度一下' &&
+       ed.querySelector('span.txtlink').getAttribute('data-href') === 'https://www.baidu.com' &&
+       app.getText().indexOf('百度一下') >= 0);
+  } catch (e) { ok('粘贴外部链接：正文落的是可管理 span.txtlink，不是 <a href>', false); }
+  try {
+    var ld2 = app.linkDirectOpen;
+    app.setLinkDirectOpen(false);
+    app.linkCard.show = false;
+    ed.innerHTML = '<p>参考：<a href="https://www.baidu.com" id="__pastelink">百度一下</a></p>';
+    var pa = document.getElementById('__pastelink');
+    var ce = new MouseEvent('click', {bubbles:true, cancelable:true, button:0});
+    pa.dispatchEvent(ce);
+    ok('外部粘贴链接：点击被拦下、就地归一化、目标交给卡片（不会在应用内打开）',
+       ce.defaultPrevented === true &&
+       ed.querySelectorAll('a[href]').length === 0 &&
+       !!ed.querySelector('span.txtlink') &&
+       app.linkCard.show === true &&
+       app.linkCard.target === 'https://www.baidu.com' &&
+       app.linkCard.text === '百度一下');
+    app.linkCard.show = false;
+    app.setLinkDirectOpen(ld2);
+  } catch (e) {
+    ok('外部粘贴链接：点击被拦下、就地归一化、目标交给卡片（不会在应用内打开）', false);
+  }
+
+  /* 0.5) 右键按「是不是链接」分支 + 编辑保存 + 工具条全局管理（v1.27） */
+  try {
+    var lk3 = ed.querySelector('span.txtlink');
+    var r3 = document.createRange(); r3.selectNodeContents(lk3); r3.collapse(true);
+    var s3 = window.getSelection(); s3.removeAllRanges(); s3.addRange(r3);
+    app._range = r3.cloneRange(); app._selRange = null;
+    ok('右键分支：光标在链接上能识别成链接', app.linkAtCaret() === lk3);
+    app.openLinkAdd();
+    ok('右键分支：是链接 → 打开编辑面板并回填目标',
+       app.linkEditing === true && app.showLinkAdd === true &&
+       app.linkTarget === 'https://www.baidu.com' && app.linkSelText === '百度一下');
+    app.linkTarget = 'https://gitee.com/meng_nuo/flash-write/releases';
+    app.applyLink();
+    ok('右键编辑：保存后只改目标，文字与链接数量不变',
+       ed.querySelectorAll('span.txtlink').length === 1 &&
+       ed.querySelector('span.txtlink').textContent === '百度一下' &&
+       ed.querySelector('span.txtlink').getAttribute('data-href') ===
+       'https://gitee.com/meng_nuo/flash-write/releases' &&
+       app.linkEditing === false && app.showLinkAdd === false);
+    ed.innerHTML = '<p>普通文字ABC</p>';
+    var r4 = document.createRange();
+    r4.setStart(ed.querySelector('p').firstChild, 0); r4.collapse(true);
+    var s4 = window.getSelection(); s4.removeAllRanges(); s4.addRange(r4);
+    app._range = r4.cloneRange(); app._selRange = null;
+    ok('右键分支：普通文字不识别成链接', app.linkAtCaret() === null);
+    app.openLinkAdd();
+    ok('右键分支：不是链接 → 打开添加面板',
+       app.linkEditing === false && app.showLinkAdd === true && app.linkTarget === '');
+    app.showLinkAdd = false;
+    app.openLinkMgr({type:'contextmenu', clientX:20, clientY:120});
+    ok('工具条右键：全局管理面板能打开', app.showLinkMgr === true &&
+       Array.isArray(app.linkList) && typeof app.setLinkDirectOpen === 'function');
+    app.showLinkMgr = false;
+  } catch (e) {
+    ok('右键分支：是链接 → 打开编辑面板并回填目标', false);
+  }
+  app.showLinkAdd = false; app.showLinkMgr = false; app.linkCard.show = false;
+  app.linkEditing = false;
+
+  /* 0.6) v1.28：链接后输入独立 / 粘贴格式选项 / 格式刷（含连击批量） */
+  app.closePasteCard(); app.exitBrush();
+  try {
+    ed.innerHTML = '<p>普通文字</p>';
+    var fmt0 = app.captureFormatShells(ed.querySelector('p'));
+    ok('格式模板：普通正文不把继承来的颜色写死（深色主题才跟得上）',
+       fmt0.css.color === '' && !fmt0.css.backgroundColor);
+  } catch (e) { ok('格式模板：普通正文不把继承来的颜色写死（深色主题才跟得上）', false); }
+  try {
+    ed.innerHTML = '<p>链接文字</p>';
+    var t6 = ed.querySelector('p').firstChild;
+    var r6 = document.createRange(); r6.setStart(t6, 0); r6.setEnd(t6, 4);
+    var s6 = window.getSelection(); s6.removeAllRanges(); s6.addRange(r6);
+    app._range = r6.cloneRange(); app._selRange = r6.cloneRange();
+    app.openLinkAdd(); app.linkKind = 'url'; app.linkTarget = 'example.com/a';
+    app.applyLink();
+    var lk6 = ed.querySelector('span.txtlink');
+    ok('链接后有独立出口文本节点', !!lk6 && !!lk6.nextSibling &&
+       lk6.nextSibling.nodeType === 3);
+    ok('设置完链接光标不在链接文字上',
+       !!window.getSelection().anchorNode &&
+       !lk6.contains(window.getSelection().anchorNode));
+    /* 把光标硬塞回链接末尾，模拟用户点完链接尾部继续打字 */
+    var r7 = document.createRange();
+    r7.setStart(lk6.firstChild, lk6.firstChild.nodeValue.length); r7.collapse(true);
+    var s7 = window.getSelection(); s7.removeAllRanges(); s7.addRange(r7);
+    key('x', {code:'KeyX'});
+    ok('打字前光标被挪出链接壳',
+       !!window.getSelection().anchorNode &&
+       !lk6.contains(window.getSelection().anchorNode));
+    window.getSelection().getRangeAt(0).insertNode(document.createTextNode('新字'));
+    ok('链接之后输入的文字是独立文字',
+       lk6.textContent === '链接文字' && app.getText().indexOf('链接文字新字') >= 0);
+  } catch (e) { ok('链接之后输入的文字是独立文字', false); }
+  try {
+    function stPaste(txt) {
+      return new Event('paste', {bubbles:true, cancelable:true});
+    }
+    function stClip(html, plain) {
+      return { getData: function(t) { return t === 'text/html' ? html : plain; } };
+    }
+    var html9 = '<span style="font-size:30px;color:#E11D48;font-weight:bold">外来文字</span>';
+    ed.innerHTML = '<p>前缀</p>';
+    var p9 = ed.querySelector('p');
+    var r9 = document.createRange(); r9.setStart(p9.firstChild, 2); r9.collapse(true);
+    var s9 = window.getSelection(); s9.removeAllRanges(); s9.addRange(r9);
+    app._range = r9.cloneRange(); app._selRange = null;
+    var pe9 = stPaste(); pe9.clipboardData = stClip(html9, '外来文字');
+    ed.dispatchEvent(pe9);
+    ok('带格式的粘贴给出「保持原格式 / 匹配当前格式」两个选项',
+       app.pasteCard.show === true && typeof app.keepPasteFormat === 'function' &&
+       typeof app.matchPasteFormat === 'function' &&
+       ed.innerHTML.indexOf('30px') >= 0);
+    var before9 = ed.innerHTML;
+    app.keepPasteFormat();
+    ok('保持原格式 = 正文一个字都不动', ed.innerHTML === before9 &&
+       app.pasteCard.show === false);
+    /* 清干净再粘一次，这次选「匹配当前格式」 */
+    ed.innerHTML = '<p>前缀</p>';
+    var pA = ed.querySelector('p');
+    var rA = document.createRange(); rA.setStart(pA.firstChild, 2); rA.collapse(true);
+    var sA = window.getSelection(); sA.removeAllRanges(); sA.addRange(rA);
+    app._range = rA.cloneRange(); app._selRange = null;
+    var peA = stPaste(); peA.clipboardData = stClip(html9, '外来文字');
+    ed.dispatchEvent(peA);
+    app.matchPasteFormat();
+    ok('匹配当前格式：外来字号被清掉、文字与前缀都还在',
+       ed.innerHTML.indexOf('30px') < 0 &&
+       app.getText().indexOf('外来文字') >= 0 &&
+       app.getText().indexOf('前缀') >= 0 && app.pasteCard.show === false);
+  } catch (e) { ok('匹配当前格式：外来字号被清掉、文字与前缀都还在 [异常:' +
+                    (e && e.message ? e.message : e) + ']', false); }
+  try {
+    ed.innerHTML = '<p><span class="txtlink" data-href="https://gitee.com/meng_nuo/flash-write" ' +
+                   'data-kind="url" style="color:#E11D48;font-weight:bold">源</span>目标文字</p>';
+    var srcB = ed.querySelector('.txtlink');
+    var rB = document.createRange(); rB.selectNodeContents(srcB);
+    var sB = window.getSelection(); sB.removeAllRanges(); sB.addRange(rB);
+    app._range = rB.cloneRange(); app._selRange = rB.cloneRange();
+    app.clickBrush();
+    ok('格式刷：选中文字后单击进入，并记下超链接属性',
+       app.brushOn === true && app.brushBatch === false && !!app.brushFmt &&
+       app.brushFmt.shells.some(function(x) {
+         return x.cls.indexOf('txtlink') >= 0 &&
+                x.attrs['data-href'] === 'https://gitee.com/meng_nuo/flash-write';
+       }));
+    app._brushAt = Date.now();          // 模拟紧接着的第二次点击（连击）
+    app.clickBrush();
+    ok('格式刷：320ms 内连击两次 = 批量模式',
+       app.brushOn === true && app.brushBatch === true);
+    var pC = ed.querySelector('p'), txtC = null;
+    for (var ci = 0; ci < pC.childNodes.length; ci++) {
+      var cn = pC.childNodes[ci];
+      if (cn.nodeType === 3 && cn.nodeValue.indexOf('目标文字') >= 0) txtC = cn;
+    }
+    var rC = document.createRange(); rC.setStart(txtC, 0); rC.setEnd(txtC, 4);
+    var sC = window.getSelection(); sC.removeAllRanges(); sC.addRange(rC);
+    app._selRange = rC.cloneRange();
+    app.tryBrushPaint();
+    var linksC = ed.querySelectorAll('span.txtlink');
+    ok('格式刷：目标文字带上全部格式（含超链接属性）',
+       linksC.length === 2 && linksC[1].textContent === '目标文字' &&
+       linksC[1].getAttribute('data-href') === 'https://gitee.com/meng_nuo/flash-write' &&
+       linksC[1].getAttribute('data-kind') === 'url' &&
+       app.getText().indexOf('源目标文字') >= 0);
+    ok('格式刷：批量模式可重复用、不自动退出',
+       app.brushOn === true && app.brushBatch === true);
+    app.exitBrush();
+    var rD = document.createRange(); rD.selectNodeContents(ed.querySelector('.txtlink'));
+    var sD = window.getSelection(); sD.removeAllRanges(); sD.addRange(rD);
+    app._range = rD.cloneRange(); app._selRange = rD.cloneRange();
+    app.clickBrush();
+    app._brushAt = Date.now() - 1000;   // 模拟慢悠悠的第二次点击
+    app.clickBrush();
+    ok('格式刷：非连击的两次点击 = 退出而不是批量',
+       app.brushOn === false && app.brushBatch === false && app.brushFmt === null);
+  } catch (e) { ok('格式刷：目标文字带上全部格式（含超链接属性）', false); }
+  app.exitBrush(); app.closePasteCard();
+  app.showLinkAdd = false; app.showLinkMgr = false; app.linkCard.show = false;
+
+  /* 0.7) v1.30：中文斜体可见 + 反值壳不挡斜体 + 格式刷复制全部格式 */
+  try {
+    ed.innerHTML = '<p>甲乙丙</p>'; app.onInput();
+    var pIt = ed.querySelector('p');
+    var rIt = document.createRange(); rIt.setStart(pIt.firstChild, 1); rIt.setEnd(pIt.firstChild, 2);
+    var sIt = window.getSelection(); sIt.removeAllRanges(); sIt.addRange(rIt);
+    app._range = rIt.cloneRange(); app._selRange = rIt.cloneRange();
+    var btnI = document.querySelector('.toolbar button[title^="斜体："]');
+    ok('v1.30 工具条 I 按钮就绪', !!btnI);
+    if (btnI) btnI.click();
+    var itEl = ed.querySelector('i');
+    ok('v1.30 真点 I：中文斜体落 <i> 且打上可见倾斜标记',
+       !!itEl && itEl.textContent === '乙' &&
+       itEl.getAttribute('data-cnital') === '1' &&
+       /matrix/.test(String(getComputedStyle(itEl).transform || '')));
+    app.syncCaretFormat();
+    ok('v1.30 中文斜体时 I 按钮亮起', app.caretItalic === true);
+    var wIt = document.createRange(); wIt.selectNodeContents(itEl);
+    var sIt2 = window.getSelection(); sIt2.removeAllRanges(); sIt2.addRange(wIt);
+    app._range = wIt.cloneRange(); app._selRange = wIt.cloneRange();
+    if (btnI) btnI.click();
+    ok('v1.30 再点 I：真拆 <i>、倾斜标记也清掉',
+       ed.querySelectorAll('i,span[style*="font-style"]').length === 0 &&
+       ed.querySelectorAll('[data-cnital]').length === 0 && ed.textContent === '甲乙丙');
+
+    /* 格式刷 / 粘贴留下 font-style:normal 反壳时，点 I 必须真套上斜体 */
+    ed.innerHTML = '<p>甲<span style="font-style:normal">乙</span>丙</p>'; app.onInput();
+    var nsp = ed.querySelector('span');
+    var rN = document.createRange(); rN.selectNodeContents(nsp);
+    var sN = window.getSelection(); sN.removeAllRanges(); sN.addRange(rN);
+    app._range = rN.cloneRange(); app._selRange = rN.cloneRange();
+    app.toggleItalicSel();
+    ok('v1.30 反值壳 font-style:normal 不挡住斜体',
+       ed.querySelectorAll('i').length === 1 && ed.textContent === '甲乙丙');
+
+    /* 源字同时带 链接 / 加粗 / 斜体 / 下划线 / 底纹 / 红字，
+       且选区起点故意落在最外层壳（v1.28 单点取样会在这里全丢） */
+    ed.innerHTML = '<p>格式刷演示</p><p><span class="txtlink" data-kind="url" ' +
+      'data-href="https://gitee.com/meng_nuo/flash-write"><b><i><u>' +
+      '<span class="hlmark" style="background-color:#FACC15;color:#E11D48">源格式文字</span>' +
+      '</u></i></b></span> ← 源 / 目标 → 目标文字</p>';
+    app.onInput(); app.scanLinks();
+    var srcEl = ed.querySelector('.txtlink');
+    var rSrc = document.createRange(); rSrc.selectNodeContents(srcEl);
+    var sSrc = window.getSelection(); sSrc.removeAllRanges(); sSrc.addRange(rSrc);
+    app._range = rSrc.cloneRange(); app._selRange = rSrc.cloneRange();
+    app.clickBrush();
+    var tags = (app.brushFmt && app.brushFmt.shells || []).map(function (x) { return x.tag; });
+    ok('v1.30 格式刷：起点在最外层壳也收齐 B/I/U 与特殊壳',
+       tags.indexOf('B') >= 0 && tags.indexOf('I') >= 0 && tags.indexOf('U') >= 0 &&
+       (app.brushFmt.shells || []).some(function (x) {
+         return x.cls.indexOf('txtlink') >= 0 || x.cls.indexOf('hlmark') >= 0;
+       }));
+    var pT = ed.querySelectorAll('p')[1], tT = null;
+    for (var ti = 0; ti < pT.childNodes.length; ti++) {
+      var cnT = pT.childNodes[ti];
+      if (cnT.nodeType === 3 && cnT.nodeValue.indexOf('目标文字') >= 0) tT = cnT;
+    }
+    var offT = tT.nodeValue.indexOf('目标文字');
+    var rT = document.createRange(); rT.setStart(tT, offT); rT.setEnd(tT, offT + 4);
+    var sT = window.getSelection(); sT.removeAllRanges(); sT.addRange(rT);
+    app._selRange = rT.cloneRange(); app._range = rT.cloneRange();
+    app.tryBrushPaint();
+    var linksT = ed.querySelectorAll('span.txtlink'), tgt = linksT[linksT.length - 1];
+    ok('v1.30 格式刷：目标文字带上全部格式（含中文斜体）',
+       !!tgt && tgt.textContent === '目标文字' &&
+       tgt.getAttribute('data-href') === 'https://gitee.com/meng_nuo/flash-write' &&
+       tgt.getAttribute('data-kind') === 'url' &&
+       !!tgt.querySelector('b') && !!tgt.querySelector('u') &&
+       !!tgt.querySelector('.hlmark') &&
+       !!tgt.querySelector('i[data-cnital]') &&
+       !!tgt.querySelector('span[style*="color"]'));
+    ok('v1.30 格式刷：源文字未被破坏',
+       ed.querySelectorAll('span.txtlink').length === 2 &&
+       app.getText().indexOf('源格式文字') >= 0);
+    app.exitBrush();
+  } catch (e) { ok('v1.30 斜体/格式刷回归 [异常:' +
+                    (e && e.message ? e.message : e) + ']', false); }
+  app.exitBrush();
+  ed.innerHTML = ''; app.onInput();
+  app._range = null; app._selRange = null;
 
   /* 1) 点词条 -> 落在光标处 */
   ed.innerText = 'abc';
@@ -300,6 +781,149 @@
   ed.innerHTML = ''; app.onInput();
   ed.innerText = '';
   app.tbSize = ''; app.tbFont = '';
+
+  /* 3.8925) v1.29：B/I/U/颜色 统一 toggle ——
+     「已有格式再点」要真拆壳恢复默认（同底纹），不能包一层抵消样式；
+     选区起点在壳外也要认；右键菜单同款手感。 */
+  (function () {
+    var sF = window.getSelection();
+    function pick(fromNode, fromOff, toNode, toOff) {
+      var r = document.createRange();
+      r.setStart(fromNode, fromOff); r.setEnd(toNode, toOff);
+      sF.removeAllRanges(); sF.addRange(r);
+      app._range = r.cloneRange(); app._selRange = r.cloneRange();
+      return r;
+    }
+    function wrapSel(el) {
+      if (!el) return;
+      var r = document.createRange(); r.selectNodeContents(el);
+      sF.removeAllRanges(); sF.addRange(r);
+      app._range = r.cloneRange(); app._selRange = r.cloneRange();
+    }
+    app.colorPaint = false; app.shadePaint = false; app.markPop = '';
+    ok('v1.29 字符格式 toggle 引擎就绪',
+       typeof app.toggleCharFmt === 'function' &&
+       typeof app._fmtCarriers === 'function' && typeof app._hasFmtAt === 'function');
+
+    /* B：应用落 <b>（导出 buildBlocks 认），再点真拆 */
+    ed.innerHTML = '<p>甲乙丙</p>'; app.onInput();
+    var pB = ed.querySelector('p');
+    pick(pB.firstChild, 1, pB.firstChild, 2);
+    app.toggleBold();
+    ok('v1.29 加粗生效=落 <b> 语义标签',
+       ed.querySelectorAll('b').length === 1 &&
+       ed.querySelector('b').textContent === '乙' && ed.textContent === '甲乙丙');
+    ok('v1.29 语义标签让导出 buildBlocks 也认粗体',
+       app.buildBlocks().indexOf('1|乙') >= 0);
+    wrapSel(ed.querySelector('b'));
+    app.syncCaretFormat();
+    ok('v1.29 选中粗体字 B 亮起[caretBold=' + app.caretBold + ']', app.caretBold === true);
+    app.toggleBold();
+    ok('v1.29 再点 B=真拆 <b> 恢复默认（不留 400 抵消壳）',
+       ed.querySelectorAll('b,span[style*="font-weight"]').length === 0 &&
+       ed.textContent === '甲乙丙');
+
+    /* 只选一半：按 Range 边界劈开，另一半仍保留格式，文字顺序不能倒 */
+    ed.innerHTML = '<p>甲<b>乙丙</b>丁</p>'; app.onInput();
+    var pP1 = ed.querySelector('p'), bP1 = ed.querySelector('b');
+    pick(bP1.firstChild, 0, bP1.firstChild, 1);
+    app.toggleBold();
+    ok('v1.29 只选前半截：拆相交段、后半截仍粗体[html=' + ed.innerHTML + ']',
+       ed.textContent === '甲乙丙丁' && ed.querySelectorAll('b').length === 1 &&
+       ed.querySelector('b').textContent === '丙');
+    ed.innerHTML = '<p>甲<b>乙丙</b>丁</p>'; app.onInput();
+    var pP2 = ed.querySelector('p'), bP2 = ed.querySelector('b');
+    pick(bP2.firstChild, 1, bP2.firstChild, 2);
+    app.toggleBold();
+    ok('v1.29 只选后半截：文字顺序不倒[html=' + ed.innerHTML + ']',
+       ed.textContent === '甲乙丙丁' && ed.querySelectorAll('b').length === 1 &&
+       ed.querySelector('b').textContent === '乙');
+
+    /* 真点工具条按钮（不是直接调方法）：验证 Vue 事件与 mousedown 保选区都通 */
+    ed.innerHTML = '<p>甲乙丙</p>'; app.onInput();
+    var pClick = ed.querySelector('p');
+    pick(pClick.firstChild, 1, pClick.firstChild, 2);
+    var btnB = document.querySelector('.toolbar button[title^="加粗："]');
+    var btnU = document.querySelector('.toolbar button[title^="下划线："]');
+    ok('v1.29 工具条 B / U 按钮就绪', !!btnB && !!btnU);
+    if (btnB) btnB.click();
+    ok('v1.29 真点 B 按钮加粗生效', ed.querySelectorAll('b').length === 1);
+    if (btnU && ed.querySelector('b')) {
+      wrapSel(ed.querySelector('b'));
+      btnU.click();
+      ok('v1.29 真点 U 按钮下划线生效', ed.querySelectorAll('u').length >= 1);
+    } else { ok('v1.29 真点 U 按钮下划线生效', false); }
+
+    /* I：同上 */
+    ed.innerHTML = '<p>甲乙丙</p>'; app.onInput();
+    var pI = ed.querySelector('p');
+    pick(pI.firstChild, 1, pI.firstChild, 2);
+    app.toggleItalicSel();
+    ok('v1.29 斜体生效=落 <i> 语义标签',
+       ed.querySelectorAll('i').length === 1 && ed.textContent === '甲乙丙');
+    wrapSel(ed.querySelector('i'));
+    app.toggleItalicSel();
+    ok('v1.29 再点 I=真拆 <i> 恢复默认',
+       ed.querySelectorAll('i,span[style*="font-style"]').length === 0 &&
+       ed.textContent === '甲乙丙');
+
+    /* U：起点在壳外也认，且 text-decoration:none 抵消壳的老路已废 */
+    ed.innerHTML = '<p>甲<u>乙丙</u>丁</p>'; app.onInput();
+    var pU = ed.querySelector('p');
+    pick(pU.firstChild, 0, pU.lastChild, 1);
+    app.syncCaretFormat();
+    ok('v1.29 起点在壳外选中有下划线的字 U 亮[caretUnder=' + app.caretUnder + ']',
+       app.caretUnder === true);
+    app.toggleUnderlineSel();
+    ok('v1.29 再点 U=真拆 <u> 恢复默认（不留 none 抵消壳）',
+       ed.querySelectorAll('u').length === 0 &&
+       ed.querySelectorAll('span[style*="text-decoration"]').length === 0 &&
+       ed.textContent === '甲乙丙丁');
+
+    /* A：起点在壳外的颜色壳也能清掉，且不会误进颜色笔模式 */
+    ed.innerHTML = '<p>甲<span style="color:#E11D48">乙丙</span>丁</p>'; app.onInput();
+    var pC = ed.querySelector('p');
+    pick(pC.firstChild, 0, pC.lastChild, 1);
+    app.quickColor();
+    ok('v1.29 再点 A=真拆颜色壳恢复默认[html=' + ed.innerHTML + ']',
+       ed.querySelectorAll('span[style*="color"]').length === 0 &&
+       ed.textContent === '甲乙丙丁' && app.colorPaint === false);
+
+    /* 右键 B：应用 → 再点恢复默认 */
+    ed.innerHTML = '<p>甲乙丙</p>'; app.onInput();
+    var pR = ed.querySelector('p');
+    pick(pR.firstChild, 1, pR.firstChild, 2);
+    app.ctxOpen({ clientX: 60, clientY: 60 });
+    app.ctxToggle('bold');
+    ok('v1.29 右键 B 生效', ed.querySelectorAll('b').length === 1);
+    app.ctxToggle('bold');
+    ok('v1.29 右键再点 B=恢复默认',
+       ed.querySelectorAll('b,span[style*="font-weight"]').length === 0 &&
+       ed.textContent === '甲乙丙');
+
+    /* 右键颜色 / 底纹：已有对应格式则恢复默认 */
+    ed.innerHTML = '<p>甲<span style="color:#E11D48">乙</span>丙</p>'; app.onInput();
+    var pRC = ed.querySelector('p');
+    pick(pRC.firstChild, 0, pRC.lastChild, 1);
+    app.ctxOpen({ clientX: 60, clientY: 60 });
+    app.ctxColor();
+    ok('v1.29 右键颜色：已有颜色则恢复默认',
+       ed.querySelectorAll('span[style*="color"]').length === 0 &&
+       ed.textContent === '甲乙丙');
+    ed.innerHTML = '<p>甲<span class="hlmark" style="background-color:#FACC15">乙</span>丙</p>';
+    app.onInput();
+    var pRS = ed.querySelector('p');
+    pick(pRS.firstChild, 0, pRS.lastChild, 1);
+    app.ctxOpen({ clientX: 60, clientY: 60 });
+    app.ctxShade();
+    ok('v1.29 右键底纹：已有底纹则恢复默认', ed.querySelectorAll('.hlmark').length === 0);
+
+    /* 复位，别把状态带给后面的异步段 */
+    app.ctxShow = false; app.ctxView = 'main'; app.markPop = '';
+    app.colorPaint = false; app.shadePaint = false;
+    sF.removeAllRanges(); app._range = null; app._selRange = null;
+    ed.innerHTML = ''; app.onInput();
+  })();
 
   /* 3.893) 中文字号（小四/四号…）+ 右键直接改样式模板（全级生效） */
   ok('中文字号 16=小四[' + app.sizeLabel(16) + ']', app.sizeLabel(16) === '16px 小四');
@@ -605,6 +1229,10 @@
   /* 等 Vue 落一帧 + enterBubble 里 60ms 的尺寸回调跑完再验 DOM，
      否则 mode-bubble / 词库浮层可能还没渲染出来（偶发假 FAIL） */
   setTimeout(function () {
+    /* 这条长异步链里别的块会改 cfg、回调也可能被重复进入 —— 检查前把前置状态
+       再钉一次，否则"前置被改掉"会被误判成"气泡类没落上"的假 FAIL */
+    app.cfg.alwaysWords = true;
+    app.wordsClosed = false;
     app.syncSidewords();
     app.applyBubbleSizeNow();
     app._lastEscAt = 0;

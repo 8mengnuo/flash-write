@@ -52,6 +52,23 @@ public class FxMain {
     public static boolean shotBubbleCfg = false;
     /** 气泡拖动/双击还原真实鼠标回归：Robot 拖拖动条 + 双击，验证真机事件管线 */
     public static boolean dragTest = false;
+    /** 外部网页截图：左键列表 / 右键添加面板 */
+    public static boolean shotWeb = false;
+    public static boolean shotWebEdit = false;
+    /** 正文超链接截图：设置面板 / 管理面板 / 点击卡片 / 编辑当前链接 */
+    public static boolean shotLink = false;
+    public static boolean shotLinkMgr = false;
+    public static boolean shotLinkCard = false;
+    public static boolean shotLinkEdit = false;
+    /** 格式刷 / 粘贴选项截图 */
+    public static boolean shotBrush = false;
+    public static boolean shotPaste = false;
+    /** v1.29 字符格式 toggle 截图：工具条亮起 / 右键菜单五个格式按钮亮起 */
+    public static boolean shotFmt = false;
+    public static boolean shotFmtCtx = false;
+    /** v1.30 斜体渲染对照 / 格式刷全格式截图 */
+    public static boolean shotItalic = false;
+    public static boolean shotBrushAll = false;
 
     public static void main(String[] args) {
         for (String a : args) {
@@ -74,6 +91,18 @@ public class FxMain {
             if ("--shot-ctx".equals(a)) { shotMode = true; shotCtx = true; }
             if ("--shot-ctx-style".equals(a)) { shotMode = true; shotCtx = true; shotCtxStyle = true; }
             if ("--shot-bubble-cfg".equals(a)) { shotMode = true; shotBubbleCfg = true; }
+            if ("--shot-web".equals(a)) { shotMode = true; shotWeb = true; }
+            if ("--shot-web-edit".equals(a)) { shotMode = true; shotWebEdit = true; }
+            if ("--shot-link".equals(a)) { shotMode = true; shotLink = true; }
+            if ("--shot-link-mgr".equals(a)) { shotMode = true; shotLinkMgr = true; }
+            if ("--shot-link-card".equals(a)) { shotMode = true; shotLinkCard = true; }
+            if ("--shot-link-edit".equals(a)) { shotMode = true; shotLinkEdit = true; }
+            if ("--shot-brush".equals(a)) { shotMode = true; shotBrush = true; }
+            if ("--shot-paste".equals(a)) { shotMode = true; shotPaste = true; }
+            if ("--shot-fmt".equals(a)) { shotMode = true; shotFmt = true; }
+            if ("--shot-fmt-ctx".equals(a)) { shotMode = true; shotFmtCtx = true; }
+            if ("--shot-italic".equals(a)) { shotMode = true; shotItalic = true; }
+            if ("--shot-brush-all".equals(a)) { shotMode = true; shotBrushAll = true; }
             if ("--shot-data".equals(a)) { shotMode = true; shotSettings = true; shotData = true; }
             if ("--gesttest".equals(a)) { shotMode = true; gestTest = true; }
             if ("--fonttest".equals(a)) { shotMode = true; fontTest = true; }

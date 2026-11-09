@@ -17,32 +17,38 @@ window.addEventListener('error', function(e) {
 
   <!-- ═══ 标题栏 ═══ -->
   <div key="header" class="header" @mousedown="dragStart($event)" v-if="mode==='full'">
-    <img class="appicon" :src="iconUrl" @mousedown.stop>
-    <span class="logo">闪写</span>
+    <!-- 标题栏是 flex：每个元素给固定 order，「外部网页」的 order 可拖动改，
+         纯数据驱动不去动 DOM（Vue 重渲染会把手工挪走的节点还原）。 -->
+    <img class="appicon" :src="iconUrl" @mousedown.stop style="order:1">
+    <span class="logo" style="order:2">闪写</span>
     <button class="pill" :class="{on:showDocs}" @click="toggleDocs" @mousedown.stop
-            :title="'文件（多文档）'">文件</button>
+            style="order:10" :title="'文件（多文档）'">文件</button>
     <button class="pill" :class="{on:pinned}" @click="togglePin" @mousedown.stop
-            :title="'置顶窗口 ' + keyOf('pin')">置顶</button>
+            style="order:20" :title="'置顶窗口 ' + keyOf('pin')">置顶</button>
     <button class="pill" :class="{on:wordsVisible}" @click="toggleWords" @mousedown.stop
-            :title="'词库 ' + keyOf('words')">词库</button>
+            style="order:30" :title="'词库 ' + keyOf('words')">词库</button>
     <button class="pill" @click="enterBubble" @mousedown.stop
-            :title="'气泡模式 ' + keyOf('bubble')">气泡</button>
+            style="order:40" :title="'气泡模式 ' + keyOf('bubble')">气泡</button>
     <button class="pill" @click="openSettings" @mousedown.stop
-            :title="'设置 ' + keyOf('settings')">设置</button>
-    <div class="spacer"></div>
-    <span class="chip docname" @click="toggleDocs" @mousedown.stop
+            style="order:50" :title="'设置 ' + keyOf('settings')">设置</button>
+    <!-- 外部网页：左键开列表、右键添加管理；按住可拖到标题栏其它位置 -->
+    <button class="pill" data-rcweb="1" :class="{moving:webDragBtn}" :style="{order:webBtnOrder}"
+            @click="toggleWeb($event)" @mousedown.stop="webBtnDown($event)"
+            title="外部网页：左键打开网页列表；右键添加/管理；按住拖动可改变它在标题栏的位置">外部网页</button>
+    <div class="spacer" style="order:90"></div>
+    <span class="chip docname" style="order:100" @click="toggleDocs" @mousedown.stop
           :title="'当前文件：' + cfg.docName + '（点击切换文件）'">
       {{docTitle}}<b v-if="docUnsaved" style="margin-left:4px">•</b></span>
-    <span class="chip" @mousedown.stop>今日 <b>{{stats.today}}</b> · 全文 <b>{{stats.total}}</b> 字</span>
-    <button class="winbtn" title="最小化" @click="host('minimize')" @mousedown.stop>—</button>
-    <button class="winbtn" title="最大化 / 还原" @click="host('toggleMaximize')" @mousedown.stop>
+    <span class="chip" style="order:101" @mousedown.stop>今日 <b>{{stats.today}}</b> · 全文 <b>{{stats.total}}</b> 字</span>
+    <button class="winbtn" style="order:110" title="最小化" @click="host('minimize')" @mousedown.stop>—</button>
+    <button class="winbtn" style="order:111" title="最大化 / 还原" @click="host('toggleMaximize')" @mousedown.stop>
       <svg width="12" height="12" viewBox="0 0 12 12">
         <rect x="3.5" y="1.5" width="7" height="7" rx="1" fill="none"
               stroke="currentColor" stroke-width="1.2"/>
         <rect x="1.5" y="3.5" width="7" height="7" rx="1" fill="none"
               stroke="currentColor" stroke-width="1.2"/>
       </svg></button>
-    <button class="winbtn close" title="关闭" @click="askClose" @mousedown.stop>✕</button>
+    <button class="winbtn close" style="order:112" title="关闭" @click="askClose" @mousedown.stop>✕</button>
   </div>
 
   <!-- ═══ 写作工具条 ═══ -->
@@ -56,6 +62,10 @@ window.addEventListener('error', function(e) {
     <button class="tb" :title="keyOf('import')" @click="importDoc">导入文档</button>
     <button class="tb" :title="keyOf('history')" @click="showHist">寻回</button>
     <button class="tb" :title="keyOf('find')" @click="openFind">查找替换</button>
+    <button class="tb" data-rclink="1"
+            title="超链接：左键设置/编辑当前链接；右键管理全文所有链接与「点击直接打开」开关。正文右键也会按当前文字自动分「编辑/添加」"
+            @mousedown.stop @click="openLinkAdd($event)"
+            @contextmenu.prevent.stop="openLinkMgr($event)">超链接</button>
     <div class="spacer"></div>
     <!-- 字体：下拉框直接显示"光标处字体"（默认=正文样式），选中文字后选=只改选中 -->
     <select class="tbsel fontsel" :value="caretFont"
@@ -81,9 +91,11 @@ window.addEventListener('error', function(e) {
     <input class="tbnum" type="number" min="8" max="200" step="1" v-model="sizeInput"
            title="自定义字号（px，8~200）：填好后回车或点别处生效，只改选中的文字"
            placeholder="px" @keydown.enter.prevent="applySizeInput" @blur="applySizeInput">
-    <button class="tb" :class="{on:caretBold}" title="加粗选中文字（亮起=光标处是粗体）" @click="toggleBold"><b>B</b></button>
-    <button class="tb" :class="{on:caretItalic}" title="斜体选中文字（亮起=光标处是斜体）" @click="toggleItalicSel"><i>I</i></button>
-    <button class="tb" :class="{on:caretUnder}" title="下划线选中文字（亮起=光标处有下划线）" @click="toggleUnderlineSel"><u>U</u></button>
+    <!-- B/I/U：亮起=当前文字带这个格式，再点=真拆掉该格式恢复默认（同「纹」）；
+         @mousedown.prevent 保住编辑区选区，不然按钮一按焦点就跑、格式化找不到选区 -->
+    <button class="tb" :class="{on:caretBold}" title="加粗：选中文字后生效；亮起=当前文字是粗体，再点恢复默认" @mousedown.prevent.stop @click="toggleBold"><b>B</b></button>
+    <button class="tb" :class="{on:caretItalic}" title="斜体：选中文字后生效；亮起=当前文字是斜体，再点恢复默认" @mousedown.prevent.stop @click="toggleItalicSel"><i>I</i></button>
+    <button class="tb" :class="{on:caretUnder}" title="下划线：选中文字后生效；亮起=当前文字有下划线，再点恢复默认" @mousedown.prevent.stop @click="toggleUnderlineSel"><u>U</u></button>
     <button class="tb" :class="{on:colorPaint || selColorOn}" data-rcmark="fg"
             title="文字颜色：亮起=当前文字带颜色，再点一下即清除；不亮时点一下开颜色笔（选中的文字自动变色）；右键换颜色"
             @mousedown.stop @click="quickColor">
@@ -92,6 +104,11 @@ window.addEventListener('error', function(e) {
             title="字纹：亮起=当前文字带底纹/标记，再点一下即清除；不亮时点一下开字纹笔（选中的文字自动上纹）；右键选颜色或标记"
             @mousedown.stop @click="quickShade">
       <span :style="{background:lastShadeBg,borderRadius:'3px',padding:'0 2px'}">纹</span></button>
+    <!-- 格式刷（v1.28）：先选中文字 → 单击把全部格式（含超链接属性）刷给下一段选中文字；
+         320ms 内连击两次 = 批量格式刷（可反复用）；已进入后再点一次 = 退出。无提示。 -->
+    <button class="tb" :class="{on:brushOn, batch:brushBatch}" data-brush="1"
+            title="格式刷：先选中文字，点一下把格式（含超链接）刷给下一段选中文字；连击两次=批量格式刷可重复用；进入后再点一次退出"
+            @mousedown.stop @click="clickBrush">格式刷</button>
     <span class="tbdiv"></span>
     <!-- ★ 标签已并入底纹：右键"纹"→ 取色面板里的"标记为…"（带名字的彩色底纹，
         导航面板可跳转）。工具栏不再有独立的标签按钮。 -->
@@ -129,7 +146,7 @@ window.addEventListener('error', function(e) {
          :class="{bold:cfg.bold}"
          :style="mode==='full' && wallpaper ? {background:'transparent'} : {}"
          data-ph="从这里开始，随心写 —"
-         @input="onInput" @mousedown.stop="edDown"
+         @input="onInput" @paste="onPaste" @mousedown.stop="edDown"
          @contextmenu.prevent="ctxOpen($event)"></div>
   </div>
 
@@ -148,6 +165,15 @@ window.addEventListener('error', function(e) {
 
     <!-- 主面板 -->
     <template v-if="ctxView==='main'">
+      <!-- 超链接：右键落在链接上=编辑当前，落在普通文字上=添加（v1.27） -->
+      <div class="ctxhd">超链接 · {{ctxHasLink ? '当前文字是链接' : '当前文字不是链接'}}</div>
+      <button class="ctxitem ctxlinkitem" @click="ctxLinkAction">
+        {{ctxHasLink ? '编辑当前超链接…' : '添加超链接…'}}
+        <span class="kbd">{{ctxHasLink ? (ctxLinkTarget || '改目标') : '选中的文字'}}</span>
+      </button>
+      <button class="ctxitem" @click="ctxLinkManage">管理全部超链接…
+        <span class="kbd">{{linkList.length}} 条</span></button>
+      <div class="msep"></div>
       <div class="ctxhd">段落样式 · {{ctxScope}}<span class="ctxhd-tip">{{ctxScope==='整段' ? '（没选中：格式改整段）' : '（字体/字号/B I U 只改选中这几个字）'}}</span></div>
       <div class="ctxtags">
         <button class="ctxtag" :class="{on:ctxCur==='p'}" @click="ctxApply('p')" data-rcstyle="p"
@@ -164,14 +190,16 @@ window.addEventListener('error', function(e) {
         <span class="kbd">{{ctxFontName || '默认'}} ›</span></button>
       <button class="ctxitem" @click="ctxView='size'">字号
         <span class="kbd">{{sizeLabel(ctxFontSize)}} ›</span></button>
+      <!-- v1.29：五个按钮亮起=当前文字带该格式，再点即恢复默认（同工具条） -->
       <div class="ctxgrid" style="grid-template-columns:repeat(3,1fr);padding-top:0">
-        <button :class="{on:ctxBold}" @click="ctxToggle('bold')"><b>B</b></button>
-        <button :class="{on:ctxItalic}" @click="ctxToggle('italic')"><i>I</i></button>
-        <button :class="{on:ctxUnder}" @click="ctxToggle('underline')"><u>U</u></button>
+        <button :class="{on:ctxBold}" title="加粗：亮起时再点=恢复默认" @click="ctxToggle('bold')"><b>B</b></button>
+        <button :class="{on:ctxItalic}" title="斜体：亮起时再点=恢复默认" @click="ctxToggle('italic')"><i>I</i></button>
+        <button :class="{on:ctxUnder}" title="下划线：亮起时再点=恢复默认" @click="ctxToggle('underline')"><u>U</u></button>
       </div>
       <div class="ctxgrid" style="grid-template-columns:repeat(2,1fr);padding-top:0">
-        <button @click="ctxColor" :style="{color:lastColor}">颜色<span class="ctxhd-tip">上次色</span></button>
-        <button @click="ctxShade">底纹<span class="ctxhd-tip">上次色</span></button>
+        <button :class="{on:ctxHasColor}" :style="ctxHasColor ? {} : {color:lastColor}"
+                title="文字颜色：亮起时再点=恢复默认" @click="ctxColor">颜色<span class="ctxhd-tip">{{ctxHasColor ? '已带色' : '上次色'}}</span></button>
+        <button :class="{on:ctxHasShade}" title="底纹：亮起时再点=恢复默认" @click="ctxShade">底纹<span class="ctxhd-tip">{{ctxHasShade ? '已带纹' : '上次色'}}</span></button>
       </div>
       <div class="msep"></div>
       <button class="ctxitem" @click="ctxIndent">段首缩进两格</button>
@@ -462,6 +490,147 @@ window.addEventListener('error', function(e) {
       <button class="mitem" @click="showHist">文字寻回…</button>
       <button class="mitem" @click="askClearAll">清空全部文本</button>
     </div>
+  </div>
+
+  <!-- ═══ 外部网页：左键列表 / 右键添加管理（v1.26：只留 Gitee 最新版 + 收藏夹拖拽排序） ═══ -->
+  <div class="pop webpop" data-popkey="web" v-if="showWeb"
+       :style="[webPos, popOff.web]" @mousedown.stop>
+    <div class="webhd"><b>外部网页</b><span class="x" @click="showWeb=false" title="关闭">✕</span></div>
+    <div class="ctxhd">最新版本获取<span class="ctxhd-tip">（Gitee · 系统默认浏览器）</span></div>
+    <button class="webitem" v-for="(o,i) in officialWebs" :key="'ow'+i"
+            @click="openWebAt(o.url)" :title="o.url">
+      <span class="webname">{{o.name}}</span>
+      <span class="weburl">{{o.note}}</span>
+    </button>
+    <div class="ctxhd">我的网页<span class="ctxhd-tip">（按住 ≡ 拖动排序）</span></div>
+    <div class="webempty" v-if="!webLinks.length">还没有添加，右键「外部网页」按钮添加</div>
+    <div class="webdrag" v-for="(w,i) in webLinks" :key="'wl'+i" data-wl="1"
+         :class="{dropbefore:webDragOver===i}">
+      <span class="wgrip" title="按住上下拖动，改变收藏夹里的顺序"
+            @mousedown.stop.prevent="webLinkDown($event,i)">≡</span>
+      <button class="webitem" @click="webLinkOpen(w.url)" :title="w.url">
+        <span class="webname">{{w.name}}</span>
+        <span class="weburl">{{w.url}}</span>
+      </button>
+    </div>
+    <div class="webdroplast" v-if="webLinks.length && webDragOver===webLinks.length"></div>
+    <button class="webadd" @click="openWebEdit()">＋ 添加网页…</button>
+  </div>
+
+  <div class="pop webpop" data-popkey="webedit" v-if="showWebEdit"
+       :style="[webPos, popOff.webedit]" @mousedown.stop>
+    <div class="webhd"><b>添加外部网页</b><span class="x" @click="showWebEdit=false" title="关闭">✕</span></div>
+    <div class="wadd">
+      <input v-model="webName" placeholder="名称（例：我的博客）" maxlength="40">
+      <input v-model="webUrl" placeholder="网址（https://…）" maxlength="500"
+             @keydown.enter.prevent="addWeb">
+      <button class="save" @click="addWeb">添加</button>
+    </div>
+    <div class="ctxhd">已添加（{{webLinks.length}}）<span class="ctxhd-tip">按住 ≡ 拖动排序</span></div>
+    <div class="webempty" v-if="!webLinks.length">添加后，左键「外部网页」即可打开</div>
+    <div class="webrow" v-for="(w,i) in webLinks" :key="'wr'+i" data-wl="1"
+         :class="{dropbefore:webDragOver===i}">
+      <span class="wgrip" title="按住上下拖动，改变收藏夹里的顺序"
+            @mousedown.stop.prevent="webLinkDown($event,i)">≡</span>
+      <span class="webname" :title="w.url">{{w.name}}</span>
+      <span class="x" title="删除" @click="delWeb(i)">✕</span>
+    </div>
+  </div>
+
+  <!-- ═══ 正文超链接：左键「设置/编辑」 / 右键「管理」 / 点击文字弹卡片（v1.27） ═══
+       刻意不用 <a href>：WebView 一点就会把编辑器页面导航走，用户实测「退不回去」。
+       外部网站复制来的 <a> 也在粘贴时归一化成 span.txtlink，目标只存 data-href，
+       打开一律由 Java 交给系统默认程序（默认浏览器 / 资源管理器）。 -->
+  <div class="pop lnkpop" data-popkey="linkadd" v-if="showLinkAdd"
+       :style="[linkPos, popOff.linkadd]" @mousedown.stop>
+    <div class="webhd"><b>{{linkEditing ? '编辑超链接' : '设置超链接'}}</b>
+      <span class="x" @click="showLinkAdd=false" title="关闭">✕</span></div>
+    <div class="lnkhint" v-if="linkSelText">{{linkEditing ? '链接文字' : '选中文字'}}：{{linkSelText}}</div>
+    <div class="lnkhint" v-else>没选中文字 —— 会插入一条以目标为文字的新链接</div>
+    <div class="lnkrow">
+      <button class="lnkkind" :class="{on:linkKind==='url'}" @click="linkKind='url'">网址</button>
+      <button class="lnkkind" :class="{on:linkKind==='file'}" @click="linkKind='file'">本地文件 / 文件夹</button>
+    </div>
+    <div class="lnkrow">
+      <input class="lnkinput" v-model="linkTarget"
+             :placeholder="linkKind==='url' ? 'https://…（只支持 http/https）' : '点右边按钮选择本地文件或文件夹'"
+             @keydown.enter.prevent="applyLink">
+    </div>
+    <div class="lnkrow" v-if="linkKind==='file'">
+      <button class="lnkbtn" @click="pickLinkFile()">选择文件…</button>
+      <button class="lnkbtn" @click="pickLinkDir()">选择文件夹…</button>
+    </div>
+    <div class="lnkfoot">
+      <button class="lnkbtn" v-if="linkEditing" @click="delEditingLink()">删除链接（保留文字）</button>
+      <button class="lnkbtn" @click="openLinkMgr()">管理全部（{{linkList.length}}）…</button>
+      <button class="lnkbtn primary" @click="applyLink">{{linkEditing ? '保存修改' : '设为超链接'}}</button>
+    </div>
+    <label class="lnkopt">
+      <input type="checkbox" :checked="linkDirectOpen"
+             @change="setLinkDirectOpen($event.target.checked)">
+      点击超链接直接打开（网址→默认浏览器，本地→资源管理器）；不勾则弹卡片让我选
+    </label>
+    <div class="lnktip">闪写不会自己打开网页：外部网站复制来的链接也会转成可管理的链接，点击一律走系统默认程序。</div>
+  </div>
+
+  <div class="pop lnkpop linkmgr" data-popkey="linkmgr" v-if="showLinkMgr"
+       :style="[linkPos, popOff.linkmgr]" @mousedown.stop>
+    <div class="webhd"><b>超链接管理（{{linkList.length}}）</b>
+      <span class="x" @click="showLinkMgr=false" title="关闭">✕</span></div>
+    <label class="lnkopt">
+      <input type="checkbox" :checked="linkDirectOpen"
+             @change="setLinkDirectOpen($event.target.checked)">
+      点击超链接直接打开（网址→默认浏览器，本地→资源管理器）；不勾则弹卡片让我选
+    </label>
+    <div class="lnkrow" style="padding-top:2px">
+      <button class="lnkbtn primary" @click="openLinkAdd()">＋ 给选中文字加超链接…</button>
+      <span class="lnkhint" style="padding:0">也可以直接在正文里右键</span>
+    </div>
+    <div class="webempty" v-if="!linkList.length">正文里还没有超链接。选中文字后点工具条「超链接」即可创建。</div>
+    <div class="lnkitem" v-for="(L,i) in linkList" :key="'lk'+i">
+      <div class="lnkit-h">
+        <span class="lnktext" :title="L.text">{{L.text}}</span>
+        <span class="lnkkindtag">{{L.kind==='file' ? '本地' : '网址'}}</span>
+        <span class="x" title="删除链接（保留文字）" @click="delLink(i)">✕</span>
+      </div>
+      <div class="lnkit-r">
+        <input class="lnkinput" :value="L.target" :title="L.target"
+               @change="setLinkTarget(i,$event.target.value)" @keydown.enter.prevent="$event.target.blur()">
+        <button class="lnkbtn" title="复制目标地址" @click="copyLinkTarget(L.target)">复制</button>
+        <button class="lnkbtn" title="在正文里选中这段文字" @click="gotoLink(i)">定位</button>
+        <button class="lnkbtn" v-if="L.kind==='file'" title="重新选择本地文件" @click="mgrPickFile(i)">改文件…</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pop lnkpop linkcard" data-popkey="linkcard" v-if="linkCard.show"
+       :style="[linkCardPos, popOff.linkcard]" @mousedown.stop>
+    <div class="webhd"><b>超链接</b><span class="x" @click="linkCard.show=false" title="关闭">✕</span></div>
+    <div class="lnkhint">{{linkCard.text}}</div>
+    <div class="lnkcard-target" :title="linkCard.target">{{linkCard.target}}</div>
+    <div class="lnkfoot">
+      <button class="lnkbtn" @click="editCardLink()">编辑这条…</button>
+      <button class="lnkbtn" @click="copyLinkTarget(linkCard.target)">复制目标</button>
+      <button class="lnkbtn" @click="openLinkMgr()">管理全部…</button>
+      <button class="lnkbtn primary" @click="launchLink(linkCard.kind,linkCard.target)">用默认程序打开</button>
+    </div>
+    <label class="lnkopt">
+      <input type="checkbox" :checked="linkDirectOpen"
+             @change="setLinkDirectOpen($event.target.checked)">
+      以后点击直接打开（不再弹这张卡片）
+    </label>
+  </div>
+
+  <!-- ═══ 粘贴选项（v1.28）：外来 HTML 落地后给两条路，默认已经是「保持原格式」 ═══ -->
+  <div class="pop lnkpop pastecard" v-if="pasteCard.show"
+       :style="pasteCard.pos" @mousedown.stop>
+    <div class="webhd"><b>粘贴选项</b><span class="x" @click="closePasteCard()" title="关闭">✕</span></div>
+    <div class="lnkfoot" style="justify-content:flex-start">
+      <button class="lnkbtn" @click="keepPasteFormat()">保持原格式</button>
+      <button class="lnkbtn primary" @click="matchPasteFormat()">匹配当前格式</button>
+    </div>
+    <div class="lnktip">「匹配当前格式」＝和粘贴处前一个字一致（字体、字号、粗细、颜色、底纹、标记），
+      外来样式会清掉，文字和换行保留，之后照样能用工具条改。</div>
   </div>
 
   <!-- ═══ 导出弹窗（多格式） ═══ -->
@@ -996,6 +1165,12 @@ window.addEventListener('error', function(e) {
    JS -> Java: host('方法名', 参数...)
    Java -> JS: 调 window.app 上的公开方法
    ══════════════════════════════════════════════════════════ */
+/* 正在编辑 / 卡片指向 / 右键命中的正文链接 DOM 元素。
+   绝不放进 Vue data：Vue3 会把对象包成 Proxy，DOM 方法一被代理就 Illegal invocation。 */
+var LINK_EDIT_EL = null, LINK_CARD_EL = null, CTX_LINK_EL = null;
+/* 刚粘贴进正文的那批顶层节点 + 粘贴处前一个字的格式模板。
+   DOM 节点不能进 Vue data（会被 Proxy 包坏），所以放模块级变量。 */
+var PASTE_INFO = null;
 var app = Vue.createApp({
   data() { return {
     mode: 'full',            // full | bubble
@@ -1062,7 +1237,29 @@ var app = Vue.createApp({
           skin: 'light', bubbleDblRestore: true, bubbleAutoSize: true,
           bubbleIntrude: false, intrudeOpacity: 40, intrudeSize: 100,
           autoSave: true, alwaysWords: false, wordPrefix: 'z', docName: '未命名.txt',
-          keys: {}},
+          keys: {}, webLinks: []},
+    /* 外部网页（v1.26）：「最新版本获取」只保留 Gitee Releases 一个入口 */
+    officialWebs: [
+      {name:'Gitee · 最新版本', note:'gitee.com/meng_nuo/flash-write/releases',
+       url:'https://gitee.com/meng_nuo/flash-write/releases'}
+    ],
+    webLinks: [], showWeb: false, showWebEdit: false,
+    webName: '', webUrl: '', webPos: {left:'14px', top:'84px'},
+    /* 收藏夹拖拽排序 / 顶部按钮拖拽改位（顺序写进独立 linkopt.properties） */
+    webDragOver: -1, webDragBtn: false, webBtnOrder: 60,
+    /* 正文超链接（v1.27）：目标只存 data-href，绝不放进 <a href>；
+       外部网站粘贴来的 <a> 一律归一化成同样的可管理链接 */
+    showLinkAdd: false, showLinkMgr: false, linkPos: {left:'14px', top:'90px'},
+    linkKind: 'url', linkTarget: '', linkSelText: '', linkList: [],
+    linkDirectOpen: false, linkEditing: false,
+    linkCard: {show:false, text:'', target:'', kind:'url'},
+    linkCardPos: {left:'14px', top:'120px'},
+    /* 粘贴选项（v1.28）：外来 HTML 落地后弹两个按钮，默认已「保持原格式」 */
+    pasteCard: {show:false, pos:{left:'14px', top:'90px'}},
+    /* 格式刷（v1.28）：单击=刷一次，320ms 内连击两次=批量刷，再点一次=退出 */
+    brushOn: false, brushBatch: false, brushFmt: null,
+    /* 右键菜单按「当前文字是不是链接」分支 */
+    ctxHasLink: false, ctxLinkTarget: '', ctxLinkXY: {x:14, y:120},
     /* 查找替换 */
     showFind: false, findText: '', replText: '', matchCase: false,
     findCount: 0, findIdx: 0,
@@ -1076,6 +1273,7 @@ var app = Vue.createApp({
     /* 右键样式菜单（WPS 式：段落样式 + 字体/字号/格式直改） */
     ctxShow: false, ctxPos: {}, ctxCur: 'p', ctxView: 'main',
     ctxFontName: '', ctxFontSize: 16, ctxBold: false, ctxItalic: false, ctxUnder: false,
+    ctxHasColor: false, ctxHasShade: false,   // v1.29：右键「颜色/底纹」亮起=已有该格式，再点恢复默认
     ctxScope: '整段', ctxStyleName: '正文',
     ctxSizes: [12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 26, 28, 30, 34, 40, 48, 56, 64],
     ctxStyleLevel: 'p',
@@ -1237,6 +1435,16 @@ var app = Vue.createApp({
     showMore:      function(v) { if (v) this.popOff.more = {}; },
     showChars:     function(v) { if (v) this.popOff.chars = {}; },
     markPop:       function(v) { if (v) this.popOff.mark = {}; },
+    /* Vue3：只能有一个 watch 块，新增 watcher 必须合并进这里（同名 key 后者会覆盖前者） */
+    showWeb:       function(v) { if (v) this.popOff.web = {}; },
+    showWebEdit:   function(v) { if (v) this.popOff.webedit = {}; },
+    /* 关掉面板就退出编辑态：DOM 引用绝不留过夜（Vue3 模板不认 _ 开头属性，
+       元素引用一律放模块级变量，这里只是把状态复位） */
+    showLinkAdd:   function(v) {
+      if (v) this.popOff.linkadd = {};
+      else { this.linkEditing = false; LINK_EDIT_EL = null; }
+    },
+    showLinkMgr:   function(v) { if (v) this.popOff.linkmgr = {}; },
     /* 冻结窗口：设置 / 退出确认时背后界面定格 */
     showSettings: function(v) { this.syncFrozen(); },
     showCloseModal: function(v) { this.syncFrozen(); },
@@ -1258,6 +1466,19 @@ var app = Vue.createApp({
     var self = this;
     /* 全局快捷键（不依赖焦点，在设置/词库外层也能用） */
     document.addEventListener('keydown', function(e) { self.onGlobalKey(e); });
+    /* 打字 / 输入法第一键之前，把折叠光标从链接壳里挪到出口（v1.28）。
+       捕获阶段执行，绝不能 preventDefault / consume —— 输入法还要收这个键。
+       keyCode 229（组字中）也要放行到这一步，否则中文第一字就落进链接里了。 */
+    document.addEventListener('keydown', function(e) {
+      if (e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
+      var k = String(e.key || '');
+      if (/^(Backspace|Delete|Tab|Escape|Arrow\w+|Home|End|Page\w+|Insert|F\d+|Shift|Control|Alt|Meta|CapsLock|PrintScreen|ScrollLock|Pause|ContextMenu|NumLock)$/.test(k)) return;
+      var s = window.getSelection();
+      if (!s || !s.rangeCount || !s.isCollapsed) return;
+      var edk = document.getElementById('editor');
+      if (!edk || !edk.contains(s.getRangeAt(0).startContainer)) return;
+      self.moveCaretAfterLink();
+    }, true);
     /* 三连击：气泡 → 完整；完整模式标题栏空白 → 气泡 */
     document.addEventListener('mousedown', function(e) { self.triClick(e); });
     /* ══ 右键兜底（捕获阶段）══
@@ -1311,6 +1532,24 @@ var app = Vue.createApp({
       if (rc) tag = rc.getAttribute('data-rcstyle');
       else if (t.closest('#editor')) tag = '#editor';
       else {
+      /* 工具条「超链接」右键：打开全文超链接管理面板 */
+        var lk = t.closest('[data-rclink]');
+        if (lk) {
+          e.preventDefault();
+          var lx = e.clientX, ly = e.clientY;
+          setTimeout(function() {
+            app.openLinkMgr({ clientX: lx, clientY: ly, type: 'contextmenu' });
+          }, 0);
+          return;
+        }
+      /* 工具条「外部网页」右键：打开添加/管理面板（同样是 mousedown(button=2) 兜底） */
+        var wb = t.closest('[data-rcweb]');
+        if (wb) {
+          e.preventDefault();
+          var wx = e.clientX, wy = e.clientY;
+          setTimeout(function() { app.openWebEdit({ clientX: wx, clientY: wy }); }, 0);
+          return;
+        }
       /* 工具条"纹/A"右键：打开取色面板（WebView 不派发 contextmenu，靠这兜底）。
          ★ 面板要贴着按钮弹：按按钮的真实位置算坐标，底纹在左边面板就开在左边，
            不再写死在右上角（"颜色调节不在底纹同一侧"就是这么来的）。 */
@@ -1380,6 +1619,10 @@ var app = Vue.createApp({
     }, true);
     /* 底纹笔/颜色笔：拖选/双击选中一松手就上色（每下拖选只上一次，不重复套） */
     document.addEventListener('mouseup', function(ev) {
+      /* 格式刷：用户拖选下一段文字松手即刷（慢一拍，等双击选词定型） */
+      var edB = document.getElementById('editor');
+      if (self.brushOn && edB && edB.contains(ev.target))
+        setTimeout(function() { self.tryBrushPaint(); }, 0);
       if (!self._paintArmed) return;
       self._paintArmed = false;
       if (!self.shadePaint && !self.colorPaint) return;
@@ -1500,6 +1743,14 @@ var app = Vue.createApp({
                             {name:'灵感', color:'#8B5CF6'}];
       this.decorImg = this.host('getDecorImage') || '';
       if (this.decorImg) this._loadDecorImg(this.decorImg);
+      /* 外部网页：getConfig 里带回用户已保存的链接列表（坏数据回落空数组） */
+      try {
+        this.webLinks = Array.isArray(this.cfg.webLinks) ? this.cfg.webLinks.slice() : [];
+      } catch (e) { this.webLinks = []; }
+      /* 超链接开关 + 「外部网页」按钮位置（独立文件，不跟 config.properties 打架） */
+      this.linkDirectOpen = !!this.cfg.linkDirectOpen;
+      var _wo = parseInt(this.cfg.webBtnOrder, 10);
+      this.webBtnOrder = (_wo >= 5 && _wo <= 65) ? _wo : 60;
       this.plugins = JSON.parse(this.host('listPlugins') || '[]');
       this.docs = JSON.parse(this.host('getDocs') || '[]');
       this.showWords = !!this.cfg.alwaysWords;    // 常驻词库：开机就贴在右侧
@@ -1513,6 +1764,12 @@ var app = Vue.createApp({
       var savedHtml = this.host('getDraftHtml') || '';
       if (savedHtml) ed.innerHTML = savedHtml;
       else ed.innerText = draft;
+      /* 老草稿里可能躺着从网页粘来的 <a href>：一律转成 span.txtlink，
+         否则点一下 WebView 就把整个应用导航走（用户实测「退不回去」）。 */
+      this.convertAnchors(ed, true);
+      this.watchAnchors();
+      this.scanLinks();
+      this.syncCnItalic();      // 冷启动恢复的草稿里，中文 <i> 立刻可见
       this.docLink = this.host('getDocLink') || '';
       this.refreshStats();
       try {
@@ -1616,6 +1873,8 @@ var app = Vue.createApp({
       this._saveTimer = setTimeout(function() { self.refreshStats(); }, 1200);
       /* 段落变了（回车/套标题/改字号）：工具条上的字体字号跟着刷新 */
       this.syncCaretFormat();
+      /* 斜体壳可能被新打字 / 粘贴 / 格式刷带进来：节流补一次中文倾斜标记 */
+      this.scheduleCnItalic();
     },
 
     /** 输入兜底：光标前是「前缀+数字」或「前缀+自定义码」时替换为词条。
@@ -2913,6 +3172,20 @@ var app = Vue.createApp({
           if (hitC) { this.selColorOn = true; break; }
         }
       }
+      /* v1.29：B/I/U 亮起也按「选区碰到的显式格式壳」判定 —— 起点在壳外一半
+         起选、或选区跨着多个壳都能认（和底纹 selShade 一套逻辑）。
+         没有显式壳时才用上面算出的模板/继承计算样式兜底。 */
+      var rFmt = this.pickSelRange();
+      var fKinds = ['bold', 'italic', 'underline'];
+      var fFlags = ['caretBold', 'caretItalic', 'caretUnder'];
+      for (var fk = 0; fk < fKinds.length; fk++) {
+        var car = this._fmtCarriers(rFmt, fKinds[fk]);
+        if (!car.length) continue;
+        var lit = false;
+        for (var fc = 0; fc < car.length; fc++)
+          if (this._fmtCarrierOn(car[fc], fKinds[fk])) { lit = true; break; }
+        this[fFlags[fk]] = lit;
+      }
     },
     /** 工具条字体下拉：只给选中文字换字体（模板样式一点不动） */
     applySelFont: function(v) {
@@ -2983,55 +3256,331 @@ var app = Vue.createApp({
         return getComputedStyle(n)[prop] || '';
       } catch (e) { return ''; }
     },
-    /**
-     * 加粗：只对选中文字生效（WPS 手感），只在选区上包 span —— 段落模板不动。
-     */
-    toggleBold: function() {
-      var r = this.pickSelRange();
-      if (!r) {
-        /* ★ 光标停在带格式的字上（按钮亮着）：再点一下 = 拆掉光标处这层格式 */
-        if (this.caretBold && this.removeSelFormat('fontWeight')) {
-          this.syncCaretFormat(); return;
+    /* ══════════ 字符格式统一 toggle（v1.29）══════════
+       和「底纹」完全同一个手感：按钮亮 = 当前文字带这个格式，再点 = 真把这一层
+       格式拆掉恢复默认，而不是再包一层 font-weight:400 / text-decoration:none。
+       老实现三个硬伤：
+         ① 只看选区起点的计算样式 —— 从壳外一半起选就认不出格式，按钮不亮；
+         ② 「取消」靠再包一层抵消样式 —— text-decoration 尤其坑：CSS 上后代的
+            none 根本压不掉祖先的 underline，看起来就是「点了没恢复」；
+         ③ 一律 <span style> —— 导出 buildBlocks 只认 <b>/<i>/<u> 裸标签，
+            加粗斜体等于白设。现在应用格式一律落语义标签。
+       判定按「选区碰到的显式壳」（intersectsNode），部分相交只拆相交段
+       （Range.extractContents 会自动把祖先壳劈开、选区外留原壳）；
+       没选中时按光标所在层拆（同 clearSelMark）。 */
+    _fmtProp: function(kind) {
+      return {bold:'fontWeight', italic:'fontStyle',
+              underline:'textDecoration', color:'color'}[kind] || '';
+    },
+    _fmtOnVal: function(kind) {
+      return {bold:'700', italic:'italic', underline:'underline',
+              color:(this.lastColor || '#E11D48')}[kind] || '';
+    },
+    _fmtOffVal: function(kind) {
+      return {bold:'400', italic:'normal', underline:'none', color:'inherit'}[kind] || '';
+    },
+    /** 元素是否「显式承载」这种字符格式。显式关掉的壳（font-weight:400）也算 ——
+        再点一下就是要把这层覆盖也拆掉，回到段落样式默认。 */
+    _fmtCarrier: function(el, kind) {
+      if (!el || el.nodeType !== 1 || !el.tagName) return false;
+      var tg = el.tagName, st = el.style || {};
+      if (kind === 'bold')    return /^(B|STRONG)$/.test(tg) || !!st.fontWeight;
+      if (kind === 'italic')  return /^(I|EM)$/.test(tg) || !!st.fontStyle;
+      if (kind === 'underline')
+        return tg === 'U' || !!(st.textDecoration || st.textDecorationLine);
+      if (kind === 'color')   return !!st.color;
+      return false;
+    },
+    /** 这个壳是「开着」还是「显式关掉」，用来决定工具条按钮亮不亮 */
+    _fmtCarrierOn: function(el, kind) {
+      var st = el.style || {};
+      if (kind === 'bold')
+        return /^(B|STRONG)$/.test(el.tagName) || /bold|bolder/i.test(st.fontWeight || '') ||
+               ((parseInt(st.fontWeight, 10) || 0) >= 600);
+      if (kind === 'italic')
+        return /^(I|EM)$/.test(el.tagName) || /italic|oblique/i.test(st.fontStyle || '');
+      if (kind === 'underline')
+        return el.tagName === 'U' || /underline/.test(st.textDecoration || st.textDecorationLine || '');
+      return !!st.color && String(st.color).toLowerCase() !== 'inherit';
+    },
+    /** 与选区相交（塌缩时=包住光标）的所有显式格式壳 */
+    _fmtCarriers: function(r, kind) {
+      var ed = document.getElementById('editor');
+      if (!ed) return [];
+      var out = [], all = ed.querySelectorAll('span,b,strong,i,em,u,font');
+      var caretNode = null;
+      if (!r || r.collapsed) {
+        var s0 = window.getSelection();
+        if (s0 && s0.rangeCount) caretNode = s0.getRangeAt(0).startContainer;
+        else if (r) caretNode = r.startContainer;
+      }
+      for (var i = 0; i < all.length; i++) {
+        var el = all[i];
+        if (!this._fmtCarrier(el, kind)) continue;
+        if (r && !r.collapsed) {
+          var hit = false;
+          try { hit = r.intersectsNode(el); } catch (eI) {}
+          if (!hit) continue;
+        } else {
+          if (!caretNode || !el.contains(caretNode)) continue;
         }
-        this.toast('请先选中要加粗的文字'); return;
+        out.push(el);
       }
-      var on = (parseInt(this._selStyle(r, 'fontWeight'), 10) || 400) >= 600;
-      if (!this._styleRange({range: r, whole: false}, {fontWeight: on ? '400' : '700'}, true)) {
-        this.toast('改不动，换个位置再试'); return;
+      /* ★ Range.selectNodeContents(壳) 或「只选了壳里那几个字」时，
+         WebKit 的 intersectsNode(壳) 会返回 false（边界落在元素内部，
+         而壳自身的边界点在父节点上）—— 不补这一遍祖先壳，按钮就不亮，
+         再点又跑去包一层 400/none 抵消壳，正是「点了没恢复」的经典症状。 */
+      if (r && !r.collapsed && ed) {
+        var walks = [r.startContainer, r.endContainer];
+        for (var wi = 0; wi < walks.length; wi++) {
+          var anc = walks[wi];
+          while (anc && anc !== ed) {
+            if (anc.nodeType === 1 && this._fmtCarrier(anc, kind) && out.indexOf(anc) < 0)
+              out.push(anc);
+            anc = anc.parentNode;
+          }
+        }
       }
-      this.syncCaretFormat();          // 重复应用即取消，不再弹提示
+      return out;
+    },
+    /** extractContents 会把「选区在内部」的祖先壳克隆进片段，原件留在正文里
+        变成空壳（<b></b> / <span style="color:…"></span>）——不清掉的话
+        DOM 里看着格式还在，按钮也还会亮。这里统一扫一遍空壳拆干净。 */
+    _sweepEmptyFmt: function(kind) {
+      var ed = document.getElementById('editor');
+      if (!ed) return;
+      var all = ed.querySelectorAll('span,b,strong,i,em,u,font');
+      for (var i = all.length - 1; i >= 0; i--) {
+        var el = all[i];
+        if (!this._fmtCarrier(el, kind)) continue;
+        if (el.textContent || el.querySelector('img,br,hr')) continue;
+        this._stripFmtFromEl(el, kind);
+      }
+    },
+    /** 模板 / 继承层面是否已经带该格式（标题自带粗体）。
+        underline 一律返回 false：text-decoration 不能被后代 none 抵消，
+        CSS 驱动的链接下划线也不该被 U 拿去乱拆。 */
+    _computedFmtOn: function(r, kind) {
+      if (kind !== 'bold' && kind !== 'italic') return false;
+      try {
+        var n = (r && !r.collapsed) ? r.startContainer : null;
+        if (!n) {
+          var s = window.getSelection();
+          n = (s && s.rangeCount) ? s.getRangeAt(0).startContainer : null;
+        }
+        if (!n) return false;
+        var el = n.nodeType === 3 ? n.parentElement : n;
+        if (!el) return false;
+        var cs = getComputedStyle(el);
+        if (kind === 'bold') {
+          var w = String(cs.fontWeight);
+          return w === 'bold' || w === 'bolder' || (parseInt(w, 10) || 400) >= 600;
+        }
+        return cs.fontStyle === 'italic' || cs.fontStyle === 'oblique';
+      } catch (e) { return false; }
+    },
+    /** 当前文字「有没有」这个格式：显式壳优先，没壳才看模板/继承 */
+    _hasFmtAt: function(r, kind) {
+      var cs = this._fmtCarriers(r, kind);
+      if (cs.length) {
+        for (var i = 0; i < cs.length; i++)
+          if (this._fmtCarrierOn(cs[i], kind)) return true;
+        return false;
+      }
+      return this._computedFmtOn(r, kind);
+    },
+    /** 从一个壳上真拆掉某一种格式；拆干净后整层解包，裸标签降成普通文字 */
+    _stripFmtFromEl: function(el, kind) {
+      if (!el || !el.parentNode) return;
+      try {
+        if (kind === 'bold') el.style.removeProperty('font-weight');
+        else if (kind === 'italic') el.style.removeProperty('font-style');
+        else if (kind === 'underline') {
+          el.style.removeProperty('text-decoration');
+          el.style.removeProperty('text-decoration-line');
+        } else if (kind === 'color') el.style.removeProperty('color');
+      } catch (e) {}
+      try { el.removeAttribute('data-cnital'); } catch (eD) {}
+      /* ★ 只把「本 kind 对应的」语义标签换成普通 span：
+         斜体是写在 <b style="font-style:italic"> 上时，拆斜体不能把 <b> 也
+         转成 span，否则粗体会一起丢。 */
+      var semKind = /^(B|STRONG)$/.test(el.tagName) ? 'bold'
+                  : /^(I|EM)$/.test(el.tagName) ? 'italic'
+                  : /^U$/.test(el.tagName) ? 'underline' : '';
+      if (semKind && semKind === kind) {
+        var sp = document.createElement('span');
+        for (var j = 0; j < el.attributes.length; j++) {
+          var a = el.attributes[j];
+          try { sp.setAttribute(a.name, a.value); } catch (e2) {}
+        }
+        while (el.firstChild) sp.appendChild(el.firstChild);
+        el.parentNode.replaceChild(sp, el);
+        el = sp;
+      }
+      /* 空壳解包（链接壳 / 标记壳 / 有其它 data 属性的都留着） */
+      if (el.tagName === 'SPAN' && !el.getAttribute('style') && !el.className &&
+          !el.getAttribute('data-tag') && !el.getAttribute('data-href') &&
+          !el.getAttribute('data-inl')) {
+        var p = el.parentNode;
+        while (el.firstChild) p.insertBefore(el.firstChild, el);
+        p.removeChild(el);
+      }
+    },
+    /** 把「格式壳 sp」与选区相交的那一段剥掉某一种字符格式：
+        选区外的头/尾克隆同款壳装回去（格式还在），相交段剥壳还原成无格式文字。
+        ★ 不能简单 r.extractContents() 再插回去：当选区正好是壳的内容时，
+          原件壳会留在正文里，插回的文字又落进壳中 —— 等于什么都没拆。
+        算法同 _splitStripMark，但插入位置必须在 sp 之后 / 尾壳之前，
+        否则「只选了后半截」时文字顺序会被倒过来。 */
+    _splitStripFmt: function(sp, r, kind) {
+      var p = sp.parentNode;
+      if (!p) return;
+      var inS = false, inE = false;
+      try { inS = sp.contains(r.startContainer); inE = sp.contains(r.endContainer); } catch (e) {}
+      var isN = inS ? r.startContainer : sp, isO = inS ? r.startOffset : 0;
+      var ieN = inE ? r.endContainer : sp, ieO = inE ? r.endOffset : sp.childNodes.length;
+      var mid, head, tail;
+      try {
+        mid = sp.ownerDocument.createRange();
+        mid.setStart(isN, isO); mid.setEnd(ieN, ieO);
+        head = sp.ownerDocument.createRange();
+        head.selectNodeContents(sp); head.setEnd(isN, isO);
+        tail = sp.ownerDocument.createRange();
+        tail.selectNodeContents(sp); tail.setStart(ieN, ieO);
+      } catch (e2) { this._stripFmtFromEl(sp, kind); return; }
+      /* 1) 尾段先摘：装进同款壳插到 sp 后面 */
+      var tailClone = null;
+      if (tail && !tail.collapsed) {
+        try {
+          var tf = tail.extractContents();
+          tailClone = sp.cloneNode(false);
+          tailClone.appendChild(tf);
+          p.insertBefore(tailClone, sp.nextSibling);
+        } catch (e3) {}
+      }
+      /* 2) 中段挖出来：剥掉里面所有同款格式壳，插到 sp 之后、尾壳之前 */
+      var anchor = tailClone || sp.nextSibling;
+      try {
+        var mf = mid.extractContents();
+        var tmp = sp.ownerDocument.createElement('span');
+        tmp.appendChild(mf);
+        var ins = tmp.querySelectorAll('span,b,strong,i,em,u,font');
+        for (var k = ins.length - 1; k >= 0; k--)
+          if (this._fmtCarrier(ins[k], kind)) this._stripFmtFromEl(ins[k], kind);
+        while (tmp.firstChild) p.insertBefore(tmp.firstChild, anchor);
+      } catch (e4) {}
+      /* 3) 头段也没了 = 壳已空：整个拆掉（注意 extractContents 会留空文本节点） */
+      while (sp.firstChild && sp.firstChild.nodeType === 3 && !sp.firstChild.nodeValue)
+        sp.removeChild(sp.firstChild);
+      if (!sp.childNodes.length ||
+          (!sp.textContent && !sp.querySelector('img,br,hr')))
+        this._stripFmtFromEl(sp, kind);
+    },
+    /** 拆掉选区碰到的所有同款格式壳（含「选区在壳内部」的祖先壳）。
+        返回拆掉的壳数；lastSp 守卫防止同一个壳反复拆、撑死循环。 */
+    stripFmtInRange: function(r, kind) {
+      var ed = document.getElementById('editor');
+      if (!ed || !r || r.collapsed) return 0;
+      var n = 0, guard = 0, lastSp = null;
+      while (guard++ < 300) {
+        var sp = null;
+        var all = ed.querySelectorAll('span,b,strong,i,em,u,font');
+        for (var i = 0; i < all.length; i++) {
+          var el = all[i];
+          if (!this._fmtCarrier(el, kind)) continue;
+          var hit = false;
+          try {
+            hit = r.intersectsNode(el) || el.contains(r.startContainer) ||
+                  el.contains(r.endContainer);
+          } catch (eI) { hit = false; }
+          if (hit) { sp = el; break; }
+        }
+        if (!sp || sp === lastSp) break;
+        lastSp = sp;
+        this._splitStripFmt(sp, r, kind);
+        n++;
+      }
+      return n;
+    },
+    /** 套格式：一律落 <b>/<i>/<u> 语义标签（导出 buildBlocks 认它们）；
+        val 是反值时（标题自带粗体点 B 取消）才用 span 写显式关闭。 */
+    _applyFmtInRange: function(r, kind, val) {
+      var on = this._fmtOnVal(kind);
+      var wrap;
+      if (kind === 'color') {
+        wrap = document.createElement('span');
+        wrap.style.color = val || on;
+      } else if (val && val !== on) {
+        wrap = document.createElement('span');
+        wrap.style[this._fmtProp(kind)] = val;
+      } else {
+        wrap = document.createElement({bold:'b', italic:'i', underline:'u'}[kind] || 'span');
+      }
+      try { wrap.appendChild(r.extractContents()); r.insertNode(wrap); }
+      catch (e) { return false; }
+      /* 新壳里裹进来的同款旧壳直接拆，格式永不叠加 */
+      var inner = wrap.querySelectorAll('span,b,strong,i,em,u,font');
+      for (var i = inner.length - 1; i >= 0; i--)
+        if (this._fmtCarrier(inner[i], kind)) this._stripFmtFromEl(inner[i], kind);
+      var nr = document.createRange();
+      try { nr.selectNodeContents(wrap); } catch (e2) { return true; }
+      var s = window.getSelection(); s.removeAllRanges(); s.addRange(nr);
+      this._range = nr.cloneRange(); this._selRange = nr.cloneRange();
+      try { document.getElementById('editor').focus(); } catch (e3) {}
+      this.syncCnItalic();      // 刚套上的 <i> 立刻可见，不等节流
+      this.onInput();
+      return true;
+    },
+    /** 统一入口：有显式壳 → 真拆（恢复默认）；没壳但模板自带 → 写一层关闭；
+        否则套上格式。返回是否动过正文。range 可由右键传整段范围进来。 */
+    toggleCharFmt: function(kind, range) {
+      var ed = document.getElementById('editor');
+      if (!ed) return false;
+      var r = range || this.pickSelRange();
+      var carriers = this._fmtCarriers(r, kind);
+      /* v1.30：判定要跟「按钮亮不亮」用同一套语义 —— 只有存在「开着」的壳
+         才算已有格式、再点=拆。全是反值壳（font-style:normal / 400 / none，
+         格式刷与「匹配当前格式」粘贴会留下）时不能再去拆壳：拆完文字还是
+         默认样式，用户点 I 就永远「没生效」。此时直接套格式，
+         _applyFmtInRange 会把新壳里裹进来的反壳一并清掉。 */
+      var anyOn = false;
+      for (var ci = 0; ci < carriers.length; ci++)
+        if (this._fmtCarrierOn(carriers[ci], kind)) { anyOn = true; break; }
+      if (anyOn) {
+        var done = false;
+        if (r && !r.collapsed) done = this.stripFmtInRange(r, kind) > 0;
+        else {
+          /* 没选中：光标停在哪层就拆哪层（同底纹 clearSelMark 的光标位兜底） */
+          for (var i = carriers.length - 1; i >= 0; i--) {
+            var el = carriers[i];
+            if (el.parentNode && this._fmtCarrier(el, kind)) {
+              this._stripFmtFromEl(el, kind); done = true;
+            }
+          }
+        }
+        if (done) {
+          this._sweepEmptyFmt(kind);     // extractContents 留在正文里的空壳一并拆掉
+          this.onInput(); this.syncCaretFormat();
+        }
+        return done;
+      }
+      if (!r || r.collapsed) return false;   // 光标位没有格式壳：不硬塞
+      var off = this._computedFmtOn(r, kind);
+      return this._applyFmtInRange(r, kind, off ? this._fmtOffVal(kind) : this._fmtOnVal(kind));
+    },
+
+    /** 加粗：只对选中文字生效（WPS 手感）；再点 = 恢复默认 */
+    toggleBold: function() {
+      if (!this.toggleCharFmt('bold')) this.toast('请先选中要加粗的文字');
     },
     insertChar: function(c) { this.insert(c); this.showChars = false; },
 
     /* ---------- 选中文字：斜体 / 下划线 / 颜色 / 底纹 ---------- */
     toggleItalicSel: function() {
-      var r = this.pickSelRange();
-      if (!r) {
-        if (this.caretItalic && this.removeSelFormat('fontStyle')) {
-          this.syncCaretFormat(); return;
-        }
-        this.toast('请先选中文字'); return;
-      }
-      var on = this._selStyle(r, 'fontStyle') === 'italic';
-      if (!this._styleRange({range: r, whole: false}, {fontStyle: on ? 'normal' : 'italic'}, true)) {
-        this.toast('改不动，换个位置再试'); return;
-      }
-      this.syncCaretFormat();
+      if (!this.toggleCharFmt('italic')) this.toast('请先选中文字');
     },
     toggleUnderlineSel: function() {
-      var r = this.pickSelRange();
-      if (!r) {
-        if (this.caretUnder && this.removeSelFormat('textDecoration')) {
-          this.syncCaretFormat(); return;
-        }
-        this.toast('请先选中文字'); return;
-      }
-      var on = (this._selStyle(r, 'textDecorationLine') || '').indexOf('underline') >= 0;
-      if (!this._styleRange({range: r, whole: false},
-                            {textDecoration: on ? 'none' : 'underline'}, true)) {
-        this.toast('改不动，换个位置再试'); return;
-      }
-      this.syncCaretFormat();
+      if (!this.toggleCharFmt('underline')) this.toast('请先选中文字');
     },
 
     /* ---------- 对齐：左 / 中 / 右 / 两端（只改本段，不回写模板） ---------- */
@@ -3303,7 +3852,17 @@ var app = Vue.createApp({
      * 当前有选中就先变色；之后选中的文字自动套上次的文字色；右键"A"换颜色。
      */
     quickColor: function() {
-      /* ★ 当前文字带显式颜色（按钮亮着）：再点一下"A"＝清除颜色 */
+      /* ★ v1.29：选区/光标碰到任何显式文字色壳 → 再点 "A" 一律真拆掉颜色
+         （多个壳、部分相交、起点在壳外都覆盖），和「纹」的取消手感一致。
+         老实现只在「选区起点那层」判断，且 removeSelFormat 只拆一层，
+         从壳外起选/跨多个色壳时点了没反应。 */
+      if (this._fmtCarriers(this.pickSelRange(), 'color').length) {
+        this.colorPaint = false;
+        this._colorClearedAt = Date.now();
+        this.markPop = '';
+        this.toggleCharFmt('color');
+        return;
+      }
       if (this.selColorOn) {
         this.colorPaint = false;
         this._colorClearedAt = Date.now();
@@ -3327,16 +3886,34 @@ var app = Vue.createApp({
       if (!ok && !this.pickSelRange()) return;
       this.applySelMark({ color: this.lastColor || '#E11D48' });
     },
-    /** 右键菜单里直接给选中文字上色（不进涂刷模式） */
+    /** 右键菜单里直接给选中文字上色（不进涂刷模式）；
+        v1.29：选中的文字已经带颜色时，再点「颜色」= 恢复默认色（同工具条 A） */
     ctxColor: function() {
+      var t = this.ctxTarget();          // 没选中就按整段（和右键 B/I/U 一致）
       this.ctxShow = false;
-      if (!this.pickSelRange()) { this.toast('请先选中要改颜色的文字'); return; }
-      this.applySelMark({ color: this.lastColor || '#E11D48' });
+      if (!t) { this.toast('这一段还没有文字'); return; }
+      var r = t.range;
+      if (this._fmtCarriers(r, 'color').length) { this.toggleCharFmt('color', r); return; }
+      this._applyFmtInRange(r, 'color', this.lastColor || '#E11D48');
     },
-    /** 右键菜单里直接给选中文字标底纹（不进涂刷模式） */
+    /** 右键菜单里直接给选中文字标底纹（不进涂刷模式）；
+        v1.29：已经带底纹/标记时，再点「底纹」= 真拆壳恢复默认（同工具条「纹」） */
     ctxShade: function() {
+      var t = this.ctxTarget();          // 没选中就按整段
       this.ctxShow = false;
-      if (!this.pickSelRange()) { this.toast('请先选中要标底纹的文字'); return; }
+      if (!t) { this.toast('这一段还没有文字'); return; }
+      var r = t.range;
+      var edq = document.getElementById('editor');
+      var mkq = edq ? edq.querySelectorAll('.hlmark,.tagmark,span[style*="background"]') : [];
+      var has = false;
+      for (var qi = 0; qi < mkq.length; qi++) {
+        try { if (r.intersectsNode(mkq[qi])) { has = true; break; } } catch (eq) {}
+      }
+      /* clearSelMark / applySelMark 都读活选区：右键没选中时先把整段范围放回去 */
+      var s3 = window.getSelection();
+      try { s3.removeAllRanges(); s3.addRange(r.cloneRange()); } catch (eR) {}
+      this._selRange = r.cloneRange();
+      if (has || this.selShade || this.selTag) { this.clearSelMark(); return; }
       this.applySelMark({ backgroundColor: this.lastShade || '#FACC15' }, 'hlmark');
     },
     /** 拆掉 sp 与选区 r 相交的那一段：选区外的头/尾保留原壳（克隆同款壳装回去），
@@ -3878,6 +4455,10 @@ var app = Vue.createApp({
       var ed = document.getElementById('editor');
       if (html) ed.innerHTML = html;
       else ed.innerText = text || '';
+      /* 切文档 / 寻回 / 导入：还原出来的 HTML 里也可能带外部 <a href> */
+      this.convertAnchors(ed, true);
+      this.scanLinks();
+      this.syncCnItalic();      // 草稿里的中文 <i> 也要看得见倾斜
       try {
         var r = document.createRange();
         r.selectNodeContents(ed); r.collapse(false);
@@ -4165,12 +4746,1016 @@ var app = Vue.createApp({
       return false;
     },
 
+    /* ══════════ 外部网页（左键列表 / 右键添加管理，v1.25） ══════════
+       只做"入口"：真正打开网页交给 Java 的 openWeb（系统默认浏览器），
+       绝不让 WebView 自己导航走 —— 编辑器页面一走就回不来了。 */
+
+    /** 弹层定位：默认贴「外部网页」按钮；右键时按鼠标坐标弹（都在可视区内） */
+    webPopPos: function(e) {
+      var b = document.querySelector('[data-rcweb]');
+      var r = b ? b.getBoundingClientRect() : {left:10, top:40, bottom:60};
+      var l = (e && typeof e.clientX === 'number') ? e.clientX : r.left;
+      var t = (e && typeof e.clientY === 'number') ? e.clientY : r.bottom + 6;
+      var w = 274;
+      if (l + w > window.innerWidth - 8) l = Math.max(6, window.innerWidth - 8 - w);
+      if (t + 320 > window.innerHeight) t = Math.max(6, r.top - 320);
+      return {left: Math.round(l) + 'px', top: Math.round(t) + 'px'};
+    },
+    /** 左键：打开网页列表（再点一次收起）；同时收掉添加面板 */
+    toggleWeb: function(e) {
+      if (this._webBtnSuppress) return;   // 刚拖完按钮：这一下 click 不算
+      var willOpen = !this.showWeb;
+      this.showWebEdit = false;
+      this.showWeb = willOpen;
+      /* 左键一律贴按钮弹（不跟着鼠标点位置跑），右键才按鼠标坐标弹 */
+      if (willOpen) this.webPos = this.webPopPos();
+    },
+    /** 右键按钮（或列表里「＋ 添加网页」）：打开添加/管理面板 */
+    openWebEdit: function(e) {
+      this.showWeb = false;
+      this.webPos = this.webPopPos(e);
+      this.showWebEdit = true;
+    },
+    /** 网址规范化：没写协议补 https://；只放行 http/https，危险协议一律拒绝 */
+    normWebUrl: function(s) {
+      var u = String(s || '').trim();
+      if (!u) return '';
+      /* 带显式协议却不是 http/https（javascript: / file: / data: …）一律拒绝。
+         不这么做的话 "javascript:alert(1)" 会因为缺少 :// 被当成域名补上 https:// 蒙混过关。 */
+      if (/^[a-zA-Z][a-zA-Z0-9+.\-]*:/.test(u) && !/^https?:\/\//i.test(u)) return '';
+      if (!/^https?:\/\//i.test(u)) u = 'https://' + u;   // 没写协议：补 https://
+      if (!/^https?:\/\/\S+$/i.test(u)) return '';
+      if (/[\s<>"']/.test(u) || u.length > 500) return '';
+      return u;
+    },
+    /** 添加（同名覆盖网址）：不弹成功提示，列表即时刷新就够了 */
+    addWeb: function() {
+      var n = String(this.webName || '').trim();
+      var u = this.normWebUrl(this.webUrl);
+      if (!n) { this.toast('请填写网页名称'); return; }
+      if (!u) { this.toast('网址只支持 http/https（例：https://example.com）'); return; }
+      var hit = -1;
+      for (var i = 0; i < this.webLinks.length; i++)
+        if (this.webLinks[i].name === n) { hit = i; break; }
+      var item = {name: n, url: u};
+      if (hit >= 0) this.webLinks.splice(hit, 1, item);
+      else this.webLinks.push(item);
+      this.webName = ''; this.webUrl = '';
+      this.saveWebLinks();
+    },
+    delWeb: function(i) {
+      if (i < 0 || i >= this.webLinks.length) return;
+      this.webLinks.splice(i, 1);
+      this.saveWebLinks();
+    },
+    /** 落盘：走 Java 的 config.properties，数据在程序目录 data/ 下，不联网 */
+    saveWebLinks: function() { this.host('setWebLinks', JSON.stringify(this.webLinks)); },
+    /** 打开：内置入口和用户链接都走这里（返回值交给 Java，不在回调里反向 executeScript） */
+    openWebAt: function(u) {
+      var url = this.normWebUrl(u);
+      if (!url) { this.toast('这个网址不能用（只支持 http/https）'); return; }
+      this.showWeb = false;
+      var r = this.host('openWeb', url);
+      if (r && String(r).indexOf('ERR') === 0) this.toast('打开失败：' + url);
+    },
+
+    /* ────────── 拖拽 ①：顶部「外部网页」按钮在标题栏里换位置 ──────────
+       标题栏是 flex，只改 order 数值，绝不手工挪 DOM（Vue 重渲染会还原）。 */
+    webBtnDown: function(e) {
+      if (e.button !== 0) return;
+      var self = this, sx = e.clientX, sy = e.clientY, moved = false;
+      function mv(ev) {
+        if (!moved && Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) < 6) return;
+        if (!moved) { moved = true; self.webDragBtn = true; }
+        self.webBtnOrder = self.webOrderAt(ev.clientX);
+      }
+      function up() {
+        document.removeEventListener('mousemove', mv);
+        document.removeEventListener('mouseup', up);
+        self.webDragBtn = false;
+        if (!moved) return;
+        /* 拖完的那一记 click 不能当成「打开列表」 */
+        self._webBtnSuppress = true;
+        self.setWebBtnOrder(self.webBtnOrder);
+        setTimeout(function() { self._webBtnSuppress = false; }, 0);
+      }
+      document.addEventListener('mousemove', mv);
+      document.addEventListener('mouseup', up);
+    },
+    /** 按鼠标 X 找插入位：越过几个 pill 的中线就插在第几个缝隙 */
+    webOrderAt: function(x) {
+      var pills = document.querySelectorAll('.header .pill'), idx = 0;
+      for (var i = 0; i < pills.length; i++) {
+        if (pills[i].hasAttribute('data-rcweb')) continue;
+        var r = pills[i].getBoundingClientRect();
+        if (x > r.left + r.width / 2) idx++;
+      }
+      return [5, 15, 25, 35, 45, 55][Math.max(0, Math.min(5, idx))];
+    },
+    /* ────────── 拖拽 ②：收藏夹里的网址上下排序 ──────────
+       用 mousedown/mousemove/mouseup 手写，不用 HTML5 DnD（WebView 里不稳）。 */
+    webLinkDown: function(e, i) {
+      if (e.button !== 0) return;
+      var self = this, sy = e.clientY, from = i, moved = false;
+      this.webDragOver = i;
+      function mv(ev) {
+        if (!moved && Math.abs(ev.clientY - sy) < 5) return;
+        moved = true;
+        var rs = document.querySelectorAll('.webpop [data-wl]'), over = rs.length;
+        for (var k = 0; k < rs.length; k++) {
+          var r = rs[k].getBoundingClientRect();
+          if (ev.clientY < r.top + r.height / 2) { over = k; break; }
+        }
+        self.webDragOver = over;
+      }
+      function up() {
+        document.removeEventListener('mousemove', mv);
+        document.removeEventListener('mouseup', up);
+        var to = self.webDragOver;
+        self.webDragOver = -1;
+        if (!moved) return;
+        self._webLinkMoved = true;
+        setTimeout(function() { self._webLinkMoved = false; }, 0);
+        self.moveWeb(from, to);
+      }
+      document.addEventListener('mousemove', mv);
+      document.addEventListener('mouseup', up);
+    },
+    /** to = 插入位置（0..n）；数组顺序就是收藏夹顺序，落盘后重启不变 */
+    moveWeb: function(from, to) {
+      if (!Array.isArray(this.webLinks) || from < 0 || from >= this.webLinks.length) return;
+      var arr = this.webLinks.slice(), it = arr.splice(from, 1)[0];
+      var t = Math.max(0, Math.min(arr.length, to > from ? to - 1 : to));
+      if (t === from) return;
+      arr.splice(t, 0, it);
+      this.webLinks = arr;
+      this.saveWebLinks();
+    },
+    webLinkOpen: function(u) {
+      if (this._webLinkMoved) return;   // 刚拖完，别误开浏览器
+      this.openWebAt(u);
+    },
+
+    /* ══════════ 正文超链接（v1.27） ══════════
+       铁律：页面里不许有 <a href>。外部网站复制来的「百度一下」这类链接，
+       粘贴时就被换成 span.txtlink（目标放 data-href）；点击一律交给 Java
+       的系统默认程序，WebView 自己绝不导航（用户实测导航后「退不回去」）。 */
+    /** 把粘贴进来的 href 变成 {kind,target}；不放行的一律返回空 kind（只留文字） */
+    pasteHref: function(raw, base) {
+      var u = String(raw || '').trim().replace(/&amp;/g, '&');
+      if (!u || u.length > 2000) return {kind:'', target:''};
+      /* file:///D:/x → 本地文件路径（同样走系统默认程序 / 资源管理器） */
+      if (/^file:\/\/\//i.test(u)) {
+        var p;
+        try { p = decodeURIComponent(u.replace(/^file:\/\/\//i, '')); }
+        catch (e) { return {kind:'', target:''}; }
+        if (/^[A-Za-z]:[\\/]/.test(p) && !/[\r\n<>"]/.test(p))
+          return {kind:'file', target:p.replace(/\\/g, '/')};
+        return {kind:'', target:''};
+      }
+      if (/^\/\//.test(u)) u = 'https:' + u;                  // 协议相对地址
+      if (base && !/^[a-zA-Z][a-zA-Z0-9+.\-]*:/.test(u)) {   // 相对地址按 <base> 解析
+        try { u = new URL(u, base).href; } catch (e) {}
+      }
+      var ok = this.normWebUrl(u);
+      return ok ? {kind:'url', target:ok} : {kind:'', target:''};
+    },
+    /* ══════════ 链接「出口」（v1.28） ══════════
+       WebKit 的 contenteditable：折叠光标停在 <span class="txtlink">末尾再打字，
+       新字会直接落进这个 span，变成链接的一部分（输入法组字更明显）。
+       解法：每条链接后面永远留一个普通文本节点当出口，打字前把光标挪到那里。 */
+    linkExit: function(el) {
+      if (!el || !el.parentNode) return null;
+      var n = el.nextSibling;
+      if (n && n.nodeType === 3) return n;
+      var t = document.createTextNode('');
+      el.parentNode.insertBefore(t, n);
+      return t;
+    },
+    /** 折叠光标若还停在链接壳里，就挪到链接后的出口。返回是否挪过。 */
+    moveCaretAfterLink: function() {
+      var ed = document.getElementById('editor');
+      if (!ed) return false;
+      var sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !sel.isCollapsed) return false;
+      var c = sel.getRangeAt(0).startContainer;
+      if (!c || !ed.contains(c)) return false;
+      var node = c.nodeType === 3 ? c.parentNode : c;
+      var lk = (node && node.closest) ? node.closest('span.txtlink') : null;
+      if (!lk || !ed.contains(lk)) return false;
+      var t = this.linkExit(lk);
+      if (!t) return false;
+      var r = document.createRange();
+      r.setStart(t, 0); r.collapse(true);
+      sel.removeAllRanges(); sel.addRange(r);
+      this._range = r.cloneRange(); this._selRange = null;
+      return true;
+    },
+    /** 老草稿 / 外部粘贴 / 寻回恢复进来的链接，统一补出口 */
+    ensureLinkExits: function() {
+      var ls = this.linkEls(), n = 0;
+      for (var i = 0; i < ls.length; i++) {
+        var nx = ls[i].nextSibling;
+        if (!nx || nx.nodeType !== 3) { if (this.linkExit(ls[i])) n++; }
+      }
+      return n;
+    },
+
+    /* ══════════ 中文斜体可见化（v1.30） ══════════
+       WebView 只对西文字体做合成斜体：选一段中文点 I，DOM 里 <i> 有了、
+       computed 也是 italic，画面却纹丝不动 —— 用户看到的就是「斜体没生效」。
+       CSS 的 transform 又只对 inline-block 生效，所以给「含汉字的斜体壳」
+       打 data-cnital，让那层壳 skewX(-12deg)；纯西文保留原生 italic，
+       不改成 inline-block（否则长斜体句会被撑成不能行内拆分的独立块）。
+       斜体可能来自工具条/右键/格式刷/粘贴/老草稿/寻回/导入，统一在这里收口：
+       onInput 节流调一次，setEditorSmart 还原草稿后立刻调一次。 */
+    syncCnItalic: function(root) {
+      var ed = root || document.getElementById('editor');
+      if (!ed || !ed.querySelectorAll) return 0;
+      var els = ed.querySelectorAll('i,em,span[style]'), n = 0;
+      var cjk = /[\u3400-\u9fff\uf900-\ufaff\u3040-\u30ff]/;
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i], on = false, fs = '';
+        try { fs = el.style ? String(el.style.fontStyle || '') : ''; } catch (e0) {}
+        if (/^(I|EM)$/.test(el.tagName) || /italic|oblique/i.test(fs)) on = true;
+        if (/normal/i.test(fs)) on = false;          // 显式关掉的斜体不算
+        var want = on && cjk.test(el.textContent || '');
+        if (want && el.getAttribute('data-cnital') !== '1') {
+          el.setAttribute('data-cnital', '1'); n++;
+        } else if (!want && el.hasAttribute && el.hasAttribute('data-cnital')) {
+          el.removeAttribute('data-cnital'); n++;
+        }
+      }
+      return n;
+    },
+    scheduleCnItalic: function() {
+      var self = this;
+      clearTimeout(this._cnItalicTimer);
+      this._cnItalicTimer = setTimeout(function() { self.syncCnItalic(); }, 60);
+    },
+
+    /* ══════════ 格式模板：粘贴匹配 / 格式刷共用（v1.28 / v1.30 增强） ══════════
+       把「某个字身上的全部格式」记成一串内联壳（含 class、data-href 等属性）
+       + 一层 computed 兜底；要套用时克隆这串壳去包目标文字。 */
+    isInlineTag: function(tg) {
+      return /^(SPAN|B|I|U|EM|STRONG|FONT|A|SMALL|BIG|MARK|SUB|SUP|S|STRIKE|DEL|INS|CODE|TT)$/.test(tg);
+    },
+    isBlockTag: function(tg) {
+      return /^(DIV|P|H1|H2|H3|LI|UL|OL|BLOCKQUOTE|SECTION|ARTICLE|TABLE|TR|TD)$/.test(tg);
+    },
+    /** 从元素向上收集内联格式壳（外→内），到块级为止 */
+    captureFormatShells: function(el) {
+      var ed = document.getElementById('editor');
+      var shells = [], cur = el;
+      while (cur && cur !== ed && cur.nodeType === 1 &&
+             !this.isBlockTag(cur.tagName)) {
+        if (this.isInlineTag(cur.tagName)) {
+          var o = {tag: cur.tagName, style: cur.getAttribute('style') || '',
+                   cls: cur.getAttribute('class') || '', attrs: {}};
+          var keys = ['data-tag', 'data-href', 'data-kind', 'data-cnital', 'title'];
+          for (var k = 0; k < keys.length; k++) {
+            var v = cur.getAttribute(keys[k]);
+            if (v) o.attrs[keys[k]] = v;
+          }
+          shells.unshift(o);
+        }
+        cur = cur.parentElement;
+      }
+      var css = {};
+      try {
+        var cs = getComputedStyle(el);
+        /* 只有源字「显式带了颜色/底色」才把颜色固化成内联样式：
+           普通正文的颜色是继承来的，写死会让深色主题下这段文字不跟随主题。
+           底纹/标记/链接壳本身带 class 或内联底色，克隆壳会保住，不必写死。 */
+        var walk = el, hasC = false, hasB = false;
+        while (walk && walk !== ed && walk.nodeType === 1 && !(hasC && hasB)) {
+          if (walk.style) {
+            if (walk.style.color) hasC = true;
+            if (walk.style.backgroundColor) hasB = true;
+          }
+          if (walk.classList && (walk.classList.contains('hlmark') ||
+              walk.classList.contains('tagmark') ||
+              walk.classList.contains('txtlink'))) hasB = true;
+          walk = walk.parentElement;
+        }
+        css.fontFamily = cs.fontFamily || '';
+        css.fontSize = cs.fontSize || '';
+        css.fontWeight = cs.fontWeight || '';
+        css.fontStyle = cs.fontStyle || '';
+        css.color = hasC ? (cs.color || '') : '';
+        var bg = hasB ? (cs.backgroundColor || '') : '';
+        if (bg && bg !== 'transparent' && bg.indexOf('rgba(0, 0, 0, 0)') < 0)
+          css.backgroundColor = bg;
+        var td = String(cs.textDecorationLine || cs.textDecoration || '');
+        css.textDecoration = td.indexOf('underline') >= 0 ? 'underline' : '';
+      } catch (e) {}
+      return {shells: shells, css: css};
+    },
+    /** v1.30 格式刷专用：复制「整段选区」里所有文字的格式，而不是只取起点一个字。
+        v1.28 的 clickBrush 只拿 r.startContainer 往上收壳；起点一旦落在最外层
+        壳（<span class=txtlink>）或块上，B/I/U/底纹/颜色这些内层壳一个都收不到，
+        刷过去等于只刷了个寂寞。这里逐文本节点取样，合成一份「最全」的模板。 */
+    captureRangeFormat: function(r) {
+      var ed = document.getElementById('editor');
+      if (!ed || !r) return {shells: [], css: {}};
+      var texts = [], tw = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT, null, false);
+      while (tw.nextNode()) {
+        var t = tw.currentNode;
+        if (!t.nodeValue || !t.nodeValue.replace(/\s/g, '')) continue;
+        var hit = false;
+        try { hit = r.intersectsNode(t); } catch (eI) {}
+        /* WebKit 在边界正好落在元素上时会把 intersectsNode 判成 false */
+        if (!hit && (r.startContainer === t || r.endContainer === t)) hit = true;
+        if (!hit) {
+          try {
+            var nr = document.createRange(); nr.selectNodeContents(t);
+            hit = (r.compareBoundaryPoints(Range.START_TO_START, nr) <= 0 &&
+                   r.compareBoundaryPoints(Range.END_TO_END, nr) >= 0);
+          } catch (eB) {}
+        }
+        if (hit) texts.push(t);
+      }
+      if (!texts.length) {
+        var st = r.startContainer;
+        if (st && st.nodeType === 3) texts.push(st);
+        else if (st && st.nodeType === 1) {
+          var first = st.firstChild;
+          while (first && first.nodeType !== 3 && first.firstChild) first = first.firstChild;
+          if (first && first.nodeType === 3) texts.push(first);
+        }
+      }
+      var shells = [], best = null, css = {};
+      for (var i = 0; i < texts.length; i++) {
+        var f = this.captureFormatShells(texts[i].parentElement || ed);
+        if (!best || f.shells.length > best.length) best = f.shells;
+        for (var j = 0; j < f.shells.length; j++) {
+          var sh = f.shells[j], dup = false;
+          for (var k = 0; k < shells.length; k++)
+            if (shells[k].tag === sh.tag && shells[k].cls === sh.cls &&
+                shells[k].style === sh.style &&
+                JSON.stringify(shells[k].attrs) === JSON.stringify(sh.attrs)) {
+              dup = true; break;
+            }
+          if (!dup) shells.push(sh);
+        }
+        var c = f.css;
+        if (!css.fontFamily && c.fontFamily) css.fontFamily = c.fontFamily;
+        if (!css.fontSize && c.fontSize) css.fontSize = c.fontSize;
+        var w = parseInt(c.fontWeight, 10) || 400,
+            w0 = parseInt(css.fontWeight, 10) || 0;
+        if (w > w0) css.fontWeight = c.fontWeight;
+        if (/italic|oblique/i.test(c.fontStyle || '')) css.fontStyle = c.fontStyle;
+        else if (!css.fontStyle && c.fontStyle) css.fontStyle = c.fontStyle;
+        if (/underline/.test(c.textDecoration || '')) css.textDecoration = 'underline';
+        if (c.color && !css.color) css.color = c.color;
+        if (c.backgroundColor && !css.backgroundColor) css.backgroundColor = c.backgroundColor;
+      }
+      /* 骨架取最长那条链（嵌套顺序最真实），再把散在别的文字上的语义标签补齐：
+         源选区前半截粗体、后半截斜体时，两种格式都得带到目标上。 */
+      var chain = best ? best.slice() : [];
+      var sem = ['B', 'STRONG', 'I', 'EM', 'U'];
+      for (var q = 0; q < sem.length; q++) {
+        var tg = sem[q], have = false, extra = null;
+        for (var m = 0; m < chain.length; m++) if (chain[m].tag === tg) { have = true; break; }
+        if (have) continue;
+        for (var n2 = 0; n2 < shells.length; n2++)
+          if (shells[n2].tag === tg) { extra = shells[n2]; break; }
+        if (extra) chain.push(extra);
+      }
+      /* 链接 / 底纹 / 标记壳（带 class 或 data-href）必须保住 */
+      for (var z = 0; z < shells.length; z++) {
+        var sx = shells[z];
+        if (!(sx.cls || (sx.attrs && sx.attrs['data-href']))) continue;
+        var same = false;
+        for (var y = 0; y < chain.length; y++)
+          if (chain[y].tag === sx.tag && chain[y].cls === sx.cls &&
+              chain[y].style === sx.style) { same = true; break; }
+        if (!same) chain.unshift(sx);
+      }
+      return {shells: chain, css: css};
+    },
+    /** 克隆格式壳，返回 {outer, inner}：inner 用来装文字 */
+    cloneFmtShells: function(fmt) {
+      var outer = null, inner = null;
+      var ss = (fmt && fmt.shells) ? fmt.shells : [];
+      for (var i = 0; i < ss.length; i++) {
+        var s = ss[i], e;
+        try { e = document.createElement(s.tag); } catch (er) { continue; }
+        if (s.style) e.setAttribute('style', s.style);
+        if (s.cls) e.setAttribute('class', s.cls);
+        for (var k in s.attrs) e.setAttribute(k, s.attrs[k]);
+        if (!outer) outer = e;
+        if (inner) inner.appendChild(e);
+        inner = e;
+      }
+      if (!outer) { outer = document.createElement('span'); inner = outer; }
+      var css = (fmt && fmt.css) || {};
+      var keys = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle',
+                  'color', 'textDecoration'];
+      /* 有壳时底色由壳自己的 class/style 决定，别再叠一层 */
+      if (!ss.length) keys.push('backgroundColor');
+      /* 语义标签壳已经表达了这些格式时别再往壳上写一遍内联样式：
+         拆格式时 <b style="font-weight:700"> 会被当成两层壳，而且拆斜体
+         把 <b> 转成 span 会连粗体一起丢。 */
+      var hasSem = {bold: false, italic: false, underline: false};
+      for (var si2 = 0; si2 < ss.length; si2++) {
+        var st2 = String(ss[si2].style || ''), tg2 = String(ss[si2].tag || '');
+        if (/^(B|STRONG)$/.test(tg2) || /font-weight\s*:/i.test(st2)) hasSem.bold = true;
+        if (/^(I|EM)$/.test(tg2) || /font-style\s*:\s*(italic|oblique)/i.test(st2)) hasSem.italic = true;
+        if (/^U$/.test(tg2) || /text-decoration(-line)?\s*:\s*underline/i.test(st2))
+          hasSem.underline = true;
+      }
+      for (var q = 0; q < keys.length; q++) {
+        var p = keys[q], v = css[p];
+        if (!v) continue;
+        /* v1.30：别把 computed 的「默认值」固化成内联样式。
+           font-style:normal / font-weight:400 / text-decoration:none 这类反壳
+           会被统一 toggle 引擎当成格式壳，之后再点 I 只是拆壳、文字永远不斜。 */
+        if (p === 'fontWeight' && (hasSem.bold || (parseInt(v, 10) || 400) < 600)) continue;
+        if (p === 'fontStyle' && (hasSem.italic || !/italic|oblique/i.test(v))) continue;
+        if (p === 'textDecoration' && (hasSem.underline || !/underline/.test(v))) continue;
+        if (p === 'color' && /^(inherit|transparent)$/i.test(v)) continue;
+        try { outer.style[p] = v; } catch (e2) {}
+      }
+      return {outer: outer, inner: inner || outer};
+    },
+    /** 剥掉 root 子树里的外来内联格式（块级结构、BR 保留）。
+        stripLinks=false 时保留 span.txtlink（粘贴来的链接仍要能点）；
+        true 时连链接壳一起拆（格式刷目标要换成源的格式）。 */
+    stripInlineIn: function(root, stripLinks) {
+      if (!root || !root.querySelectorAll) return;
+      var ns = root.querySelectorAll('*'), arr = [];
+      for (var i = 0; i < ns.length; i++) arr.push(ns[i]);
+      for (var j = arr.length - 1; j >= 0; j--) {
+        var el = arr[j];
+        if (!el.parentNode || el.tagName === 'BR') continue;
+        var isLink = !!(el.classList && el.classList.contains('txtlink'));
+        if (isLink && !stripLinks) { el.removeAttribute('style'); continue; }
+        if (this.isInlineTag(el.tagName)) {
+          var p = el.parentNode;
+          while (el.firstChild) p.insertBefore(el.firstChild, el);
+          p.removeChild(el);
+        } else {
+          el.removeAttribute('style'); el.removeAttribute('class');
+          el.removeAttribute('align'); el.removeAttribute('width');
+        }
+      }
+    },
+    /** 给一个文本节点套上格式模板（链接里的文字交给链接自己的样式） */
+    wrapTextNode: function(t, fmt) {
+      if (!t || !t.parentNode || !t.nodeValue) return;
+      var p = t.parentNode;
+      if (p.closest && p.closest('.txtlink')) return;
+      var sh = this.cloneFmtShells(fmt);
+      p.insertBefore(sh.outer, t);
+      sh.inner.appendChild(t);
+    },
+    /** 把一段 Range 里的内容换成「无格式文字 + 指定格式」 */
+    applyFmtToRange: function(r, fmt) {
+      var box = document.createElement('div');
+      box.appendChild(r.extractContents());
+      this.stripInlineIn(box, true);
+      var texts = [];
+      (function walk(n) {
+        for (var c = n.firstChild; c; c = c.nextSibling) {
+          if (c.nodeType === 3) texts.push(c);
+          else if (c.nodeType === 1 && c.tagName !== 'BR') walk(c);
+        }
+      })(box);
+      for (var i = 0; i < texts.length; i++) this.wrapTextNode(texts[i], fmt);
+      var frag = document.createDocumentFragment();
+      while (box.firstChild) frag.appendChild(box.firstChild);
+      r.insertNode(frag);
+    },
+    /** 粘贴处「前一个字」的格式：前一个文本节点所在元素，往上收壳 */
+    fmtBeforeCaret: function() {
+      var ed = document.getElementById('editor');
+      if (!ed) return {shells: [], css: {}};
+      var sel = window.getSelection();
+      var r = (sel && sel.rangeCount) ? sel.getRangeAt(0).cloneRange()
+            : (this._range ? this._range.cloneRange() : null);
+      if (!r || !ed.contains(r.startContainer)) {
+        r = document.createRange(); r.selectNodeContents(ed); r.collapse(false);
+      }
+      var node = r.startContainer, off = r.startOffset, el = null;
+      if (node.nodeType === 3) {
+        if (off > 0) el = node.parentNode;
+        else {
+          /* 光标正好在这个文本节点开头：找它前面最近的一个非空文本节点 */
+          var tw = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT, null, false);
+          var last = null, n;
+          while ((n = tw.nextNode())) {
+            if (n === node) break;
+            if ((n.nodeValue || '').length) last = n;
+          }
+          el = last ? last.parentNode : node.parentNode;
+        }
+      } else {
+        var ch = off > 0 ? node.childNodes[off - 1] : null;
+        el = ch ? (ch.nodeType === 3 ? ch.parentNode : ch) : node;
+      }
+      if (!el || el.nodeType !== 1 || !ed.contains(el)) el = ed;
+      return this.captureFormatShells(el);
+    },
+
+    /** 把 root 里所有 <a> 换成 span：有合法目标=span.txtlink，没有=普通 span（只留文字）。
+        inEditor=true 时只处理仍在编辑器里的节点（避免动到弹层中的临时 DOM）。 */
+    convertAnchors: function(root, inEditor, base) {
+      var ed = document.getElementById('editor');
+      if (!root || !root.querySelectorAll) return 0;
+      var ns = root.querySelectorAll('a'), arr = [];
+      for (var i = 0; i < ns.length; i++) arr.push(ns[i]);
+      if (root.nodeType === 1 && root.tagName === 'A') arr.push(root);
+      var n = 0;
+      for (var j = 0; j < arr.length; j++) {
+        var a = arr[j];
+        if (!a.parentNode) continue;
+        if (inEditor && (!ed || !ed.contains(a))) continue;
+        var info = this.pasteHref(a.getAttribute('href') || '', base || '');
+        var span = document.createElement('span');
+        if (info.kind) {
+          span.className = 'txtlink';
+          span.setAttribute('data-href', info.target);
+          span.setAttribute('data-kind', info.kind);
+          span.setAttribute('title', info.target);
+        }
+        while (a.firstChild) span.appendChild(a.firstChild);
+        a.parentNode.replaceChild(span, a);
+        n++;
+      }
+      return n;
+    },
+    /** 兜底：任何路径（原生粘贴/插件/导入/寻回）塞进正文的 <a> 都就地拆掉 */
+    watchAnchors: function() {
+      var ed = document.getElementById('editor'), self = this;
+      if (!ed || !window.MutationObserver || this._anchorObs) return;
+      this._anchorObs = new MutationObserver(function() {
+        if (!ed.querySelector('a')) return;       // 绝大多数改动：一次 query 就走
+        self.convertAnchors(ed, true);
+        self.refreshStats(); self.scanLinks();
+      });
+      this._anchorObs.observe(ed, {childList: true, subtree: true});
+    },
+    /** 粘贴（v1.28）：只要剪贴板带 HTML 就接管 —— 先原样落地（保持原格式），
+        再弹「保持原格式 / 匹配当前格式」两个按钮让用户当场选。
+        纯文本粘贴仍走 WebView 原生（保住 换行→<br>，本来也没有格式差异）。 */
+    onPaste: function(e) {
+      var self = this, ed = document.getElementById('editor');
+      if (!ed) return;
+      var cd = e.clipboardData || window.clipboardData, html = '';
+      try { html = cd ? (cd.getData('text/html') || '') : ''; } catch (er) { html = ''; }
+      if (!html) return;
+      e.preventDefault();
+      /* 光标停在链接里时，粘进来的内容也不能被吞成链接的一部分 */
+      this.moveCaretAfterLink();
+      var fmt = this.fmtBeforeCaret();
+      var box = document.createElement('div');
+      box.innerHTML = html;
+      var base = '', bEl = box.querySelector('base[href]');
+      if (bEl) base = bEl.getAttribute('href') || '';
+      /* 网页剪贴板常带 meta/base/link/script，先把这些和事件属性清掉 */
+      var bad = box.querySelectorAll('script,style,iframe,object,embed,link,meta,base,form,input,button,svg,math');
+      for (var i = bad.length - 1; i >= 0; i--)
+        if (bad[i].parentNode) bad[i].parentNode.removeChild(bad[i]);
+      var all = box.querySelectorAll('*');
+      for (var k = 0; k < all.length; k++) {
+        var el = all[k];
+        for (var q = el.attributes.length - 1; q >= 0; q--) {
+          var nm = el.attributes[q].name, v = el.getAttribute(nm) || '';
+          if (/^on/i.test(nm) || nm === 'srcdoc' || nm === 'formaction' ||
+              ((nm === 'href' || nm === 'src' || nm === 'xlink:href') &&
+               /^\s*(javascript|data|vbscript):/i.test(v))) el.removeAttribute(nm);
+        }
+      }
+      this.convertAnchors(box, false, base);
+      /* 用 Range 插，不用 execCommand：后者在 WebView 里返回值不可靠，
+         明明插进去了却返回 false，会造成「粘一次出两份」。 */
+      var frag = document.createDocumentFragment(), inserted = [];
+      while (box.firstChild) {
+        var ch = box.firstChild;
+        frag.appendChild(ch); inserted.push(ch);
+      }
+      var s = window.getSelection(), r = (s && s.rangeCount) ? s.getRangeAt(0) : null;
+      if (!r || !ed.contains(r.startContainer)) {
+        r = document.createRange(); r.selectNodeContents(ed); r.collapse(false);
+      }
+      r.deleteContents();
+      var last = frag.lastChild;
+      r.insertNode(frag);
+      if (last) { r.setStartAfter(last); r.collapse(true); }
+      var s2 = window.getSelection(); s2.removeAllRanges(); s2.addRange(r);
+      this._range = r.cloneRange(); this._selRange = null;
+      this.onInput(); this.scanLinks();
+      /* 记下这批顶层节点 + 粘贴处前一个字的格式，等用户点「匹配当前格式」 */
+      PASTE_INFO = {nodes: inserted, fmt: fmt};
+      var rect = null;
+      try {
+        if (last && last.getBoundingClientRect) rect = last.getBoundingClientRect();
+        else if (last && last.nodeType === 3) {
+          var mr = document.createRange(); mr.selectNode(last);
+          rect = mr.getBoundingClientRect();
+        }
+      } catch (e2) {}
+      var l = rect ? Math.max(8, Math.min(window.innerWidth - 312, Math.round(rect.left))) : 14;
+      var tp = rect ? Math.max(8, Math.min(window.innerHeight - 170, Math.round(rect.bottom + 6))) : 90;
+      this.pasteCard = {show: true, pos: {left: l + 'px', top: tp + 'px'}};
+      /* 无论走哪条路：落地后再扫一次，防止 WebKit 自己塞进隐式链接 */
+      setTimeout(function() {
+        var n = self.convertAnchors(ed, true);
+        if (n) { self.onInput(); self.scanLinks(); }
+      }, 0);
+    },
+    closePasteCard: function() {
+      this.pasteCard = {show: false, pos: (this.pasteCard && this.pasteCard.pos) || {left:'14px', top:'90px'}};
+      PASTE_INFO = null;
+    },
+    /** 保持原格式：正文已经按原样落地，收起卡片即可 */
+    keepPasteFormat: function() { this.closePasteCard(); },
+    /** 匹配当前格式：清掉外来样式，统一套上「粘贴处前一个字」的格式 */
+    matchPasteFormat: function() {
+      var info = PASTE_INFO;
+      if (!info || !info.nodes || !info.nodes.length) { this.closePasteCard(); return false; }
+      for (var i = 0; i < info.nodes.length; i++)
+        this.flattenPasteNode(info.nodes[i], info.fmt);
+      this.closePasteCard();
+      this.onInput(); this.scanLinks(); this.syncCaretFormat();
+      return true;
+    },
+    /** 单个粘贴节点剥成「结构 + 文字」再套格式（链接壳保留，仍能用卡片打开） */
+    flattenPasteNode: function(node, fmt) {
+      if (!node || !node.parentNode) return;
+      if (node.nodeType === 3) { this.wrapTextNode(node, fmt); return; }
+      if (node.nodeType !== 1) return;
+      var isLink = !!(node.classList && node.classList.contains('txtlink'));
+      if (this.isInlineTag(node.tagName) && !isLink) {
+        /* insertBefore 会把孩子从 node 里摘出来，循环才能往前走。
+           只 push 不移除 = 死循环（firstChild 永远不变），整个页面会卡死。 */
+        var p = node.parentNode, kids = [];
+        while (node.firstChild) {
+          var c0 = node.firstChild;
+          p.insertBefore(c0, node);
+          kids.push(c0);
+        }
+        p.removeChild(node);
+        for (var j = 0; j < kids.length; j++) this.flattenPasteNode(kids[j], fmt);
+        return;
+      }
+      node.removeAttribute('style');
+      if (!isLink) {
+        node.removeAttribute('class'); node.removeAttribute('align');
+        node.removeAttribute('width');
+      }
+      this.stripInlineIn(node, false);
+      var texts = [];
+      (function walk(n) {
+        for (var c = n.firstChild; c; c = c.nextSibling) {
+          if (c.nodeType === 3) texts.push(c);
+          else if (c.nodeType === 1 && c.tagName !== 'BR' &&
+                   !(c.classList && c.classList.contains('txtlink'))) walk(c);
+        }
+      })(node);
+      for (var q = 0; q < texts.length; q++) this.wrapTextNode(texts[q], fmt);
+    },
+    /** 光标/选区所在的正文链接（没有就 null）；先把漏网 <a> 归一化 */
+    linkAtCaret: function() {
+      var ed = document.getElementById('editor');
+      if (!ed) return null;
+      this.convertAnchors(ed, true);
+      var sel = window.getSelection(), node = null, r = null;
+      if (sel && sel.rangeCount) {
+        r = sel.getRangeAt(0).cloneRange();
+        node = r.startContainer;
+      } else if (this._range && ed.contains(this._range.startContainer)) {
+        r = this._range.cloneRange(); node = r.startContainer;
+      }
+      if (node && node.nodeType !== 1) node = node.parentNode;
+      if (node && node.closest) {
+        var lk = node.closest('span.txtlink');
+        if (lk && ed.contains(lk)) return lk;
+      }
+      if (!node && this.caretEl) node = this.caretEl();
+      if (node && node.closest) {
+        var lk2 = node.closest('span.txtlink');
+        if (lk2 && ed.contains(lk2)) return lk2;
+      }
+      try {
+        if (r && r.intersectsNode) {
+          var ls = this.linkEls();
+          for (var i = 0; i < ls.length; i++)
+            if (r.intersectsNode(ls[i])) return ls[i];
+        }
+      } catch (e) {}   // 归一化刚动过 DOM 时 Range 可能失效，别让右键菜单整个崩掉
+      return null;
+    },
+    linkPopPos: function(e) {
+      var b = document.querySelector('[data-rclink]');
+      var r = b ? b.getBoundingClientRect() : {left:12, bottom:80, top:50};
+      var byMouse = !!(e && e.type === 'contextmenu' && typeof e.clientX === 'number');
+      var l = byMouse ? e.clientX : r.left;
+      var t = byMouse ? e.clientY : r.bottom + 6;
+      if (l + 340 > window.innerWidth - 8) l = Math.max(6, window.innerWidth - 8 - 340);
+      if (t + 330 > window.innerHeight) t = Math.max(6, r.top - 330);
+      return {left: Math.round(l) + 'px', top: Math.round(t) + 'px'};
+    },
+    openLinkAdd: function(e) {
+      /* 光标/选区已经落在链接上：左键工具条也改成「编辑当前超链接」 */
+      var cur = this.linkAtCaret();
+      if (cur) { this.openLinkEditEl(cur, e); return; }
+      this.showLinkMgr = false;
+      this.linkCard.show = false;
+      this.linkPos = this.linkPopPos(e);
+      var r = this.pickSelRange(), txt = '';
+      try { if (r) txt = r.toString().replace(/\s+/g, ' ').slice(0, 40); } catch (er) {}
+      this.linkSelText = txt;
+      this.linkTarget = '';
+      this.linkKind = 'url';
+      this.linkEditing = false; LINK_EDIT_EL = null;
+      this.scanLinks();
+      this.showLinkAdd = true;
+    },
+    /** 编辑已有链接：回填目标，保存时只改属性，不重新包一层 */
+    openLinkEditEl: function(el, e) {
+      this.showLinkMgr = false;
+      this.linkCard.show = false;
+      this.linkPos = this.linkPopPos(e);
+      LINK_EDIT_EL = el;
+      this.linkEditing = true;
+      this.linkSelText = (el.textContent || '').replace(/\s+/g, ' ').slice(0, 40);
+      this.linkTarget = el.getAttribute('data-href') || '';
+      this.linkKind = el.getAttribute('data-kind') === 'file' ? 'file' : 'url';
+      this.scanLinks();
+      this.showLinkAdd = true;
+    },
+    openLinkMgr: function(e) {
+      this.showLinkAdd = false;
+      this.linkCard.show = false;
+      this.linkPos = this.linkPopPos(e);
+      this.scanLinks();
+      this.showLinkMgr = true;
+    },
+    /** 目标校验：网址走 normWebUrl（只放行 http/https）；本地路径不许带协议头 */
+    normLinkTarget: function(s, kind) {
+      var t = String(s || '').trim();
+      if (!t) return '';
+      if (kind === 'file') {
+        if (/^(javascript|data|file|https?):/i.test(t)) return '';
+        if (/[\r\n<>"]/.test(t) || t.length > 1000) return '';
+        return t;
+      }
+      return this.normWebUrl(t);
+    },
+    pickLinkFile: function() {
+      var p = this.host('pickLinkFile');
+      if (p) { this.linkKind = 'file'; this.linkTarget = p; }
+    },
+    pickLinkDir: function() {
+      var p = this.host('pickLinkDir');
+      if (p) { this.linkKind = 'file'; this.linkTarget = p; }
+    },
+    /** 把选中文字包成 span.txtlink；没选中就插入一条以目标为文字的新链接 */
+    applyLink: function() {
+      var t = this.normLinkTarget(this.linkTarget, this.linkKind);
+      if (!t) {
+        this.toast(this.linkKind === 'file' ? '请先选择本地文件或文件夹'
+                                           : '网址只支持 http/https');
+        return;
+      }
+      var ed = document.getElementById('editor');
+      if (!ed) return;
+      /* 编辑态：只改属性，保住链接文字和原来的光标位置，不重新包一层 */
+      if (this.linkEditing && LINK_EDIT_EL) {
+        if (!ed.contains(LINK_EDIT_EL)) { this.toast('这条链接已不在正文里'); return; }
+        LINK_EDIT_EL.setAttribute('data-href', t);
+        LINK_EDIT_EL.setAttribute('data-kind', this.linkKind);
+        LINK_EDIT_EL.setAttribute('title', t);
+        this.showLinkAdd = false;
+        this.linkEditing = false; LINK_EDIT_EL = null;
+        this.linkTarget = '';
+        this.onInput(); this.scanLinks();
+        return;
+      }
+      var span = document.createElement('span');
+      span.className = 'txtlink';
+      span.setAttribute('data-href', t);
+      span.setAttribute('data-kind', this.linkKind);
+      span.setAttribute('title', t);
+      var r = this.pickSelRange();
+      if (r) {
+        try {
+          span.appendChild(r.extractContents());
+          r.insertNode(span);
+          /* ★ 别把选区留在链接文字上：接着打字会被 WebKit 吞进链接壳。
+             光标一律落到链接后面的「出口」文本节点。 */
+          var s1 = window.getSelection(); s1.removeAllRanges();
+          var ex1 = this.linkExit(span);
+          var rr1 = document.createRange();
+          rr1.setStart(ex1, 0); rr1.collapse(true);
+          s1.addRange(rr1);
+          this._range = rr1.cloneRange(); this._selRange = null;
+        } catch (e1) { this.toast('设置失败，请重新选中文字'); return; }
+      } else {
+        span.textContent = this.linkKind === 'file'
+          ? (t.replace(/\\/g, '/').split('/').pop() || t) : t;
+        var rr2 = (this._range && ed.contains(this._range.startContainer))
+          ? this._range.cloneRange() : null;
+        if (!rr2) { rr2 = document.createRange(); rr2.selectNodeContents(ed); rr2.collapse(false); }
+        rr2.collapse(true);
+        rr2.insertNode(span);
+        var ex2 = this.linkExit(span);
+        rr2.setStart(ex2, 0); rr2.collapse(true);
+        var s2 = window.getSelection(); s2.removeAllRanges(); s2.addRange(rr2);
+        this._range = rr2.cloneRange(); this._selRange = null;
+      }
+      this.showLinkAdd = false;
+      this.linkTarget = '';
+      this.onInput();        // 让 HTML 草稿立刻落盘，重启链接还在
+      this.scanLinks();
+    },
+    /* ══════════ 格式刷（v1.28） ══════════
+       单击 = 记下当前选中文字的全部格式（含 data-href 链接属性），刷给下一段选中文字后自动退出；
+       320ms 内连击两次 = 批量模式，可反复刷；已进入后慢点一次 = 退出。
+       按用户要求：进入 / 退出都不弹任何提示，只用按钮亮起 / 变橙表示状态。 */
+    clickBrush: function() {
+      var now = Date.now();
+      if (this.brushOn) {
+        if (!this.brushBatch && now - (this._brushAt || 0) <= 320) {
+          this.brushBatch = true; this._brushAt = now;
+          return;
+        }
+        this.exitBrush();
+        return;
+      }
+      var r = this.pickSelRange();
+      if (!r) return;                         // 必须先选中文字；不给提示
+      /* v1.30：整段选区取样，起点落在最外层壳也不会把 B/I/U/底纹弄丢 */
+      this.brushFmt = this.captureRangeFormat(r);
+      this.brushOn = true; this.brushBatch = false;
+      this._brushAt = now;
+      this.shadePaint = false; this.colorPaint = false;  // 互斥，别同时上色
+      this._selRange = null;
+    },
+    exitBrush: function() {
+      this.brushOn = false; this.brushBatch = false;
+      this.brushFmt = null; this._brushAt = 0;
+    },
+    /** 用户选中下一段文字松手时调用；批量模式下可重复执行 */
+    tryBrushPaint: function() {
+      if (!this.brushOn || !this.brushFmt) return false;
+      var r = this.pickSelRange();
+      if (!r) return false;
+      this.applyFmtToRange(r, this.brushFmt);
+      this._selRange = null; this._range = null;
+      this.onInput(); this.scanLinks(); this.syncCnItalic(); this.syncCaretFormat();
+      if (!this.brushBatch) this.exitBrush();
+      return true;
+    },
+    linkEls: function() {
+      var ed = document.getElementById('editor');
+      return ed ? ed.querySelectorAll('span.txtlink') : [];
+    },
+    scanLinks: function() {
+      /* 顺手给每条链接补出口：草稿恢复 / 外部粘贴 / 寻回进来的链接也别吞字 */
+      this.ensureLinkExits();
+      var ns = this.linkEls(), arr = [];
+      for (var i = 0; i < ns.length; i++) {
+        var el = ns[i];
+        arr.push({text: (el.textContent || '').replace(/\s+/g, ' '),
+                  target: el.getAttribute('data-href') || '',
+                  kind: el.getAttribute('data-kind') === 'file' ? 'file' : 'url'});
+      }
+      this.linkList = arr;
+      return arr;
+    },
+    delLink: function(i) { this.delLinkEl(this.linkEls()[i]); },
+    delLinkEl: function(el) {
+      if (!el || !el.parentNode) return;
+      el.parentNode.replaceChild(document.createTextNode(el.textContent || ''), el);
+      if (LINK_EDIT_EL === el) LINK_EDIT_EL = null;
+      if (LINK_CARD_EL === el) LINK_CARD_EL = null;
+      this.onInput(); this.scanLinks();
+    },
+    /** 编辑面板里「删除链接（保留文字）」 */
+    delEditingLink: function() {
+      var el = LINK_EDIT_EL;
+      this.showLinkAdd = false;
+      this.linkEditing = false; LINK_EDIT_EL = null;
+      this.delLinkEl(el);
+    },
+    setLinkTarget: function(i, v) {
+      var el = this.linkEls()[i];
+      if (!el) return;
+      var kind = el.getAttribute('data-kind') === 'file' ? 'file' : 'url';
+      var t = this.normLinkTarget(v, kind);
+      if (!t) { this.toast('目标不合法（网址只支持 http/https）'); this.scanLinks(); return; }
+      el.setAttribute('data-href', t);
+      el.setAttribute('title', t);
+      this.onInput(); this.scanLinks();
+    },
+    gotoLink: function(i) {
+      var el = this.linkEls()[i];
+      if (!el) return;
+      try {
+        var r = document.createRange(); r.selectNodeContents(el);
+        var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+        this._range = r.cloneRange(); this._selRange = r.cloneRange();
+        if (el.scrollIntoView) el.scrollIntoView();
+        document.getElementById('editor').focus();
+      } catch (e) {}
+    },
+    mgrPickFile: function(i) {
+      var p = this.host('pickLinkFile');
+      if (p) this.setLinkTarget(i, p);
+    },
+    copyLinkTarget: function(t) {
+      this.host('copyText', t || '');
+      this.toast('已复制目标地址');
+    },
+    /** 卡片：target/kind/text + 定位矩形；linkDirectOpen 时直接交给系统默认程序 */
+    showLinkCard: function(target, kind, text, rect) {
+      if (!target) return;
+      if (this.linkDirectOpen) { this.launchLink(kind, target); return; }
+      this.popOff.linkcard = {};
+      var r = rect || {left:14, bottom:100};
+      var l = Math.max(6, Math.min(window.innerWidth - 306, Math.round(r.left || 14)));
+      var tp = Math.max(6, Math.min(window.innerHeight - 210,
+                           Math.round((r.bottom || r.top || 100) + 6)));
+      this.linkCardPos = {left: l + 'px', top: tp + 'px'};
+      this.linkCard = {show: true, text: (text || '').replace(/\s+/g, ' '),
+                       target: target, kind: kind};
+    },
+    onLinkClick: function(el) {
+      var t = el.getAttribute('data-href') || '';
+      var kind = el.getAttribute('data-kind') === 'file' ? 'file' : 'url';
+      if (!t) return;
+      LINK_CARD_EL = el;
+      this.showLinkCard(t, kind, el.textContent || '', el.getBoundingClientRect());
+    },
+    /** 漏网的 <a href>（外部粘贴/插件注入）：先拦下导航，再就地归一化，最后照常给卡片。
+        这是「点外部粘贴链接会把应用导航走、退不回去」的最后一道闸。 */
+    onAnchorClick: function(a) {
+      var info = this.pasteHref(a.getAttribute('href') || '', '');
+      var text = (a.textContent || '').replace(/\s+/g, ' ');
+      var rect = a.getBoundingClientRect();
+      var ed = document.getElementById('editor');
+      if (info.kind) this.showLinkCard(info.target, info.kind, text, rect);
+      LINK_CARD_EL = null;
+      if (ed) {
+        this.convertAnchors(ed, true);
+        if (info.kind) {
+          var ls = this.linkEls();
+          for (var i = 0; i < ls.length; i++)
+            if (ls[i].getAttribute('data-href') === info.target) { LINK_CARD_EL = ls[i]; break; }
+        }
+      }
+    },
+    /** 卡片里「编辑这条…」 */
+    editCardLink: function() {
+      var el = LINK_CARD_EL;
+      this.linkCard.show = false;
+      var e = {type:'contextmenu',
+               clientX: parseInt(this.linkCardPos.left, 10) || 14,
+               clientY: parseInt(this.linkCardPos.top, 10) || 120};
+      var ed = document.getElementById('editor');
+      if (el && ed && ed.contains(el)) this.openLinkEditEl(el, e);
+      else this.openLinkMgr(e);
+    },
+    /** 右键菜单顶部：当前文字是链接→编辑这条；不是→给选中的文字添加 */
+    ctxLinkAction: function() {
+      this.ctxShow = false;
+      var e = {type:'contextmenu', clientX:this.ctxLinkXY.x, clientY:this.ctxLinkXY.y};
+      var ed = document.getElementById('editor');
+      if (this.ctxHasLink && CTX_LINK_EL && ed && ed.contains(CTX_LINK_EL))
+        this.openLinkEditEl(CTX_LINK_EL, e);
+      else this.openLinkAdd(e);
+    },
+    ctxLinkManage: function() {
+      this.ctxShow = false;
+      this.openLinkMgr({type:'contextmenu', clientX:this.ctxLinkXY.x, clientY:this.ctxLinkXY.y});
+    },
+    launchLink: function(kind, t) {
+      this.linkCard.show = false;
+      var r = this.host('openLinkTarget', kind, t);
+      if (r && String(r).indexOf('ERR') === 0)
+        this.toast('打不开这个目标（文件可能已移动，或网址不合法）');
+    },
+    setLinkDirectOpen: function(v) {
+      this.linkDirectOpen = !!v;
+      this.host('setLinkDirectOpen', v ? 'true' : 'false');
+    },
+    setWebBtnOrder: function(v) {
+      var n = parseInt(v, 10);
+      if (!(n >= 5 && n <= 65)) return;
+      this.webBtnOrder = n;
+      this.host('setWebBtnOrder', String(n));
+    },
+
     /** 是否有"挡住正文"的弹层/录键状态（查找条、词库面板是非模态的，不算） */
     layerOpen: function() {
       return !!(this.capturing || this.showSettings || this.showCloseModal ||
                 this.confirmMsg || this.showImportModal || this.showHistModal ||
                 this.showChars || this.showDocs || this.promptShow || this.showMore ||
-                this.showExport);
+                this.showExport || this.showWeb || this.showWebEdit ||
+                this.showLinkAdd || this.showLinkMgr || this.linkCard.show);
     },
 
     /**
@@ -4242,7 +5827,11 @@ var app = Vue.createApp({
                      this.showImportModal || this.showHistModal || this.showChars ||
                      this.showDocs || this.wordsVisible || this.promptShow ||
                      this.showMore || this.showFind || this.showExport || this.ctxShow ||
-                     this.tagPickerShow || this.navShow || this.markPop;
+                     this.tagPickerShow || this.navShow || this.markPop ||
+                     this.showWeb || this.showWebEdit ||
+                     this.showLinkAdd || this.showLinkMgr || this.linkCard.show ||
+                     this.pasteCard.show || this.brushOn;
+      this.closePasteCard(); this.exitBrush();
       this.showCloseModal = false;
       this.showExport = false;
       this.confirmMsg = ''; this._confirmCb = null;
@@ -4255,6 +5844,9 @@ var app = Vue.createApp({
       this.showFind = false;
       this.promptShow = false; this._promptCb = null;
       this.tagPickerShow = false; this.markPop = ''; this.navShow = false;
+      this.showWeb = false; this.showWebEdit = false;
+      this.showLinkAdd = false; this.showLinkMgr = false; this.linkCard.show = false;
+      this.linkEditing = false; LINK_EDIT_EL = null;
       this.shadePaint = false;      // Esc 顺手把底纹笔也关了（curTag/shadeKind 留着）
       this.colorPaint = false;      // 颜色笔同理
       this.showWords = false; this.wordsClosed = true; this.addingWord = false;
@@ -5322,6 +6914,10 @@ var app = Vue.createApp({
       } catch (e3) { return null; }
     },
     ctxOpen: function(e) {
+      var edX = document.getElementById('editor');
+      if (edX) this.convertAnchors(edX, true);   // 外部粘贴的 <a> 先拆，右键才能识别成可编辑链接
+      this.ctxLinkXY = {x: Math.round(e.clientX || 14), y: Math.round(e.clientY || 120)};
+      CTX_LINK_EL = null;
       this.ctxCur = this.blockOf();
       this.ctxView = 'main';
       var sel = window.getSelection();
@@ -5377,8 +6973,32 @@ var app = Vue.createApp({
         this.ctxItalic = (cs.fontStyle === 'italic');
         this.ctxUnder = (cs.textDecorationLine || '').indexOf('underline') >= 0;
       } catch (err) {}
+      /* v1.29：右键 B/I/U 亮起同样按「选区碰到的显式壳」判定 ——
+         从壳外起选、跨多个壳都能认出来，再点才会走恢复默认那条路 */
+      try {
+        var ctxR = this.pickSelRange();
+        this.ctxBold = this._hasFmtAt(ctxR, 'bold');
+        this.ctxItalic = this._hasFmtAt(ctxR, 'italic');
+        this.ctxUnder = this._hasFmtAt(ctxR, 'underline');
+        this.ctxHasColor = this._fmtCarriers(ctxR, 'color').length > 0 || !!this.selColorOn;
+        this.ctxHasShade = !!(this.selShade || this.selTag);
+        if (!this.ctxHasShade && ctxR && !ctxR.collapsed) {
+          var edSh = document.getElementById('editor');
+          var mkSh = edSh ? edSh.querySelectorAll('.hlmark,.tagmark') : [];
+          for (var msi = 0; msi < mkSh.length; msi++) {
+            try { if (ctxR.intersectsNode(mkSh[msi])) { this.ctxHasShade = true; break; } }
+            catch (eSh) {}
+          }
+        }
+      } catch (eFmt) {}
       this.ctxStyleName = this.levelName(this.ctxCur);
       this.ctxStyleLevel = this.ctxCur;
+      /* 超链接分支：右键落在链接上=编辑当前，落在普通文字上=添加 */
+      try { CTX_LINK_EL = this.linkAtCaret(); } catch (e5) { CTX_LINK_EL = null; }
+      this.ctxHasLink = !!CTX_LINK_EL;
+      this.ctxLinkTarget = CTX_LINK_EL
+        ? (CTX_LINK_EL.getAttribute('data-href') || '').slice(0, 30) : '';
+      this.scanLinks();
       this.ctxPos = {
         left: Math.min(e.clientX, window.innerWidth - 262) + 'px',
         top: Math.max(6, Math.min(e.clientY, window.innerHeight - 330)) + 'px'
@@ -5520,18 +7140,19 @@ var app = Vue.createApp({
       var j = Math.max(0, Math.min(list.length - 1, i + d));
       this.ctxSetSize(list[j]);
     },
-    /** B / I / U：直接套内联样式，标题里也改得动（样式本身不受影响） */
+    /** B / I / U：v1.29 走和工具条同一套字符格式 toggle ——
+        亮着（当前文字带格式）再点 = 真拆壳恢复默认，而不是写一层 400/none 盖上去。
+        没选中时右键按「整段」处理，范围由 ctxTarget() 给。 */
     ctxToggle: function(cmd) {
       var t = this.ctxTarget();
       if (!t) { this.toast('这一段还没有文字，先写几个字再设格式'); return; }
-      var css = null;
-      if (cmd === 'bold') css = {fontWeight: this.ctxBold ? '400' : '700'};
-      else if (cmd === 'italic') css = {fontStyle: this.ctxItalic ? 'normal' : 'italic'};
-      else css = {textDecoration: this.ctxUnder ? 'none' : 'underline'};
-      if (!this._styleRange(t, css)) { this.toast('改不动，换个位置再试'); return; }
-      if (cmd === 'bold') this.ctxBold = !this.ctxBold;
-      else if (cmd === 'italic') this.ctxItalic = !this.ctxItalic;
-      else this.ctxUnder = !this.ctxUnder;
+      var kind = cmd === 'bold' ? 'bold' : cmd === 'italic' ? 'italic' : 'underline';
+      if (!this.toggleCharFmt(kind, t.range)) { this.toast('改不动，换个位置再试'); return; }
+      /* 重新取一次选区（拆壳/套壳都会重建 DOM），把三个按钮的亮起状态刷新 */
+      var rr = this.pickSelRange();
+      this.ctxBold = this._hasFmtAt(rr, 'bold');
+      this.ctxItalic = this._hasFmtAt(rr, 'italic');
+      this.ctxUnder = this._hasFmtAt(rr, 'underline');
     },
     ctxIndent: function() {
       /* 全文首行缩进开着时不用手动插（不然变成四格） */
@@ -5911,10 +7532,52 @@ var hostWait = setInterval(function() {
   }
 }, 120);
 
+/* 超链接点击（捕获阶段）：绝不让 WebView 拿到 href 去导航。
+   · 自己的链接是 span.txtlink（目标在 data-href 里）
+   · 外面复制来的「百度一下」是 <a href>：同样拦下，转成 txtlink 后走系统默认程序
+   两者都只由 Java 用 rundll32 / Desktop 打开外部程序，编辑器页面永远不动。 */
+document.addEventListener('click', function(e) {
+  var t = e.target;
+  if (!t || !t.closest || !window.app) return;
+  var ed = document.getElementById('editor');
+  if (!ed) return;
+  var lk = t.closest('.txtlink');
+  var anc = t.closest('a[href]');
+  if (lk && ed.contains(lk)) {
+    e.preventDefault(); e.stopPropagation();
+    if (app.onLinkClick) app.onLinkClick(lk);
+    return;
+  }
+  if (anc) {
+    /* 不管链接在正文还是别处，都不允许 WebView 自己跳走 */
+    e.preventDefault(); e.stopPropagation();
+    if (app.onAnchorClick) app.onAnchorClick(anc);
+  }
+}, true);
+
+/* 点弹层外面收起超链接三张卡（编辑器自己有 @mousedown.stop，必须走捕获阶段） */
+document.addEventListener('mousedown', function(e) {
+  var t = e.target;
+  if (!t || !t.closest) return;
+  if (!t.closest('.lnkpop') && !t.closest('[data-rclink]')) {
+    if (!window.app) return;
+    app.showLinkAdd = false;
+    app.showLinkMgr = false;
+    app.linkCard.show = false;
+  }
+  /* 粘贴选项：点卡片外面就收起（卡片内要留给两个按钮的 click） */
+  if (!t.closest('.pastecard') && window.app) app.closePasteCard();
+}, true);
+
 /* 点击空白处收起弹出层 */
 document.addEventListener('mousedown', function(e) {
   var el = e.target;
   if (!el || !el.closest) return;
+  /* 外部网页弹层：点弹层内或按钮本身不收（按钮要留给 click 做开/关切换） */
+  if (!el.closest('.webpop') && !el.closest('[data-rcweb]')) {
+    app.showWeb = false;
+    app.showWebEdit = false;
+  }
   if (!el.closest('.pop') && !el.closest('.toolbar')) {
     app.showMore = false;
     app.showChars = false;
@@ -6004,6 +7667,18 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
   font-family:var(--pff,var(--font));font-weight:var(--pbw,400);
   font-style:var(--pit,normal)}
 .editor.bold{font-weight:700}
+/* v1.30 中文斜体：JavaFX WebView 只给西文合成斜体，CJK 回退字体一个都不倾斜
+   （<i>里 "ABC" 是斜的、汉字还是笔直的），而 transform 只对 inline-block 生效。
+   含汉字的斜体壳由 syncCnItalic() 打上 data-cnital，用 skewX 补出可见倾斜；
+   纯西文保持原生 italic、不动 display，避免长斜体句被 inline-block 撑成独立块。 */
+.editor [data-cnital]{
+  display:inline-block;
+  /* ★ inline-block 是块级容器，会把段落的 text-indent:2em 也用到自己内部首行，
+     文字整体右推 32px，看上去像斜体前面凭空多了一块空白 —— 必须清零 */
+  text-indent:0;
+  -webkit-transform:skewX(-12deg);transform:skewX(-12deg);
+  -webkit-transform-origin:50% 50%;transform-origin:50% 50%;
+  vertical-align:baseline;line-height:1.2}
 .editor:empty:before{content:attr(data-ph);color:var(--ph)}
 .editor ::selection{background:rgba(99,102,241,.25)}
 .editor::selection{background:rgba(99,102,241,.25)}
@@ -6046,6 +7721,82 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
   border-radius:8px;font-size:12.5px}
 .tagpick .tagrow:hover{background:var(--soft)}
 
+/* ═══════════════ 外部网页（左键列表 / 右键添加） ═══════════════ */
+.webpop{width:274px;max-height:74vh;overflow-y:auto;padding:8px}
+.webhd{display:flex;align-items:center;justify-content:space-between;padding:2px 6px 8px;
+  border-bottom:1px solid var(--line);margin-bottom:6px}
+.webhd b{font-size:13px;color:var(--ink)}
+.webhd .x,.webrow .x{font-size:12px;color:var(--sub);padding:0 4px;cursor:pointer}
+.webhd .x:hover,.webrow .x:hover{color:var(--accent)}
+.webitem{display:block;width:100%;text-align:left;padding:6px 9px;border-radius:9px;
+  margin-bottom:3px;background:transparent}
+.webitem:hover{background:var(--soft)}
+.webname{display:block;font-size:12.5px;color:var(--ink);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.weburl{display:block;font-size:10.5px;color:var(--sub);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+.webempty{font-size:11.5px;color:var(--sub);padding:6px 9px 10px;line-height:1.6}
+.webadd{display:block;width:100%;text-align:left;padding:7px 9px;border-radius:9px;
+  font-size:12px;color:var(--accent);background:var(--soft);margin-top:5px}
+.webadd:hover{background:var(--hover)}
+.webrow{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:8px}
+.webrow:hover{background:var(--soft)}
+.webrow .webname{flex:1;min-width:0}
+.webrow .x:hover{color:#E11D48}
+.webpop .wadd input{-webkit-user-select:text;user-select:text}
+/* 收藏夹拖拽排序 + 标题栏按钮拖拽改位 */
+.wgrip{cursor:grab;color:var(--sub);font-size:13px;padding:0 4px;
+  line-height:1;user-select:none;-webkit-user-select:none}
+.wgrip:active{cursor:grabbing;color:var(--accent)}
+.webdrag{display:flex;align-items:center;gap:2px;border-radius:9px}
+.webdrag .webitem{flex:1;min-width:0}
+.webdrag.dropbefore,.webrow.dropbefore{box-shadow:inset 0 2px 0 var(--accent)}
+.webdroplast{height:3px;margin:2px 9px 4px;background:var(--accent);border-radius:2px}
+.pill.moving{opacity:.8;box-shadow:0 0 0 2px rgba(255,255,255,.7)}
+
+/* ═══════════════ 正文超链接（v1.26） ═══════════════ */
+.editor .txtlink{color:var(--accent);text-decoration:underline;text-underline-offset:2px;
+  cursor:pointer;border-radius:3px;padding:0 1px;background:rgba(99,102,241,.09)}
+.editor .txtlink:hover{background:rgba(99,102,241,.2)}
+html.dark .editor .txtlink{background:rgba(129,140,248,.16)}
+.lnkpop{width:330px;max-height:76vh;overflow-y:auto;padding:8px}
+.lnkpop .lnkhint{font-size:11.5px;color:var(--sub);padding:4px 8px 8px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lnkrow{display:flex;align-items:center;gap:6px;padding:0 8px 7px;flex-wrap:wrap}
+.lnkkind{height:25px;padding:0 10px;border-radius:8px;font-size:12px;
+  color:var(--sub);background:var(--soft)}
+.lnkkind.on{background:var(--accent);color:#fff;font-weight:700}
+.lnkinput{flex:1;min-width:0;height:27px;border:1px solid var(--line);border-radius:7px;
+  padding:4px 8px;font-size:12px;color:var(--ink);background:var(--field);
+  -webkit-user-select:text;user-select:text}
+.lnkinput:focus{border-color:var(--accent)}
+.lnkbtn{height:26px;padding:0 10px;border-radius:8px;font-size:11.5px;
+  color:var(--ink);background:var(--soft);white-space:nowrap}
+.lnkbtn:hover{background:var(--hover)}
+.lnkbtn.primary{background:var(--accent);color:#fff;font-weight:700}
+.lnkfoot{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:5px;padding:4px 8px 6px}
+.lnktip{font-size:10.5px;color:var(--sub);line-height:1.6;
+  padding:5px 8px 2px;border-top:1px dashed var(--line)}
+.lnkopt{display:flex;align-items:flex-start;gap:6px;font-size:11px;color:var(--sub);
+  line-height:1.5;padding:6px 8px 8px;cursor:pointer}
+.lnkopt input{accent-color:var(--accent);margin-top:2px}
+.lnkitem{border-top:1px dashed var(--line);padding:7px 8px}
+.lnkit-h{display:flex;align-items:center;gap:6px}
+.lnktext{flex:1;min-width:0;font-size:12px;color:var(--ink);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.lnkkindtag{font-size:10px;color:var(--accent);background:var(--soft);
+  border-radius:6px;padding:1px 5px}
+.lnkit-r{display:flex;align-items:center;gap:5px;margin-top:5px;flex-wrap:wrap}
+.linkcard{width:296px}
+/* 格式刷：亮起=已带格式待刷，橙色=批量（可反复刷）。不给任何文字提示。 */
+.tb.on.batch{background:#F59E0B;color:#fff}
+.pastecard{width:300px;padding:8px}
+.pastecard .lnkfoot{padding:6px 8px}
+.pastecard .lnktip{margin-top:2px}
+.lnkcard-target{font-size:11px;color:var(--accent);background:var(--soft);
+  border-radius:8px;padding:7px 9px;margin:0 8px;word-break:break-all;
+  max-height:80px;overflow-y:auto}
+
 /* ═══════════════ 弹层 ═══════════════ */
 .pop{position:absolute;background:var(--panel);border-radius:14px;z-index:50;
   box-shadow:0 10px 40px rgba(25,35,80,.16);border:1px solid var(--line);
@@ -6072,6 +7823,11 @@ button{font-family:inherit;cursor:pointer;border:none;background:none}
 .ctxitem .kbd{margin-left:auto;color:var(--sub);font-size:11px;max-width:112px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ctxitem.on{color:var(--accent);font-weight:700}
+/* 右键菜单最上面的超链接入口：亮一点，一眼能看到「编辑 / 添加」 */
+.ctxitem.ctxlinkitem{color:var(--accent);font-weight:700;
+  background:var(--soft);border-radius:8px;margin:0 2px 3px;width:calc(100% - 4px)}
+.ctxitem.ctxlinkitem:hover{background:var(--accent);color:#fff}
+.ctxitem.ctxlinkitem .kbd{color:inherit;opacity:.75}
 .ctxgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;padding:4px 6px 8px}
 .ctxgrid button{height:27px;border-radius:7px;font-size:12px;color:var(--ink);background:var(--soft)}
 .ctxgrid button:hover{background:var(--hover);color:var(--accent)}

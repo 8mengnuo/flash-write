@@ -78,6 +78,11 @@ public class FxApp extends Application {
     private boolean pItalic = false, h1Italic = false, h2Italic = false, h3Italic = false; // 样式斜体
     private String pFont = "", h1Font = "", h2Font = "", h3Font = ""; // 样式字体族（空=默认栈）
     private String tagDefsJson = "";      // 标签定义 JSON：[{"name":"重要","color":"#F59E0B"}]
+    private String webLinksJson = "[]";   // 外部网页：用户自定义链接 JSON：[{"name":"我的博客","url":"https://..."}]
+    /* 超链接（v1.26）：开关与「外部网页」按钮在标题栏里的顺序，单独存 linkopt.properties。
+       绝不经 config.properties —— saveConfig() 会把测试隔离配置写回，踩过一次假 FAIL。 */
+    private boolean linkDirectOpen = false;  // 点正文超链接：false=弹卡片，true=直接交给系统默认程序
+    private int webBtnOrder = 60;            // 标题栏 flex order（默认排在「设置」之后）
     private int tocSize = 16;             // 目录字号（生成前后都实时生效）
     private boolean bubbleCloud = true;   // 气泡：云彩环绕
     private boolean bubbleRhythm = true;  // 气泡：节奏律动
@@ -243,10 +248,40 @@ public class FxApp extends Application {
            原生菜单只会添乱 —— 一刀切，永不再弹。 */
         web.setContextMenuEnabled(false);
         engine = web.getEngine();
-        engine.load(getClass().getResource("/index.html").toExternalForm());
+        final String homeUrl = getClass().getResource("/index.html").toExternalForm();
+        engine.load(homeUrl);
         // 页面加载完成后挂载 JS 桥（必须在 load 完成后，否则 window 上挂不上）
         engine.getLoadWorker().stateProperty().addListener((ov, oldV, newV) -> {
             if (newV == Worker.State.SUCCEEDED) hookJs();
+        });
+        /* ★ 最后一道闸：万一有漏网的 <a href> 把 WebView 导航到外部地址，
+           立刻把地址交给系统默认程序，并把应用页面重新载回来。
+           否则用户点一下网页里复制来的「百度一下」，整个闪写界面就被换成网页、
+           退不回去（用户实测）。前端已在粘贴/点击/加载三处归一化，这里只兜底。 */
+        final long[] lastNavGuard = {0L};
+        engine.locationProperty().addListener((obs, oldLoc, newLoc) -> {
+            if (newLoc == null || newLoc.isEmpty() || newLoc.equals(homeUrl)) return;
+            String low = newLoc.toLowerCase(java.util.Locale.ROOT);
+            /* 只认 http/https：应用自己可能从 file:/jar: 页面启动，
+               把 file: 也算成外部导航会在开发模式下误触发甚至循环重载。 */
+            if (!low.startsWith("http://") && !low.startsWith("https://")) return;
+            long now = System.currentTimeMillis();
+            if (now - lastNavGuard[0] < 2000) return;   // 防重入
+            lastNavGuard[0] = now;
+            Platform.runLater(() -> {
+                try {
+                    final String url = newLoc;
+                    Thread th = new Thread(() -> {
+                        try {
+                            Runtime.getRuntime().exec(new String[]{
+                                    "rundll32", "url.dll,FileProtocolHandler", url});
+                        } catch (Throwable ignored) {}
+                    }, "snapwrite-nav-guard");
+                    th.setDaemon(true);
+                    th.start();
+                    engine.load(homeUrl);   // load() 会自动取消当前这次外部导航
+                } catch (Throwable ignored) {}
+            });
         });
 
         Scene scene = new Scene(web, 880, 600, javafx.scene.paint.Color.TRANSPARENT);
@@ -1429,9 +1464,48 @@ public class FxApp extends Application {
                 writeAll(docFile, draft);           // 首启迁移：把老草稿变成文档
             }
         } catch (Exception ignored) {}
+        loadWebLinks();
+        loadLinkOpt();
         loadHistory();
         today0 = loadToday();
         total0 = countChars(draft);
+    }
+
+    /** 外部网页列表独立存 data/weblinks.json：保存列表时绝不覆写 config.properties 的其它字段 */
+    private File webLinksFile() { return new File(dataDir(), "weblinks.json"); }
+    private void loadWebLinks() {
+        try {
+            File f = webLinksFile();
+            String s = f.exists() ? readAll(f).trim() : "[]";
+            webLinksJson = (s.startsWith("[") && s.endsWith("]")) ? s : "[]";
+        } catch (Exception e) { webLinksJson = "[]"; }
+    }
+    private void saveWebLinksFile() {
+        try { writeAll(webLinksFile(), webLinksJson); } catch (Exception ignored) {}
+    }
+
+    /** 超链接开关 / 标题栏按钮位置：独立两行文本，不碰 config.properties */
+    private File linkOptFile() { return new File(dataDir(), "linkopt.properties"); }
+    private void loadLinkOpt() {
+        try {
+            File f = linkOptFile();
+            if (!f.exists()) return;
+            for (String ln : readAll(f).split("\\r?\\n")) {
+                if (ln.startsWith("directOpen="))
+                    linkDirectOpen = Boolean.parseBoolean(ln.substring(11).trim());
+                else if (ln.startsWith("webBtnOrder=")) {
+                    try { webBtnOrder = Integer.parseInt(ln.substring(12).trim()); }
+                    catch (Exception ignored) {}
+                    if (webBtnOrder < 5 || webBtnOrder > 65) webBtnOrder = 60;
+                }
+            }
+        } catch (Exception ignored) {}
+    }
+    private void saveLinkOpt() {
+        try {
+            writeAll(linkOptFile(), "directOpen=" + linkDirectOpen
+                    + "\nwebBtnOrder=" + webBtnOrder + "\n");
+        } catch (Exception ignored) {}
     }
 
     /** 文档同名伴生 HTML：存格式（标题/底纹/标签/颜色），.txt 只存纯文字（统计/快照/兼容） */
@@ -1880,7 +1954,104 @@ public class FxApp extends Application {
                 javafx.util.Duration.seconds(4));
         wait.setOnFinished(e -> {
             try {
-                if (FxMain.shotBubbleWords) {
+                if (FxMain.shotBrush || FxMain.shotPaste) {
+                    /* 格式刷（批量态高亮） / 粘贴选项卡片 */
+                    engine.executeScript("if(window.app&&app.testFill)app.testFill();");
+                    engine.executeScript(
+                        "(function(){var a=window.app,ed=document.getElementById('editor');if(!a||!ed)return;" +
+                        "ed.innerHTML=\"<p>第一章 雨夜</p><p>参考资料：<span class='txtlink' data-kind='url' " +
+                        "data-href='https://gitee.com/meng_nuo/flash-write'>Gitee 仓库</span>，后面还有普通文字。</p>\";" +
+                        "a.onInput();a.scanLinks();" +
+                        (FxMain.shotBrush
+                            ? "a.brushOn=true;a.brushBatch=true;"
+                            : "a.pasteCard={show:true,pos:{left:'210px',top:'170px'}};") +
+                        "})()");
+                } else if (FxMain.shotItalic) {
+                    /* v1.30 斜体渲染对照：WebView 对中文字体是否肯合成倾斜，
+                       六种写法并排拍一张，用来挑真正看得见的那种。 */
+                    engine.executeScript(
+                        "(function(){var a=window.app,ed=document.getElementById('editor');if(!a||!ed)return;" +
+                        "ed.innerHTML=\"<p>A normal : 中文斜体测试 ABC abc</p>\" +" +
+                        "\"<p>B tag i : <i>中文斜体测试 ABC abc</i></p>\" +" +
+                        "\"<p>C oblique14 : <span style='font-style:oblique 14deg'>中文斜体测试 ABC abc</span></p>\" +" +
+                        "\"<p>D skew : <span style='display:inline-block;transform:skewX(-14deg)'>中文斜体测试 ABC abc</span></p>\" +" +
+                        "\"<p>E synth : <span style='font-style:italic;font-synthesis:style'>中文斜体测试 ABC abc</span></p>\" +" +
+                        "\"<p>F italic : <span style='font-style:italic'>中文斜体测试 ABC abc</span></p>\" +" +
+                        "\"<p>G inline skew : <span style='transform:skewX(-14deg)'>中文斜体测试 ABC abc</span></p>\" +" +
+                        "\"<p>H ib skew : <span style='display:inline-block;transform:skewX(-12deg)'>中文斜体测试 ABC abc</span></p>\" +" +
+                        "\"<p>I tag i skew : <i style='display:inline-block;transform:skewX(-12deg)'>中文斜体测试 ABC abc</i></p>\";" +
+                        "a.onInput();})()");
+                } else if (FxMain.shotBrushAll) {
+                    /* v1.30：源文字同时带 加粗/斜体/下划线/颜色/底纹/超链接，
+                       用格式刷刷给「目标文字」，看是不是六种格式一个都不少。 */
+                    engine.executeScript(
+                        "(function(){var a=window.app,ed=document.getElementById('editor');if(!a||!ed)return;" +
+                        "ed.innerHTML=\"<p>格式刷演示</p><p><span class='txtlink' data-kind='url' \" +" +
+                        "\"data-href='https://gitee.com/meng_nuo/flash-write'><b><i><u>\" +" +
+                        "\"<span class='hlmark' style='background-color:#FACC15;color:#E11D48'>源格式文字</span>\" +" +
+                        "\"</u></i></b></span> ← 源 / 目标 → 目标文字</p>\";" +
+                        "a.onInput();a.scanLinks();" +
+                        "var src=ed.querySelector('.txtlink');if(!src)return;" +
+                        "var r=document.createRange();r.selectNodeContents(src);" +
+                        "var s=window.getSelection();s.removeAllRanges();s.addRange(r);" +
+                        "a._range=r.cloneRange();a._selRange=r.cloneRange();a.clickBrush();" +
+                        "var p=ed.querySelectorAll('p')[1],t=null;" +
+                        "for(var i=0;i<p.childNodes.length;i++){var n=p.childNodes[i];" +
+                        "if(n.nodeType===3&&n.nodeValue.indexOf('目标文字')>=0)t=n;}" +
+                        "if(t){var off=t.nodeValue.indexOf('目标文字');" +
+                        "var r2=document.createRange();r2.setStart(t,off);r2.setEnd(t,off+4);" +
+                        "var s2=window.getSelection();s2.removeAllRanges();s2.addRange(r2);" +
+                        "a._selRange=r2.cloneRange();a._range=r2.cloneRange();a.tryBrushPaint();}" +
+                        "})()");
+                } else if (FxMain.shotFmt || FxMain.shotFmtCtx) {
+                    /* v1.29：选中一段同时带 B/I/U/颜色/底纹的文字，
+                       看工具条（或右键菜单）五个格式按钮是否都亮起 ——
+                       亮=当前文字带该格式，再点即恢复默认。 */
+                    engine.executeScript(
+                        "(function(){var a=window.app,ed=document.getElementById('editor');if(!a||!ed)return;" +
+                        "ed.innerHTML=\"<p>第一章 雨夜</p><p>字符格式演示：<b>加粗</b>、<i>斜体</i>、\" +" +
+                        "\"<u>下划线</u>、<span style='color:#E11D48'>红字</span>与\" +" +
+                        "\"<span class='hlmark' style='background-color:#FACC15'>底纹</span>。</p>\";" +
+                        "a.onInput();" +
+                        "var p=ed.querySelectorAll('p')[1];if(!p)return;" +
+                        "var r=document.createRange();r.setStart(p.firstChild,0);" +
+                        "r.setEnd(p.lastChild,p.lastChild.nodeType===3?p.lastChild.length:p.lastChild.childNodes.length);" +
+                        "var s=window.getSelection();s.removeAllRanges();s.addRange(r);" +
+                        "a._range=r.cloneRange();a._selRange=r.cloneRange();" +
+                        "a.syncCaretFormat();" +
+                        (FxMain.shotFmtCtx ? "a.ctxOpen({clientX:150,clientY:190});" : "") +
+                        "})()");
+                } else if (FxMain.shotLink || FxMain.shotLinkMgr ||
+                    FxMain.shotLinkCard || FxMain.shotLinkEdit) {
+                    /* 正文超链接：造一条网址 + 一条本地链接，三种面板各截一张 */
+                    engine.executeScript(
+                        "(function(){var a=window.app,ed=document.getElementById('editor');if(!a||!ed)return;" +
+                        "ed.innerHTML=\"<p>第一章 雨夜</p><p>参考资料：<span class='txtlink' data-kind='url' " +
+                        "data-href='https://gitee.com/meng_nuo/flash-write'>Gitee 仓库</span>，以及" +
+                        "<span class='txtlink' data-kind='file' data-href='D:/素材库'>本地素材库</span>。</p>\";" +
+                        "a.linkDirectOpen=false;a.onInput();a.scanLinks();" +
+                        (FxMain.shotLinkMgr
+                            ? "a.openLinkMgr();"
+                            : FxMain.shotLinkCard
+                                ? "a.onLinkClick(ed.querySelector('.txtlink'));"
+                                : FxMain.shotLinkEdit
+                                    ? "a.openLinkEditEl(ed.querySelector('.txtlink'));"
+                                    : "a.linkKind='url';" +
+                                      "a.linkTarget='https://gitee.com/meng_nuo/flash-write/releases';" +
+                                      "a.openLinkAdd();") +
+                        "})()");
+                } else if (FxMain.shotWeb || FxMain.shotWebEdit) {
+                    /* 外部网页：左键列表 / 右键添加面板（示例链接只放内存里，不写盘） */
+                    engine.executeScript("if(window.app&&app.testFill)app.testFill();");
+                    engine.executeScript(
+                        "(function(){var a=window.app;if(!a)return;" +
+                        "a.webLinks=[{name:'我的博客',url:'https://example.com/blog'}," +
+                        "{name:'写作素材库',url:'https://example.com/notes'}];" +
+                        (FxMain.shotWebEdit
+                            ? "a.webName='';a.webUrl='';a.openWebEdit();"
+                            : "a.toggleWeb();") +
+                        "})()");
+                } else if (FxMain.shotBubbleWords) {
                     engine.executeScript("if(window.app&&app.testFill)app.testFill();");
                     engine.executeScript("if(window.app){app.cfg.alwaysWords=true;app.enterBubble();}");
                 } else if (FxMain.shotBubble) {
@@ -2046,6 +2217,15 @@ public class FxApp extends Application {
                     case "setWestFont":  setWestFont(a1); break;
                     case "setStyleItalics": setStyleItalics(a1, a2, a3, a4); break;
                     case "setTagDefs":   setTagDefs(a1); break;
+                    /* 外部网页：列表持久化 + 用系统默认浏览器打开（只收 http/https） */
+                    case "setWebLinks":  setWebLinks(a1); break;
+                    case "openWeb":      return openWebUrl(a1);
+                    case "setLinkDirectOpen": setLinkDirectOpen(Boolean.parseBoolean(a1)); break;
+                    case "setWebBtnOrder":    setWebBtnOrder(parseIntS(a1)); break;
+                    case "pickLinkFile": return pickLinkFile();
+                    case "pickLinkDir":  return pickLinkDir();
+                    case "openLinkTarget": return openLinkTarget(a1, a2);
+                    case "copyText":     return copyText(a1);
                     case "setTocSize":   setTocSize(parseIntS(a1)); break;
                     case "getBgm":       return getBgm();
                     case "isAutoStart":  return String.valueOf(isAutoStart());
@@ -2612,6 +2792,9 @@ public class FxApp extends Application {
                     + ",\"pItalic\":" + pItalic + ",\"h1Italic\":" + h1Italic
                     + ",\"h2Italic\":" + h2Italic + ",\"h3Italic\":" + h3Italic
                     + ",\"tagDefs\":" + (tagDefsJson.isEmpty() ? "[]" : tagDefsJson)
+                    + ",\"webLinks\":" + (webLinksJson.isEmpty() ? "[]" : webLinksJson)
+                    + ",\"linkDirectOpen\":" + linkDirectOpen
+                    + ",\"webBtnOrder\":" + webBtnOrder
                     + ",\"tocSize\":" + tocSize
                     + ",\"bubbleCloud\":" + bubbleCloud
                     + ",\"bubbleRhythm\":" + bubbleRhythm
@@ -2991,6 +3174,126 @@ public class FxApp extends Application {
             /* 只收合法的 JSON 数组，防止把乱七八糟的东西写进配置 */
             if (j.startsWith("[") && j.endsWith("]")) tagDefsJson = j;
             saveConfig();
+        }
+
+        /** 外部网页列表（[{name,url}] JSON 全量替换）：只收合法数组，坏数据回落空列表 */
+        public void setWebLinks(String json) {
+            String j = json == null ? "" : json.trim();
+            webLinksJson = (j.startsWith("[") && j.endsWith("]")
+                    && j.indexOf('\n') < 0 && j.indexOf('\r') < 0) ? j : "[]";
+            saveWebLinksFile();
+        }
+
+        /**
+         * 打开外部网页：只放行 http/https，交给系统默认浏览器，绝不把 WebView 导航走。
+         * v1.26：不再用 HostServices.showDocument（用户实测那条路会出错），
+         * 改为和正文超链接同一条系统命令通道，且放到独立线程避免卡住 JS。
+         */
+        public String openWebUrl(String raw) {
+            String u = raw == null ? "" : raw.trim();
+            if (u.length() > 2000 || !u.matches("(?i)^https?://[^\\s<>\"']+$"))
+                return "ERR:bad-url";
+            final String url = u;
+            Thread th = new Thread(() -> {
+                try {
+                    Runtime.getRuntime().exec(new String[]{
+                            "rundll32", "url.dll,FileProtocolHandler", url});
+                } catch (Throwable ex) {
+                    try {
+                        java.awt.Desktop.getDesktop().browse(java.net.URI.create(url));
+                    } catch (Throwable ignored) {}
+                }
+            }, "snapwrite-open-web");
+            th.setDaemon(true);
+            th.start();
+            return "ok";
+        }
+
+        /* ══════════ 正文超链接（v1.26） ══════════
+           铁律：绝不让 WebView 自己导航，也绝不用 HostServices.showDocument
+           （用户实测那条路会出错）。目标一律交给 Windows 系统默认程序。 */
+
+        public void setLinkDirectOpen(boolean v) {
+            linkDirectOpen = v;
+            saveLinkOpt();
+        }
+
+        public void setWebBtnOrder(int v) {
+            webBtnOrder = Math.max(5, Math.min(65, v));
+            saveLinkOpt();
+        }
+
+        public String pickLinkFile() {
+            try {
+                FileChooser fc = new FileChooser();
+                fc.setTitle("选择超链接要指向的本地文件");
+                fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("所有文件", "*.*"));
+                File f = fc.showOpenDialog(stage);
+                return f == null ? "" : f.getAbsolutePath();
+            } catch (Exception e) { return ""; }
+        }
+
+        public String pickLinkDir() {
+            try {
+                javafx.stage.DirectoryChooser dc = new javafx.stage.DirectoryChooser();
+                dc.setTitle("选择超链接要指向的本地文件夹");
+                File f = dc.showDialog(stage);
+                return f == null ? "" : f.getAbsolutePath();
+            } catch (Exception e) { return ""; }
+        }
+
+        /** 复制到系统剪贴板（剪贴板属于 FX 线程，必须异步） */
+        public String copyText(String s) {
+            final String t = s == null ? "" : s;
+            javafx.application.Platform.runLater(() -> {
+                try {
+                    javafx.scene.input.ClipboardContent c = new javafx.scene.input.ClipboardContent();
+                    c.putString(t);
+                    javafx.scene.input.Clipboard.getSystemClipboard().setContent(c);
+                } catch (Throwable ignored) {}
+            });
+            return "ok";
+        }
+
+        /**
+         * 打开超链接目标：网址 → 系统默认浏览器；本地文件/文件夹 → 系统默认程序 / 资源管理器。
+         * 独立线程执行：桥接回调里做系统级调用会卡住 JS 线程。
+         */
+        public String openLinkTarget(String kind, String target) {
+            String t = target == null ? "" : target.trim();
+            final boolean local = "file".equals(kind);
+            if (local) {
+                if (t.isEmpty() || t.length() > 1000
+                        || t.toLowerCase().startsWith("javascript:")) return "ERR:bad-target";
+                File f = new File(t);
+                if (!f.exists()) return "ERR:not-found";
+                t = f.getAbsolutePath();
+            } else {
+                if (t.length() > 2000 || !t.matches("(?i)^https?://[^\\s<>\"']+$"))
+                    return "ERR:bad-url";
+            }
+            final String path = t;
+            Thread th = new Thread(() -> {
+                try {
+                    if (local) {
+                        /* 文件夹 → 资源管理器；文件 → 系统默认程序 */
+                        java.awt.Desktop.getDesktop().open(new File(path));
+                    } else {
+                        /* Windows 自己的协议处理器：只拉起外部浏览器，
+                           JavaFX 不参与，编辑器 WebView 更不会被导航走。 */
+                        Runtime.getRuntime().exec(new String[]{
+                                "rundll32", "url.dll,FileProtocolHandler", path});
+                    }
+                } catch (Throwable ex) {
+                    try {
+                        if (local) Runtime.getRuntime().exec(new String[]{"explorer.exe", path});
+                        else java.awt.Desktop.getDesktop().browse(java.net.URI.create(path));
+                    } catch (Throwable ignored) {}
+                }
+            }, "snapwrite-open-link");
+            th.setDaemon(true);
+            th.start();
+            return "ok";
         }
 
         /** 目录字号 */
