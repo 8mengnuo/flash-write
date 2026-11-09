@@ -263,7 +263,7 @@ public class Exporter {
             put(z, "docProps/app.xml",
                 "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
               + "<Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\">"
-              + "<Application>闪写 SnapWrite</Application></Properties>");
+              + "<Application>闪写 FlashWrite</Application></Properties>");
         }
     }
 
@@ -338,8 +338,8 @@ public class Exporter {
              + "xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:dcterms=\"http://purl.org/dc/terms/\" "
              + "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">"
              + "<dc:title>" + xml(title == null ? "" : title) + "</dc:title>"
-             + "<dc:creator>闪写 SnapWrite</dc:creator>"
-             + "<cp:lastModifiedBy>闪写 SnapWrite</cp:lastModifiedBy>"
+             + "<dc:creator>闪写 FlashWrite</dc:creator>"
+             + "<cp:lastModifiedBy>闪写 FlashWrite</cp:lastModifiedBy>"
              + "<dcterms:created xsi:type=\"dcterms:W3CDTF\">" + iso + "</dcterms:created>"
              + "<dcterms:modified xsi:type=\"dcterms:W3CDTF\">" + iso + "</dcterms:modified>"
              + "</cp:coreProperties>";

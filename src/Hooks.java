@@ -66,6 +66,29 @@ public final class Hooks {
      *  手势还没打完窗口就显示了，用户看到的就是'鼠标老板键失灵/乱跳' */
     private static long lastFireAt = 0;
     private static java.util.Timer summonTimer;
+    /** 托盘图标点击保护窗口（到这个时刻之前的唤回一律作废）。
+     *  真凶：隐藏后右键托盘图标，AWT 弹菜单的同时 JNativeHook 也收到一次右键，
+     *  600ms 后 scheduleSummon 把窗口自己唤回来 —— 用户看到的就是
+     *  "右键也能打开软件"。点托盘 = 只走 AWT 菜单 / 左键 toggle，不许全局钩子插手。 */
+    private static volatile long trayClickUntil = 0;
+
+    /** AWT TrayIcon 收到点击（左/右键都算）时调用：取消待执行的唤回，
+     *  并在 1.2 秒内屏蔽全局钩子对这次点击的右键/三连击唤回。
+     *  注意事件顺序不保证（JNativeHook 可能先于 AWT 也可能后于），
+     *  所以「立刻取消 + 保护窗口过滤 + 定时器执行前再查一次」三道都要有。 */
+    public static void noteTrayClick() {
+        trayClickUntil = System.currentTimeMillis() + 1200;
+        leftStreak = 0;
+        gestureBuf.setLength(0);
+        cancelSummon();
+    }
+
+    public static boolean trayGuardActive() {
+        return System.currentTimeMillis() < trayClickUntil;
+    }
+
+    /** 测试专用：不经过真实鼠标，直接喂一次点击给手势/唤回逻辑（--traytest）。 */
+    public static void testClick(int btn, int x, int y) { handleGesture(btn, x, y); }
 
     /* ---------- 键码 <-> 可读名 映射（反射读取 VC_ 常量表，勿手写推算：
        JNativeHook 的键码不是 ASCII 排列，Z 不是 'Z'，直接算会错） ---------- */
@@ -169,7 +192,7 @@ public final class Hooks {
         GlobalScreen.addNativeMouseListener(new NativeMouseListener() {
             public void nativeMousePressed(NativeMouseEvent e) {
                 mousePressedCount++;
-                try { handleGesture(e); } catch (Throwable ignored) {}
+                try { handleGesture(e.getButton(), e.getX(), e.getY()); } catch (Throwable ignored) {}
             }
             public void nativeMouseReleased(NativeMouseEvent e) { /* 不需要 */ }
             public void nativeMouseClicked(NativeMouseEvent e) { /* 不需要 */ }
@@ -245,9 +268,8 @@ public final class Hooks {
      *  直接 `b == 0 → gestureBuf 清空`，LLRRLL 永远凑不齐 → 手势 100% 不触发。
      *  实测（--gesttest Robot 点击）：左中右 = [1,3,2]。
      *  现在 2 和 3 都当右键（中键极少用，最多让序列多一个 R，不会误触发长序列）。 */
-    private static void handleGesture(NativeMouseEvent e) {
+    private static void handleGesture(int btn, int x, int y) {
         if (capturing) return;
-        int btn = e.getButton();
         char b = 0;
         if (btn == 1) b = 'L';
         else if (btn == 2 || btn == 3) b = 'R';
@@ -262,7 +284,7 @@ public final class Hooks {
              还没点完时就执行 —— 窗口以气泡模式弹出来（"LLRRLL 怎么进气泡了"）。
              所以定时器触发时若 550ms 内还有过点击（手势仍在继续）就再等 550ms，
              直到 fireBoss 作废它，或用户真的停手（孤立右键/三连击 → 召唤）。 */
-        if (b == 'R' && summonBubble != null) {
+        if (b == 'R' && summonBubble != null && !trayGuardActive()) {
             cancelSummon();
             scheduleSummon(summonBubble, 600);
         }
@@ -270,11 +292,11 @@ public final class Hooks {
            ★ 同样必须延迟+作废：LLRRLL 手势点快了（~110ms/拍），第 1/2/5 拍的
              三次左键正好凑成三连击，第 5 拍瞬间唤回气泡、第 6 拍又把它藏回去 ——
              这就是"手势变成了进气泡"的另一半真凶。统一走 600ms 延迟。 */
-        if (b == 'L') {
-            boolean sameSpot = Math.abs(e.getX() - lastLeftX) <= 10 && Math.abs(e.getY() - lastLeftY) <= 10;
+        if (b == 'L' && !trayGuardActive()) {
+            boolean sameSpot = Math.abs(x - lastLeftX) <= 10 && Math.abs(y - lastLeftY) <= 10;
             if (now - lastLeftAt < 700 && sameSpot) leftStreak++;
             else leftStreak = 1;
-            lastLeftAt = now; lastLeftX = e.getX(); lastLeftY = e.getY();
+            lastLeftAt = now; lastLeftX = x; lastLeftY = y;
             if (leftStreak >= 3) {
                 leftStreak = 0;
                 if (summonBubble != null) {
@@ -313,10 +335,11 @@ public final class Hooks {
     }
 
     /** 唤回气泡的延迟执行（右键单击 / 左键三连击共用）。
-     *  触发时三道闸：
+     *  触发时四道闸：
      *  1) lastFireAt 很近 → 手势刚好完成、fireBoss 已处理 → 作废；
-     *  2) 550ms 内还有过点击 → 手势仍在继续（6 拍点得慢）→ 顺延 550ms 再看；
-     *  3) 都不是 = 用户真的停手了（孤立右键 / 三连击）→ 召唤。 */
+     *  2) 刚点过托盘图标 → 只弹菜单，不许唤回（右键打开软件的 bug）；
+     *  3) 550ms 内还有过点击 → 手势仍在继续（6 拍点得慢）→ 顺延 550ms 再看；
+     *  4) 都不是 = 用户真的停手了（孤立右键 / 三连击）→ 召唤。 */
     private static void scheduleSummon(final Runnable sb, long delay) {
         if (summonTimer == null) summonTimer = new java.util.Timer("summon", true);
         try {
@@ -325,6 +348,9 @@ public final class Hooks {
                     try {
                         long t = System.currentTimeMillis();
                         if (t - lastFireAt < 600) return;
+                        /* 第 4 道闸：JNativeHook 若比 AWT 托盘事件更早，定时器已经排上了，
+                           执行时再查一次保护窗口，别把窗口从菜单底下唤回来。 */
+                        if (t < trayClickUntil) return;
                         if (t - lastClickAt < 550) { scheduleSummon(sb, 550); return; }
                         sb.run();
                     } catch (Exception ignored) {}

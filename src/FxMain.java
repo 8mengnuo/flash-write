@@ -42,6 +42,8 @@ public class FxMain {
     public static boolean shotData = false;
     /** 鼠标手势回归：用 Robot 真的点出 LLRRLL，验证 钩子→手势→老板键 整条链路 */
     public static boolean gestTest = false;
+    /** 托盘左右键分工回归：右键只弹菜单不打开软件、左键能打开、普通右键仍能唤回 */
+    public static boolean trayTest = false;
     /** 导入字体回归：把系统字体真的导进来，验证存盘格式 / @font-face 是否真的加载 */
     public static boolean fontTest = false;
     /** 插件回归：写一个探针插件进 data/plugins，验证加载与 window.snapwrite API */
@@ -108,6 +110,7 @@ public class FxMain {
             if ("--fonttest".equals(a)) { shotMode = true; fontTest = true; }
             if ("--plugtest".equals(a)) { shotMode = true; plugTest = true; }
             if ("--dragtest".equals(a)) { shotMode = true; dragTest = true; }
+            if ("--traytest".equals(a)) { shotMode = true; trayTest = true; }
         }
         /* 单实例：已经在跑就直接把那个窗口叫出来，自己静默退出。
            这样不会出现"关不掉→反复双击→任务管理器一堆 javaw"的情况。 */

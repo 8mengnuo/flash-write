@@ -31,14 +31,14 @@
   <versionInfo>
     <fileVersion>1.24.0.0</fileVersion>
     <txtFileVersion>1.24.0</txtFileVersion>
-    <fileDescription>SnapWrite</fileDescription>
-    <copyright>Copyright (C) 2026 SnapWrite</copyright>
+    <fileDescription>FlashWrite</fileDescription>
+    <copyright>Copyright (C) 2026 FlashWrite</copyright>
     <productVersion>1.24.0.0</productVersion>
     <txtProductVersion>1.24.0</txtProductVersion>
-    <productName>SnapWrite</productName>
-    <companyName>SnapWrite</companyName>
-    <internalName>SnapWrite</internalName>
-    <originalFilename>SnapWrite.exe</originalFilename>
+    <productName>FlashWrite</productName>
+    <companyName>FlashWrite</companyName>
+    <internalName>FlashWrite</internalName>
+    <originalFilename>FlashWrite.exe</originalFilename>
     <language>SIMPLIFIED_CHINESE</language>
   </versionInfo>
 </launch4jConfig>

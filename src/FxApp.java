@@ -34,7 +34,7 @@ import java.util.List;
 import java.util.Properties;
 
 /**
- * 闪写 SnapWrite 混合版 —— Java 后端 + WebView 前端（HTML/CSS/Vue）。
+ * 闪写 FlashWrite 混合版 —— Java 后端 + WebView 前端（HTML/CSS/Vue）。
  *
  * 架构（Electron 同款思路，但不引 Node，纯 Java 生态）：
  *   Java 后端：全局键鼠钩子(Hooks)、系统托盘、窗口控制(置顶/透明/伸缩)、
@@ -276,7 +276,7 @@ public class FxApp extends Application {
                             Runtime.getRuntime().exec(new String[]{
                                     "rundll32", "url.dll,FileProtocolHandler", url});
                         } catch (Throwable ignored) {}
-                    }, "snapwrite-nav-guard");
+                    }, "flashwrite-nav-guard");
                     th.setDaemon(true);
                     th.start();
                     engine.load(homeUrl);   // load() 会自动取消当前这次外部导航
@@ -325,7 +325,7 @@ public class FxApp extends Application {
         try { stage.setOpacity(winOpacity / 100.0); } catch (Exception ignored) {}
         if (FxMain.shotMode && !FxMain.bossTest && !FxMain.keyTest && !FxMain.selfTest
                 && !FxMain.gestTest && !FxMain.fontTest && !FxMain.plugTest
-                && !FxMain.dragTest) runShotTest();
+                && !FxMain.dragTest && !FxMain.trayTest) runShotTest();
         if (FxMain.selfTest) runSelfTest();
         if (FxMain.bossTest) runBossTest();
         if (FxMain.keyTest) runKeyTest();
@@ -333,6 +333,7 @@ public class FxApp extends Application {
         if (FxMain.fontTest) runFontTest();
         if (FxMain.plugTest) runPlugTest();
         if (FxMain.dragTest) runDragTest();
+        if (FxMain.trayTest) runTrayTest();
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -680,6 +681,69 @@ public class FxApp extends Application {
             String r = shown[0] ? "SHOW_OK" : "SHOW_FAIL";
             log("bosstest result=" + r);
             System.out.println("BOSSTEST " + r);
+            Platform.runLater(this::exitApp);
+        });
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * 托盘左右键分工回归（逻辑注入，不真的去点系统托盘 —— 托盘图标位置随系统而变）。
+     *
+     * 钉死的 bug：隐藏后右键托盘图标，AWT 弹菜单的同时 JNativeHook 也收到一次右键，
+     * 600ms 后 scheduleSummon 把窗口自己唤回来，用户看到"右键也能打开软件"。
+     * 期望：右键图标只弹菜单（菜单里的显示/隐藏、退出仍可用）、左键图标打开窗口，
+     * 而非托盘区域的孤立右键仍要能唤回气泡（原有功能不能砍）。
+     */
+    private void runTrayTest() {
+        Thread t = new Thread(() -> {
+            int trayA = -1, trayB = -1, normal = -1;
+            boolean wasHidden = false, openedByLeft = false;
+            try {
+                sleepQuiet(1800);
+                final java.util.concurrent.atomic.AtomicInteger calls =
+                        new java.util.concurrent.atomic.AtomicInteger();
+                Runnable keep = Hooks.summonBubble;
+                Hooks.summonBubble = calls::incrementAndGet;
+
+                /* ① 全局钩子先于 AWT：定时器已排上，noteTrayClick 必须把它取消掉 */
+                Hooks.testClick(2, 10, 10);
+                Hooks.noteTrayClick();
+                sleepQuiet(1100);
+                trayA = calls.get();
+
+                /* ② AWT 先于全局钩子：保护窗口内这次右键不许再排定时器 */
+                Hooks.noteTrayClick();
+                Hooks.testClick(2, 10, 10);
+                sleepQuiet(1100);
+                trayB = calls.get();
+
+                /* ③ 左键点托盘图标：隐藏状态下应能打开窗口 */
+                Platform.runLater(FxApp.this::hideToTray);
+                sleepQuiet(700);
+                wasHidden = isHiddenNow();
+                Hooks.noteTrayClick();
+                Platform.runLater(FxApp.this::toggleBoss);
+                sleepQuiet(900);
+                openedByLeft = !isHiddenNow();
+
+                /* ④ 保护窗口过期后，普通右键仍要能唤回（原有功能保留） */
+                sleepQuiet(1400);
+                Hooks.testClick(2, 300, 300);
+                sleepQuiet(1700);
+                normal = calls.get() - trayB;
+
+                Hooks.summonBubble = keep;
+                boolean ok = trayA == 0 && trayB == 0 && wasHidden && openedByLeft && normal > 0;
+                log("traytest trayRight=" + trayA + "/" + trayB
+                        + " hidden=" + wasHidden + " leftOpened=" + openedByLeft
+                        + " normalRight=" + normal);
+                System.out.println("TRAYTEST " + (ok ? "TRAY_OK" : "TRAY_FAIL")
+                        + " tray=" + trayA + "/" + trayB + " left=" + openedByLeft
+                        + " normal=" + normal);
+            } catch (Throwable ex) {
+                System.out.println("TRAYTEST TRAY_FAIL ex=" + ex);
+            }
             Platform.runLater(this::exitApp);
         });
         t.setDaemon(true);
@@ -1098,16 +1162,21 @@ public class FxApp extends Application {
     private void initTray() {
         try {
             if (!SystemTray.isSupported()) return;
-            trayIcon = new TrayIcon(appIconImage(16), "闪写 SnapWrite");
+            trayIcon = new TrayIcon(appIconImage(16), "闪写 FlashWrite");
             trayIcon.setImageAutoSize(true);
             trayIcon.addMouseListener(new MouseAdapter() {
                 public void mouseClicked(java.awt.event.MouseEvent e) {
+                    /* 点托盘图标这一下，全局钩子（JNativeHook）也会收到。
+                       必须先把它标记为「托盘点击」：否则右键会被当成"单击右键唤回气泡"，
+                       600ms 后窗口自己冒出来 —— 右键就变成能打开软件了。
+                       标记后右键只弹菜单、左键只走下面的 toggleBoss。 */
+                    Hooks.noteTrayClick();
                     if (e.getButton() == java.awt.event.MouseEvent.BUTTON3) {
-                        /* 右键：在光标处弹自绘菜单（显示/退出） */
+                        /* 右键：只在光标处弹自绘菜单（显示 / 隐藏、退出），不碰窗口 */
                         java.awt.Point p = java.awt.MouseInfo.getPointerInfo().getLocation();
                         Platform.runLater(() -> showTrayPopup(p.x, p.y));
                     } else if (e.getButton() == java.awt.event.MouseEvent.BUTTON1) {
-                        /* 左键：显示 / 隐藏窗口（与老板键等效） */
+                        /* 左键：显示 / 隐藏窗口（与老板键等效）—— 隐藏时就是"打开软件" */
                         Platform.runLater(FxApp.this::toggleBoss);
                     }
                 }
@@ -3203,7 +3272,7 @@ public class FxApp extends Application {
                         java.awt.Desktop.getDesktop().browse(java.net.URI.create(url));
                     } catch (Throwable ignored) {}
                 }
-            }, "snapwrite-open-web");
+            }, "flashwrite-open-web");
             th.setDaemon(true);
             th.start();
             return "ok";
@@ -3290,7 +3359,7 @@ public class FxApp extends Application {
                         else java.awt.Desktop.getDesktop().browse(java.net.URI.create(path));
                     } catch (Throwable ignored) {}
                 }
-            }, "snapwrite-open-link");
+            }, "flashwrite-open-link");
             th.setDaemon(true);
             th.start();
             return "ok";
@@ -3565,7 +3634,9 @@ public class FxApp extends Application {
 
         public boolean inBubble() { return bubble; }
 
-        /* ---- 开机自启动（注册表 HKCU…Run，指向 闪写.exe） ---- */
+        /* ---- 开机自启动（注册表 HKCU…Run，指向 闪写.exe） ----
+           注册表项名沿用早期的 "SnapWrite"：改名会让老机器残留重复自启项，
+           且旧设置读不到。它只是内部键名，不面向用户显示，产品名统一为 FlashWrite。 */
         public boolean isAutoStart() {
             try {
                 Process p = Runtime.getRuntime().exec(new String[]{

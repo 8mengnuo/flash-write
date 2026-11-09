@@ -1,5 +1,5 @@
 <#
-  SnapWrite local build script (Windows PowerShell 5.1 / PowerShell 7)
+  FlashWrite local build script (Windows PowerShell 5.1 / PowerShell 7)
 
   Usage (from anywhere, paths are resolved from this script's folder):
     powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1
@@ -34,7 +34,7 @@ $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 Set-Location -LiteralPath $root
 
-function Say($msg) { Write-Host "[snapwrite] $msg" }
+function Say($msg) { Write-Host "[flashwrite] $msg" }
 
 function Invoke-Step($exe, [string[]]$argv, $label) {
     Say $label
