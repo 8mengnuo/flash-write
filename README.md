@@ -1,6 +1,8 @@
 # 闪写 SnapWrite / FlashWrite
 
-一款为「专心码字」设计的 Windows 桌面写作软件：**完整编辑界面 + 气泡悬浮模式**，可一键藏进老板键，也能把文字随手格式成稿。
+桌面码字软件：Java 21 + OpenJFX 21（WebView）+ Vue 3。
+完整编辑模式 + 气泡悬浮模式，支持老板键、应用伪装、词库、多文档、快照寻回、六种格式导出 —— 摸鱼码字利器。
+一款为「专心码字」设计的 Windows 桌面写作软件：可一键藏进老板键，也能把文字随手格式成稿。
 
 - 技术栈：Java 21 + OpenJFX 21（`WebView` / WebKit）+ Vue 3（单文件前端）
 - 形态：单体桌面应用，无服务端、无 HTTP、无 Node；Java 与网页通过 JavaFX LiveConnect 直接互调
@@ -34,7 +36,7 @@
 | 分类 | 能力 |
 |---|---|
 | **写作** | 多文档（新建 / 切换 / 改名 / 删除 / 关联本地文件）、草稿自动保存、字数统计、查找替换、导航面板（标题与命名标记跳转）、自定义词库（编码 + `Tab` / 前缀最长匹配）、全局快捷键录制 |
-| **气泡与隐藏** | 气泡模式按「光标所在段落」自适应宽高、边缘拖动改尺寸、双击顶部回完整界面；老板键 / 托盘 / 开机自启 / 窗口置顶 / 透明度；隐藏时右键或三连击唤回；慢手势与三连击互不抢跑 |
+| **气泡与隐藏** | 气泡模式按「光标所在段落」自适应宽高、边缘拖动改尺寸、双击顶部回完整界面；老板键 / 应用伪装 / 托盘 / 开机自启 / 窗口置顶 / 透明度；隐藏时右键或三连击唤回；慢手势与三连击互不抢跑 |
 | **排版** | 正文与 H1–H3 四套可编辑样式、字体字号（**只对选中文字生效**）、加粗 / 斜体 / 下划线 / 文字色 / 底纹与命名标记、段首缩进、左中右对齐、清除格式、导航跳转；格式按钮与右键菜单统一遵循「**亮起 = 当前文字带该格式，再点 = 恢复默认**」 |
 | **中文斜体** | WebView 只给西文合成斜体，因此含汉字的斜体壳改用 `inline-block + skewX(-12deg) + text-indent:0`，中文也能真正倾斜且不产生段首空白 |
 | **格式刷** | 选中源文字后单击 = 把**全部**格式（B/I/U、颜色、底纹、标记、超链接属性、中文斜体）刷给下一段选中文字；320ms 内连击两次 = 批量模式可反复刷；再点一次退出，全程无提示 |
@@ -65,23 +67,28 @@
 
 ## 四、目录结构（开发视角）
 
+源码、配置、文档、jar 与 exe **入库**；`runtime/`、`data/`、`dist/`、`tools/`、`jfx/`、`out/`、`target/`、测试截图与日志一律被 `.gitignore` **忽略**（本机环境、编译产物与用户数据都不进仓库）。
+
 ```text
-flashwrite-hybrid/
+flashwrite-hybrid/                  ← IDEA / VSCode 都打开这一层
 ├─ src/                    Java 后端：FxMain（入口/CLI）、FxApp（总控与桥接）、
 │                          Hooks（全局键鼠）、Exporter（六格式导出）、
-│                          VolumeMeter / IconArt / MakeIco
+│                          VolumeMeter / IconArt / MakeIco                 〔入库〕
 ├─ web/                    前端：index.html（Vue3 模板+脚本+样式全内联，<style> 在末尾）、
-│                          vue3.min.js、selftest.js（前端断言）
-├─ app/                    ★ 运行文件：FlashWriteFx.jar（class + 前端资源）、lib/ 依赖
-├─ build/                  launch4j.xml、manifest.txt、icon.ico（打包三件套）
-├─ build.ps1               ★ 唯一构建入口（PowerShell，源码保持纯 ASCII）
-├─ docs/                   开发手册 + bridge / backend-tree / build-pipeline / config-layers 四张 SVG
-├─ .vscode/ .idea/ 闪写.iml  VSCode 与 IDEA 共用根目录的「按钮」配置
-├─ jfx/  tools/  out/       JavaFX jar、JDK/launch4j/rcedit、编译产物（均不入库）
-├─ runtime/  dist/  data/   jlink 运行时、发行目录、用户数据（均不入库）
-├─ 闪写.exe                ★ launch4j 启动器（dontWrapJar，运行时读 app/ 里最新的 jar）
-└─ 闪写 SnapWrite vX.XX 免安装版.zip  ← 发行包在项目**外层目录**生成，不入库
+│                          vue3.min.js、selftest.js（前端断言）              〔入库〕
+├─ app/                    ★ 运行文件：FlashWriteFx.jar（class + 前端资源）、lib/ 依赖 〔入库〕
+├─ build/                  launch4j.xml、manifest.txt、icon.ico（打包三件套）   〔入库 3 个〕
+├─ build.ps1               ★ 唯一构建入口（PowerShell，源码保持纯 ASCII）      〔入库〕
+├─ docs/                   开发手册 + bridge / backend-tree / build-pipeline /
+│                          config-layers 四张 SVG                             〔入库〕
+├─ .vscode/ .idea/ 闪写.iml  VSCode 与 IDEA 共用根目录的「按钮」配置            〔入库〕
+├─ 闪写.exe                ★ launch4j 启动器（dontWrapJar，读 app/ 里最新的 jar）〔入库〕
+├─ jfx/  tools/  out/  target/  JavaFX jar、JDK/launch4j/rcedit、编译产物      〔忽略〕
+├─ runtime/  dist/  data/   jlink 运行时、发行目录、用户数据                   〔忽略〕
+└─ ui_*.png  shot*.log      测试截图与日志                                     〔忽略〕
 ```
+
+发行包《闪写 SnapWrite vX.XX 免安装版.zip》在项目**外层目录**生成，本身也不入库。
 
 **为什么是 jar + lib + exe 三段**：exe 只是不内嵌 jar 的启动器；`app/FlashWriteFx.jar` 装自己写的 class 与网页；`app/lib/` 放第三方 jar（JNativeHook、PDFBox、FontBox、commons-logging）；`runtime/` 是 jlink 裁出的 Java 运行环境。重打 jar 后 exe 不用换即可生效（但交付前仍按流程重打 exe）。
 
