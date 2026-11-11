@@ -4,11 +4,13 @@ jfx/
 tools/
 target/
 
-# ---- 构建产物（可要可不要，建议走 GitHub Release 发 exe/jar）----
+# ---- 构建产物（由 build.ps1 重新生成，绝不入库；发布走 GitHub Release 或本地构建）----
 out/
 *.class
 shot.log
 shotb.log
+app/FlashWriteFx.jar
+闪写.exe
 
 # build 目录只保留打包必需的 launch4j.xml / manifest.txt / icon.ico，其余全是测试日志
 build/*
@@ -24,6 +26,8 @@ data/
 ui_*.png
 test/*.log
 test/*.out
+test/*.png
+test/app.js
 
 # ---- 系统杂项 ----
 Thumbs.db
