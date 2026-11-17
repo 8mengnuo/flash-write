@@ -54,6 +54,10 @@ public class FxMain {
     public static boolean shotBubbleCfg = false;
     /** 气泡拖动/双击还原真实鼠标回归：Robot 拖拖动条 + 双击，验证真机事件管线 */
     public static boolean dragTest = false;
+    /** 气泡位置还原回归：进气泡 dock 到右下 → 退出，验证窗口回到进气泡前的位置 */
+    public static boolean posTest = false;
+    /** 本地数据目录回归：指针读写 + 目录迁移 + 重启后重定位 */
+    public static boolean dirTest = false;
     /** 外部网页截图：左键列表 / 右键添加面板 */
     public static boolean shotWeb = false;
     public static boolean shotWebEdit = false;
@@ -111,6 +115,8 @@ public class FxMain {
             if ("--plugtest".equals(a)) { shotMode = true; plugTest = true; }
             if ("--dragtest".equals(a)) { shotMode = true; dragTest = true; }
             if ("--traytest".equals(a)) { shotMode = true; trayTest = true; }
+            if ("--postest".equals(a)) { shotMode = true; posTest = true; }
+            if ("--dirtest".equals(a)) { shotMode = true; dirTest = true; }
         }
         /* 单实例：已经在跑就直接把那个窗口叫出来，自己静默退出。
            这样不会出现"关不掉→反复双击→任务管理器一堆 javaw"的情况。 */

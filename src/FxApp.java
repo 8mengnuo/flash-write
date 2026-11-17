@@ -98,6 +98,7 @@ public class FxApp extends Application {
     private boolean bubbleManualSize = false;  // 气泡大小改由用户手动定（否则按文字自适应）
     private String bubbleCustomChars = ""; // 气泡自定义环绕元素（字符序列，循环使用）
     private String customIconPath = "";   // 用户自定义图标（data/custom_icon.png），空=默认
+    private String appName = "闪写";       // 应用显示名（标题栏/任务栏/托盘/界面），空=默认“闪写”
     private String skin = "light";        // 皮肤：light=浅色 dark=深色（黑色主题）
     private boolean bubbleDblRestore = true;  // 气泡：双击拖动条还原完整界面
     /* 气泡边缘拉伸状态（bubbleResizeStart/Move/End 三拍） */
@@ -128,7 +129,8 @@ public class FxApp extends Application {
             {"bubble", "Ctrl+Shift+M"},  {"settings", "Ctrl+,"},
             {"pin", "Ctrl+Shift+T"},
             {"tag", "Ctrl+Shift+G"},      // 插入标签（选中套标签 / 空选插标签名）
-            {"nav", "Ctrl+Shift+N"}       // 导航面板（标题+标签跳转 / 一键目录）
+            {"nav", "Ctrl+Shift+N"},      // 导航面板（标题+标签跳转 / 一键目录）
+            {"centerWin", "Ctrl+Shift+C"} // 窗口回到屏幕中央（气泡/完整模式均可）
     };
     private final java.util.LinkedHashMap<String, String> keyMap =
             new java.util.LinkedHashMap<String, String>();
@@ -153,7 +155,18 @@ public class FxApp extends Application {
     private javafx.animation.Timeline bubbleWatch;   // 气泡可见性看门狗（防"窗口还在但看不见"）
     private long lastBossAt = 0;          // 老板键去抖
     private double preW = 880, preH = 600;
+    private double preX = 0, preY = 0;    // 进气泡前的完全模式窗口位置，退出时还原
+    private boolean hasPrePos = false;    // 是否记录过位置（用标志而非坐标哨兵，兼容负坐标的多屏）
+    /* 气泡进场的"居中宽限期"：从 enterBubble 起到用户首次手动拖动 / 拉伸为止，
+       每次尺寸校正都用最终尺寸把窗口摆回屏幕中央。
+       为什么需要：前端 enterBubble 在 60ms 调 applyBubbleSizeNow 改尺寸、再调
+       centerWindow；但 JavaFX 的 setWidth/setHeight 是异步生效的，centerWindow
+       抢在尺寸缩成气泡前读到旧的大窗尺寸（日志实锤 pos=194,292），按大尺寸算
+       出的"居中"其实是偏左上，气泡就此卡在边角。把居中合并进 resizeBubble、
+       用传入的目标尺寸 w/h 算位置，尺寸和位置一次算完，就没有这个竞态了。 */
+    private long bubbleCenterUntil = 0;   // 居中宽限期截止时刻（毫秒），0=无效
     private TrayIcon trayIcon;
+    private boolean trayRemoved = false;  // 老板键彻底隐藏时把托盘图标也摘掉，恢复时再加回
     private javafx.stage.Stage trayPop;   // 托盘右键自绘菜单
     private Bridge bridge;                // JS 桥（强引用防 GC，见 hookJs）
     private static final Charset UTF8 = Charset.forName("UTF-8");
@@ -231,6 +244,15 @@ public class FxApp extends Application {
         if (FxMain.fontTest) dataRoot = "data/selftest/fonttest";
         if (FxMain.plugTest) dataRoot = "data/selftest/plugtest";
         if (FxMain.plugTest) writeProbePlugin();
+        /* 用户自定义数据目录：从程序目录下的固定指针文件读取（它不随 data 迁移）。
+           只在正常启动（非任何测试/截图模式）时生效，测试永远跑隔离数据。 */
+        if (!FxMain.selfTest && !FxMain.shotMode && !FxMain.bossTest && !FxMain.keyTest
+                && !FxMain.gestTest && !FxMain.dragTest && !FxMain.trayTest
+                && !FxMain.fontTest && !FxMain.plugTest && !FxMain.posTest
+                && !FxMain.dirTest) {
+            String custom = readDataDirPointer();
+            if (custom != null && !custom.isEmpty()) dataRoot = custom;
+        }
         loadAll();
 
         /* ★ 最关键的开关：JavaFX 默认「最后一个窗口隐藏 = 退出工具箱」。
@@ -290,7 +312,7 @@ public class FxApp extends Application {
            JavaFX 这一层永远拿得到真实的 KeyCode 与修饰键，所以在这里组一份
            标准组合串（Ctrl+F / Ctrl+, / Esc …）交给前端统一分发。 */
         scene.addEventFilter(KeyEvent.KEY_PRESSED, this::forwardKeyToJs);
-        stage.setTitle("闪写");
+        stage.setTitle(appName);
         stage.setScene(scene);
         stage.initStyle(StageStyle.TRANSPARENT);   // 透明窗口：气泡模式的云彩可"浮"出内容区
         stage.setMinWidth(300);
@@ -300,6 +322,23 @@ public class FxApp extends Application {
         initTray();
 
         // 全局钩子：老板键 / 手势（回调统一切到 FX 线程）
+        /* 注入唤回位置过滤器：只在真实屏幕的工作区（visualBounds，已排除任务栏）内
+           才允许右键/三连击唤回。落在任务栏、通知区（三角标）、屏幕外一律拒绝，
+           修掉「右键任务栏任意位置软件就从任务栏冒出来」。
+           测试模式（traytest/gesttest 等，testClick 喂的是屏幕内坐标）直接放行，
+           避免无真实屏幕时过滤逻辑干扰回归。 */
+        Hooks.summonFilter = (x, y) -> {
+            if (FxMain.trayTest || FxMain.gestTest || FxMain.selfTest || FxMain.dragTest)
+                return true;
+            try {
+                for (javafx.stage.Screen sc : javafx.stage.Screen.getScreens()) {
+                    javafx.geometry.Rectangle2D vb = sc.getVisualBounds();
+                    if (x >= vb.getMinX() && x <= vb.getMaxX()
+                            && y >= vb.getMinY() && y <= vb.getMaxY()) return true;
+                }
+            } catch (Exception ignored) {}
+            return false;
+        };
         try {
             Hooks.register(bossEnabled ? bossCodes : new int[0], () ->
                     Platform.runLater(FxApp.this::toggleBoss));
@@ -325,7 +364,8 @@ public class FxApp extends Application {
         try { stage.setOpacity(winOpacity / 100.0); } catch (Exception ignored) {}
         if (FxMain.shotMode && !FxMain.bossTest && !FxMain.keyTest && !FxMain.selfTest
                 && !FxMain.gestTest && !FxMain.fontTest && !FxMain.plugTest
-                && !FxMain.dragTest && !FxMain.trayTest) runShotTest();
+                && !FxMain.dragTest && !FxMain.trayTest && !FxMain.posTest
+                && !FxMain.dirTest) runShotTest();
         if (FxMain.selfTest) runSelfTest();
         if (FxMain.bossTest) runBossTest();
         if (FxMain.keyTest) runKeyTest();
@@ -334,6 +374,8 @@ public class FxApp extends Application {
         if (FxMain.plugTest) runPlugTest();
         if (FxMain.dragTest) runDragTest();
         if (FxMain.trayTest) runTrayTest();
+        if (FxMain.posTest) runPosTest();
+        if (FxMain.dirTest) runDirTest();
     }
 
     /* ══════════════════════════════════════════════════════════════════
@@ -733,14 +775,31 @@ public class FxApp extends Application {
                 sleepQuiet(1700);
                 normal = calls.get() - trayB;
 
+                /* ⑤ v1.32 位置过滤：任务栏/托盘区（visualBounds 外）右键不得唤回，
+                   工作区内右键仍可唤回。装一个只放行 y<1000 的过滤器模拟"任务栏在底部"。 */
+                Hooks.PointFilter keepFilter = Hooks.summonFilter;
+                Hooks.summonFilter = (x, y) -> y < 1000;   // 模拟工作区高度 1000
+                int base = calls.get();
+                Hooks.testClick(2, 960, 1050);   // 任务栏区（y=1050）→ 应被挡
+                sleepQuiet(900);
+                int taskbarCalls = calls.get() - base;
+                Hooks.testClick(2, 300, 300);    // 工作区 → 应放行
+                sleepQuiet(900);
+                int workspaceCalls = calls.get() - base - taskbarCalls;
+                Hooks.summonFilter = keepFilter;
+                boolean areaGuard = taskbarCalls == 0 && workspaceCalls > 0;
+
                 Hooks.summonBubble = keep;
-                boolean ok = trayA == 0 && trayB == 0 && wasHidden && openedByLeft && normal > 0;
+                boolean ok = trayA == 0 && trayB == 0 && wasHidden && openedByLeft
+                        && normal > 0 && areaGuard;
                 log("traytest trayRight=" + trayA + "/" + trayB
                         + " hidden=" + wasHidden + " leftOpened=" + openedByLeft
-                        + " normalRight=" + normal);
+                        + " normalRight=" + normal
+                        + " areaGuard=" + areaGuard
+                        + " taskbarCalls=" + taskbarCalls + " workspaceCalls=" + workspaceCalls);
                 System.out.println("TRAYTEST " + (ok ? "TRAY_OK" : "TRAY_FAIL")
                         + " tray=" + trayA + "/" + trayB + " left=" + openedByLeft
-                        + " normal=" + normal);
+                        + " normal=" + normal + " areaGuard=" + areaGuard);
             } catch (Throwable ex) {
                 System.out.println("TRAYTEST TRAY_FAIL ex=" + ex);
             }
@@ -750,8 +809,160 @@ public class FxApp extends Application {
         t.start();
     }
 
+    /**
+     * 气泡位置还原回归（--postest）：不依赖真实鼠标（Robot 在无桌面/沙箱里失效），
+     * 直接在 Java 层走 Bridge 的 enterBubble/exitBubble：
+     *   ① 把窗口固定放到屏幕中间，记录为原始位置
+     *   ② bridge.enterBubble() 保存位置 → 模拟 dock 到右下角（bridge.dockBubbleBottomRight）
+     *   ③ bridge.exitBubble() 还原 → 读回位置，必须和①一致才算过关
+     *   ④ 进气泡 → centerWindow，中心须落在主屏可视区中心
+     *   ⑤ resizeBubble 改尺寸后中心锚点不漂（气泡默认居中且缩放不跑偏）
+     * 若 exitBubble 只还原尺寸不还原位置（曾经的 bug），②的右下角位置会残留 → FAIL。
+     */
+    private void runPosTest() {
+        Thread t = new Thread(() -> {
+            double x0 = -1, y0 = -1, xDock = -1, yDock = -1, xBack = -1, yBack = -1;
+            boolean docked = false, restored = false;
+            try {
+                sleepQuiet(2200);
+                final double[] p = new double[2];
+                // ① 固定放到屏幕中央并记下
+                runOnFx(() -> {
+                    javafx.geometry.Rectangle2D vb =
+                            javafx.stage.Screen.getPrimary().getVisualBounds();
+                    stage.setWidth(880); stage.setHeight(600);
+                    stage.setX(vb.getMinX() + (vb.getWidth() - 880) / 2);
+                    stage.setY(vb.getMinY() + (vb.getHeight() - 600) / 2);
+                    p[0] = stage.getX(); p[1] = stage.getY();
+                });
+                x0 = p[0]; y0 = p[1];
+
+                // ② 进气泡（保存位置）→ dock 到右下角（改变位置）
+                runOnFx(() -> { if (bridge != null) bridge.enterBubble(); });
+                sleepQuiet(300);
+                runOnFx(() -> { if (bridge != null) bridge.dockBubbleBottomRight(); });
+                sleepQuiet(150);
+                runOnFx(() -> { p[0] = stage.getX(); p[1] = stage.getY(); });
+                xDock = p[0]; yDock = p[1];
+                docked = Math.abs(xDock - x0) > 50 || Math.abs(yDock - y0) > 50;
+
+                // ③ 退出气泡 → 必须还原到①
+                runOnFx(() -> { if (bridge != null) bridge.exitBubble(); });
+                sleepQuiet(200);
+                runOnFx(() -> { p[0] = stage.getX(); p[1] = stage.getY(); });
+                xBack = p[0]; yBack = p[1];
+                restored = Math.abs(xBack - x0) < 3 && Math.abs(yBack - y0) < 3;
+
+                /* ④ 进气泡 → centerWindow 居中：中心应落在主屏可视区中心 */
+                runOnFx(() -> { if (bridge != null) bridge.enterBubble(); });
+                sleepQuiet(120);
+                runOnFx(() -> { if (bridge != null) bridge.centerWindow(); });
+                sleepQuiet(120);
+                final double[] c1 = new double[2];
+                runOnFx(() -> {
+                    javafx.geometry.Rectangle2D vb =
+                            javafx.stage.Screen.getPrimary().getVisualBounds();
+                    c1[0] = stage.getX() + stage.getWidth() / 2 - (vb.getMinX() + vb.getWidth() / 2);
+                    c1[1] = stage.getY() + stage.getHeight() / 2 - (vb.getMinY() + vb.getHeight() / 2);
+                });
+                boolean centered = Math.abs(c1[0]) < 3 && Math.abs(c1[1]) < 3;
+
+                /* ⑤ resizeBubble 改尺寸后中心锚点不漂：再读一次中心偏差 */
+                runOnFx(() -> {
+                    if (bridge != null) bridge.resizeBubble(stage.getWidth() + 120,
+                            stage.getHeight() + 40);
+                });
+                sleepQuiet(120);
+                final double[] c2 = new double[2];
+                runOnFx(() -> {
+                    javafx.geometry.Rectangle2D vb =
+                            javafx.stage.Screen.getPrimary().getVisualBounds();
+                    c2[0] = stage.getX() + stage.getWidth() / 2 - (vb.getMinX() + vb.getWidth() / 2);
+                    c2[1] = stage.getY() + stage.getHeight() / 2 - (vb.getMinY() + vb.getHeight() / 2);
+                });
+                boolean centerKept = Math.abs(c2[0]) < 3 && Math.abs(c2[1]) < 3;
+
+                boolean ok = docked && restored && centered && centerKept;
+                log("postest origin=" + (int) x0 + "," + (int) y0
+                        + " dock=" + (int) xDock + "," + (int) yDock
+                        + " back=" + (int) xBack + "," + (int) yBack
+                        + " docked=" + docked + " restored=" + restored
+                        + " centered=" + centered + "(d=" + (int) c1[0] + "," + (int) c1[1] + ")"
+                        + " centerKept=" + centerKept + "(d=" + (int) c2[0] + "," + (int) c2[1] + ")");
+                System.out.println("POSTEST " + (ok ? "RESTORE_OK" : "RESTORE_FAIL")
+                        + " origin=" + (int) x0 + "," + (int) y0
+                        + " dock=" + (int) xDock + "," + (int) yDock
+                        + " back=" + (int) xBack + "," + (int) yBack
+                        + " centered=" + centered + " centerKept=" + centerKept);
+            } catch (Throwable ex) {
+                System.out.println("POSTEST RESTORE_FAIL ex=" + ex);
+            }
+            Platform.runLater(this::exitApp);
+        });
+        t.setDaemon(true);
+        t.start();
+    }
+
     private static void sleepQuiet(long ms) {
         try { Thread.sleep(ms); } catch (InterruptedException ignored) {}
+    }
+
+    /** 本地数据目录回归：
+     *   ① 造一个隔离的源目录放几个假数据文件
+     *   ② copyDirTree 迁到新目录，验证文件都在、内容一致
+     *   ③ 指针文件 write→read 往返，验证重启后能读回同一路径
+     *   全程只在 data/selftest/dirtest 下操作，绝不碰用户真实 data。
+     */
+    private void runDirTest() {
+        Thread t = new Thread(() -> {
+            boolean migrateOk = false, pointerOk = false;
+            try {
+                File base = new File("data/selftest/dirtest");
+                File src = new File(base, "src");
+                File dst = new File(base, "dst");
+                // 清理上次残留
+                deleteTreeQuiet(dst); deleteTreeQuiet(src);
+                src.mkdirs();
+                writeAll(new File(src, "draft.txt"), "草稿内容-迁移测试");
+                writeAll(new File(src, "config.properties"), "appName=闪写");
+                new File(src, "hist").mkdirs();
+                writeAll(new File(new File(src, "hist"), "h1.hist"), "历史片段");
+
+                // ①+② 迁移
+                int n = copyDirTree(src, dst);
+                File dDraft = new File(dst, "draft.txt");
+                File dCfg = new File(dst, "config.properties");
+                File dHist = new File(new File(dst, "hist"), "h1.hist");
+                migrateOk = n >= 3 && dDraft.isFile() && dCfg.isFile() && dHist.isFile()
+                        && "草稿内容-迁移测试".equals(
+                                new String(java.nio.file.Files.readAllBytes(dDraft.toPath()), UTF8));
+
+                // ③ 指针往返（写到临时指针路径，不碰真实 flashwrite.datadir）
+                String abs = dst.getAbsolutePath();
+                File tmpPointer = new File(base, "pointer.tmp");
+                java.nio.file.Files.write(tmpPointer.toPath(), abs.getBytes(UTF8));
+                String readBack = new String(java.nio.file.Files.readAllBytes(tmpPointer.toPath()), UTF8).trim();
+                pointerOk = abs.equals(readBack);
+
+                boolean ok = migrateOk && pointerOk;
+                System.out.println("DIRTEST " + (ok ? "DIR_OK" : "DIR_FAIL")
+                        + " copied=" + n + " migrate=" + migrateOk + " pointer=" + pointerOk);
+            } catch (Throwable ex) {
+                System.out.println("DIRTEST DIR_FAIL ex=" + ex);
+            }
+            Platform.runLater(this::exitApp);
+        });
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private static void deleteTreeQuiet(File f) {
+        if (f == null || !f.exists()) return;
+        File[] fs = f.listFiles();
+        if (fs != null) for (File c : fs) {
+            if (c.isDirectory()) deleteTreeQuiet(c); else c.delete();
+        }
+        f.delete();
     }
 
     /**
@@ -1145,13 +1356,96 @@ public class FxApp extends Application {
         } catch (Exception ignored) {}
     }
 
-    /** 运行时更换窗口/任务栏/托盘图标（设置自定义图片后调用） */
+    /** 运行时更换窗口/任务栏/托盘图标（设置自定义图片后调用）。
+     *  桌面快捷方式保持用户原有设置、左上角标题栏图标（前端 iconUrl）也不变。 */
     private void applyAppIcon() {
         try {
             stage.getIcons().clear();
             setStageIcon();
             if (trayIcon != null) trayIcon.setImage(appIconImage(16));
         } catch (Exception ignored) {}
+    }
+
+    /** 换图标后同步桌面快捷方式图标：
+     *  自定义图标 → 生成 data/app_icon.ico，把指向本 exe 的 .lnk 的 IconLocation 改过去；
+     *  恢复默认 → 把 IconLocation 清掉（指回 exe 自带图标）。
+     *  纯 Java 改 .lnk 二进制（LnkIcon），不依赖 PowerShell/COM，用户机器零外挂。 */
+    private void syncDesktopShortcutIcon() {
+        if (FxMain.selfTest || FxMain.shotMode || FxMain.bossTest || FxMain.keyTest
+                || FxMain.gestTest || FxMain.dragTest || FxMain.trayTest
+                || FxMain.fontTest || FxMain.plugTest || FxMain.posTest
+                || FxMain.dirTest) return;   // 测试/截图绝不碰真实桌面
+        try {
+            String icoPath = "";
+            if (customIconPath != null && !customIconPath.isEmpty()) {
+                File custom = new File(dataDir(), customIconPath);
+                if (custom.exists()) {
+                    java.awt.image.BufferedImage src = ImageIO.read(custom);
+                    if (src != null) {
+                        File ico = new File(dataDir(), "app_icon.ico");
+                        java.nio.file.Files.write(ico.toPath(), MakeIco.toIco(src));
+                        icoPath = ico.getAbsolutePath() + ",0";
+                    }
+                }
+            }
+            int changed = updateShortcuts(icoPath);
+            log("桌面快捷方式图标同步: " + (icoPath.isEmpty() ? "恢复默认" : "自定义") + " 改动 " + changed + " 个");
+            if (changed > 0) refreshIconCache();
+        } catch (Exception e) {
+            log("桌面快捷方式图标同步失败: " + e);
+        }
+    }
+
+    /** 通知 Explorer 重建图标缓存：直接改写 .lnk 后，Explorer 常仍显示旧图标（或空白），
+     *  必须主动刷新。rundll32 UpdatePerUserSystemParameters 是系统自带、零依赖的轻量方式。 */
+    private void refreshIconCache() {
+        new Thread(() -> {
+            try {
+                Runtime.getRuntime().exec(new String[]{
+                        "rundll32.exe", "user32.dll,UpdatePerUserSystemParameters"});
+            } catch (Exception ignored) {}
+        }, "flashwrite-icon-refresh").start();
+    }
+
+    /** 遍历桌面目录，把目标指向本程序的 .lnk 图标换成 icoPath（空=恢复默认，指回 exe）。 */
+    private int updateShortcuts(String icoPath) {
+        int changed = 0;
+        String exeName = "闪写.exe";
+        File[] desks = desktopDirs();
+        byte[] bytes;
+        for (File d : desks) {
+            if (d == null || !d.isDirectory()) continue;
+            File[] lnks = d.listFiles((dir, n) -> n.toLowerCase(java.util.Locale.ROOT).endsWith(".lnk"));
+            if (lnks == null) continue;
+            for (File lnk : lnks) {
+                try {
+                    bytes = java.nio.file.Files.readAllBytes(lnk.toPath());
+                    String target = LnkIcon.readTargetPath(bytes);
+                    String cur = LnkIcon.readIconLocation(bytes);
+                    boolean ours = target.contains(exeName) || target.contains("FlashWrite")
+                            || cur.contains("app_icon.ico");
+                    if (!ours) continue;
+                    String newIcon = icoPath.isEmpty() ? (target.isEmpty() ? "" : target + ",0") : icoPath;
+                    if (newIcon.equals(cur)) continue;
+                    byte[] out = LnkIcon.setIconLocation(bytes, newIcon);
+                    java.nio.file.Files.write(lnk.toPath(), out);
+                    changed++;
+                } catch (Exception ignored) {}
+            }
+        }
+        return changed;
+    }
+
+    /** 桌面目录（用户桌面 / 公共桌面 / OneDrive 桌面，中英文都试） */
+    private File[] desktopDirs() {
+        java.util.List<File> list = new java.util.ArrayList<File>();
+        String home = System.getProperty("user.home", "");
+        String[] names = {"Desktop", "桌面", "OneDrive/Desktop", "OneDrive/桌面"};
+        for (String n : names) list.add(new File(home, n));
+        String pub = System.getenv("PUBLIC");
+        if (pub != null) { list.add(new File(pub, "Desktop")); list.add(new File(pub, "桌面")); }
+        list.add(new File("C:/Users/Public/Desktop"));
+        return list.toArray(new File[0]);
     }
 
     /* ════════════════ 系统托盘（老板键隐藏后的找回入口） ════════════════
@@ -1162,7 +1456,7 @@ public class FxApp extends Application {
     private void initTray() {
         try {
             if (!SystemTray.isSupported()) return;
-            trayIcon = new TrayIcon(appIconImage(16), "闪写 FlashWrite");
+            trayIcon = new TrayIcon(appIconImage(16), appName);
             trayIcon.setImageAutoSize(true);
             trayIcon.addMouseListener(new MouseAdapter() {
                 public void mouseClicked(java.awt.event.MouseEvent e) {
@@ -1227,7 +1521,7 @@ public class FxApp extends Application {
         catch (Exception ignored) {}
     }
 
-    /** 当前应用图标（用户自定义优先，否则 IconArt 默认） */
+    /** 当前应用图标（用户自定义优先，否则 IconArt 默认）——用于窗口与托盘通知区 */
     private java.awt.Image appIconImage(int size) {
         try {
             if (customIconPath != null && !customIconPath.isEmpty()) {
@@ -1253,16 +1547,41 @@ public class FxApp extends Application {
         boolean needShow = hiddenToTray || !stage.isShowing() || stage.isIconified();
         log("boss toggle -> " + (needShow ? "show" : "hide"));
         if (needShow) showFromTray(false);
-        else hideToTray();
+        else { hideToTray(); removeTrayIcon(); }   // 老板键/手势：连托盘图标一起摘掉，真正无痕
     }
 
-    /** 隐藏到托盘（老板键 / 气泡 ✕ / 关闭选择"最小化"都走这里） */
+    /** 隐藏到托盘（气泡 ✕ / 关闭选择"最小化"走这里，托盘图标保留作找回入口） */
     private void hideToTray() {
         if (bubble) { /* 保持气泡状态，恢复时原样回来 */ }
         if (bridge != null) bridge.stopWatchOnHide();
         stage.hide();
         hiddenToTray = true;
         log("hide -> tray (" + (bubble ? "bubble" : "full") + ")");
+    }
+
+    /** 老板键彻底隐藏：把托盘图标也从系统托盘摘掉（找回靠老板键/手势/三连击/双击桌面） */
+    private void removeTrayIcon() {
+        try {
+            if (trayIcon != null && !trayRemoved) {
+                SystemTray.getSystemTray().remove(trayIcon);
+                trayRemoved = true;
+                log("boss hide: tray icon removed");
+            }
+        } catch (Exception e) { log("remove tray: " + e); }
+    }
+
+    /** 恢复可见时把托盘图标加回去（只在确实被摘掉过时才 add，避免重复添加抛异常） */
+    private void restoreTrayIcon() {
+        try {
+            if (trayIcon != null && trayRemoved) {
+                SystemTray.getSystemTray().add(trayIcon);
+                trayRemoved = false;
+                log("show: tray icon restored");
+            }
+        } catch (Exception e) {
+            try { SystemTray.getSystemTray().add(trayIcon); } catch (Exception ignored) {}
+            trayRemoved = false;
+        }
     }
 
     /** 从托盘恢复（重新应用不透明度并强制重排，避免透明窗口复现后白屏） */
@@ -1277,6 +1596,7 @@ public class FxApp extends Application {
      */
     private void showFromTray(boolean toBubble) {
         hiddenToTray = false;
+        restoreTrayIcon();
         try { stage.setOpacity(Math.min(1.0, winOpacity / 100.0)); } catch (Exception ignored) {}
         try {
             stage.show();
@@ -1325,6 +1645,50 @@ public class FxApp extends Application {
         File d = new File(dataRoot);
         if (!d.exists()) d.mkdirs();
         return d;
+    }
+
+    /* ---- 用户自定义数据目录 ----
+       指针文件固定放程序目录（exe 旁边），不随 data 迁移；真正的草稿/配置/寻回
+       放在指针指向的目录里。这样"换位置 + 迁移"后，下次启动仍能找到新位置。 */
+    private File dataPointerFile() { return new File("flashwrite.datadir"); }
+
+    private String readDataDirPointer() {
+        try {
+            File f = dataPointerFile();
+            if (!f.exists()) return "";
+            String s = new String(java.nio.file.Files.readAllBytes(f.toPath()), UTF8).trim();
+            if (s.isEmpty()) return "";
+            File d = new File(s);
+            if (d.isDirectory() || (d.mkdirs())) return d.getAbsolutePath();
+        } catch (Exception ignored) {}
+        return "";
+    }
+
+    private void writeDataDirPointer(String absPath) {
+        try {
+            java.nio.file.Files.write(dataPointerFile().toPath(), absPath.getBytes(UTF8));
+        } catch (Exception ignored) {}
+    }
+
+    /** 递归复制目录（覆盖同名文件），用于把旧 data 迁到新位置。返回复制的文件数。 */
+    private int copyDirTree(File src, File dst) {
+        int n = 0;
+        if (src == null || !src.isDirectory()) return 0;
+        if (!dst.exists()) dst.mkdirs();
+        File[] fs = src.listFiles();
+        if (fs == null) return 0;
+        for (File f : fs) {
+            if (f.isDirectory()) {
+                n += copyDirTree(f, new File(dst, f.getName()));
+            } else {
+                try {
+                    java.nio.file.Files.copy(f.toPath(), new File(dst, f.getName()).toPath(),
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    n++;
+                } catch (Exception ignored) {}
+            }
+        }
+        return n;
     }
 
     /** 字体库目录：固定放「我的文档\闪写字体库」，用户在自己电脑上直接能翻到，
@@ -1508,6 +1872,8 @@ public class FxApp extends Application {
             bubbleManualSize = Boolean.parseBoolean(c.getProperty("bubbleManualSize", "false"));
             bubbleCustomChars = c.getProperty("bubbleCustomChars", "");
             customIconPath = c.getProperty("customIcon", "");
+            appName = c.getProperty("appName", "闪写");
+            if (appName == null || appName.trim().isEmpty()) appName = "闪写";
             skin = c.getProperty("skin", "light");
             if (!skin.matches("light|dark")) skin = "light";
             bubbleDblRestore = Boolean.parseBoolean(c.getProperty("bubbleDblRestore", "true"));
@@ -1868,6 +2234,7 @@ public class FxApp extends Application {
             c.setProperty("bubbleManualSize", String.valueOf(bubbleManualSize));
             c.setProperty("bubbleCustomChars", bubbleCustomChars);
             c.setProperty("customIcon", customIconPath);
+            c.setProperty("appName", appName);
             c.setProperty("skin", skin);
             c.setProperty("bubbleDblRestore", String.valueOf(bubbleDblRestore));
             c.setProperty("bubbleAutoSize", String.valueOf(bubbleAutoSize));
@@ -2274,6 +2641,12 @@ public class FxApp extends Application {
                     case "setComposing": setComposing(a1); return "";
                     case "setCapturing": setCapturing(a1); return "";
                     case "getIcon":      return getIcon();
+                    case "getAppName":   return appName;
+                    case "setAppName":   setAppName(a1); break;
+                    /* 本地数据目录：查看当前路径 / 选目录 / 切换（可选迁移） */
+                    case "getDataDir":   return getDataDir();
+                    case "pickDataDir":  return pickDataDir();
+                    case "setDataDir":   return setDataDir(a1, Boolean.parseBoolean(a2));
                     case "getWallpaper": return getWallpaper();
                     case "getFontData":  return getFontData();
                     case "getFontName":  return getFontName();
@@ -2351,6 +2724,8 @@ public class FxApp extends Application {
                     case "setWinOpacityPercent": setWinOpacityPercent(parseIntS(a1)); break;
                     /* 窗口 */
                     case "moveBy":         moveBy(parseDoubleS(a1), parseDoubleS(a2)); break;
+                    case "centerWindow":   centerWindow(); break;
+                    case "dockBubbleBottomRight": dockBubbleBottomRight(); break;
                     case "setSize":        setSize(parseDoubleS(a1), parseDoubleS(a2)); break;
                     case "setOpacity":     setOpacity(parseDoubleS(a1) / 100.0); break;
                     case "minimize":       minimize(); break;
@@ -2408,6 +2783,7 @@ public class FxApp extends Application {
                         rszSX = parseD(a2); rszSY = parseD(a3);
                         rszX0 = stage.getX(); rszY0 = stage.getY();
                         rszW0 = stage.getWidth(); rszH0 = stage.getHeight();
+                        bubbleCenterUntil = 0;   // 用户开始边缘拉伸：中止进场自动居中
                         break;
                     case "bubbleResizeMove": {
                         if (!rszDrag) break;
@@ -2879,6 +3255,8 @@ public class FxApp extends Application {
                     + ",\"bubbleCustomChars\":\"" + esc(bubbleCustomChars) + "\""
                     + ",\"themeMode\":\"" + themeMode + "\",\"accent2\":\"" + accent2 + "\""
                     + ",\"closeAction\":\"" + closeAction + "\""
+                    + ",\"appName\":\"" + esc(appName) + "\""
+                    + ",\"dataDir\":\"" + esc(dataDir().getAbsolutePath()) + "\""
                     + ",\"skin\":\"" + skin + "\""
                     + ",\"bubbleDblRestore\":" + bubbleDblRestore
                     + ",\"bubbleAutoSize\":" + bubbleAutoSize
@@ -3003,6 +3381,64 @@ public class FxApp extends Application {
         public void setCloseAction(String a) {
             if (a != null && a.matches("ask|tray|exit")) closeAction = a;
             saveConfig();
+        }
+
+        /* ---- 应用显示名（标题栏 / 任务栏 / 托盘 / 界面即时生效） ---- */
+        public void setAppName(String s) {
+            if (s == null) return;
+            s = s.trim();
+            if (s.isEmpty()) s = "闪写";
+            if (s.length() > 24) s = s.substring(0, 24);
+            appName = s;
+            try { stage.setTitle(appName); } catch (Exception ignored) {}
+            try { if (trayIcon != null) trayIcon.setToolTip(appName); } catch (Exception ignored) {}
+            saveConfig();
+        }
+
+        /* ---- 本地数据目录（草稿 / 配置 / 寻回历史的存放位置） ---- */
+
+        /** 当前实际生效的数据目录绝对路径 */
+        public String getDataDir() {
+            try { return dataDir().getAbsolutePath(); } catch (Exception e) { return "data"; }
+        }
+
+        /** 弹目录选择框，返回用户选中的绝对路径，取消返回 "" */
+        public String pickDataDir() {
+            try {
+                javafx.stage.DirectoryChooser dc = new javafx.stage.DirectoryChooser();
+                dc.setTitle("选择本地文件存储位置（草稿 / 配置 / 寻回历史）");
+                File cur = dataDir();
+                if (cur.isDirectory()) dc.setInitialDirectory(cur);
+                File f = dc.showDialog(stage);
+                return f == null ? "" : f.getAbsolutePath();
+            } catch (Exception e) { return ""; }
+        }
+
+        /** 切换数据目录。migrate=true 时把旧 data 整个复制过去。切换后需重启生效。
+         *  返回 "ok:迁移了N个文件" / "ok:空目录" / "ERR:..."。 */
+        public String setDataDir(String absPath, boolean migrate) {
+            if (absPath == null || absPath.trim().isEmpty()) return "ERR:路径为空";
+            try {
+                File target = new File(absPath.trim());
+                if (!target.isDirectory() && !target.mkdirs())
+                    return "ERR:无法创建目录";
+                String newAbs = target.getAbsolutePath();
+                String oldAbs = dataDir().getAbsolutePath();
+                String oldRoot = dataRoot;
+                int copied = 0;
+                if (migrate && !newAbs.equalsIgnoreCase(oldAbs)) {
+                    copied = copyDirTree(new File(oldRoot), target);
+                }
+                /* 先写指针文件，再切 dataRoot 并落盘配置，保证重启后仍指向新位置 */
+                writeDataDirPointer(newAbs);
+                dataRoot = newAbs;
+                saveConfig();
+                log("数据目录切换到 " + newAbs + "（迁移 " + copied + " 个文件，重启生效）");
+                return "ok:迁移了" + copied + "个文件";
+            } catch (Exception e) {
+                log("数据目录切换失败: " + e);
+                return "ERR:" + e.getMessage();
+            }
         }
 
         /* ---- 外观扩展：标题图标 / 背景图 / 字体 / 透明度 ---- */
@@ -3465,8 +3901,30 @@ public class FxApp extends Application {
 
         /* ---- 窗口控制 ---- */
         public void moveBy(double dx, double dy) {
+            bubbleCenterUntil = 0;   // 用户开始拖动：中止进场自动居中，尊重手动位置
             stage.setX(stage.getX() + dx);
             stage.setY(stage.getY() + dy);
+        }
+
+        /** 一键回到屏幕中央（按当前实际尺寸居中，主屏可视区） */
+        public void centerWindow() {
+            try {
+                javafx.geometry.Rectangle2D vb = javafx.stage.Screen.getPrimary().getVisualBounds();
+                stage.setX(vb.getMinX() + Math.max(0, (vb.getWidth() - stage.getWidth()) / 2));
+                stage.setY(vb.getMinY() + Math.max(0, (vb.getHeight() - stage.getHeight()) / 2));
+                log("centerWindow pos=" + (int) stage.getX() + "," + (int) stage.getY());
+            } catch (Exception ignored) {}
+        }
+
+        /** 气泡进入时默认停靠：右下角、任务栏正上方（visualBounds 已排除任务栏） */
+        public void dockBubbleBottomRight() {
+            try {
+                javafx.geometry.Rectangle2D vb = javafx.stage.Screen.getPrimary().getVisualBounds();
+                double margin = 24;   // 离屏幕右/下各留一点，别贴死
+                stage.setX(vb.getMaxX() - stage.getWidth() - margin);
+                stage.setY(vb.getMaxY() - stage.getHeight() - margin);
+                log("bubble dock bottom-right pos=" + (int) stage.getX() + "," + (int) stage.getY());
+            } catch (Exception ignored) {}
         }
 
         public void setSize(double w, double h) {
@@ -3492,7 +3950,16 @@ public class FxApp extends Application {
                 preW = stage.getWidth();
                 preH = stage.getHeight();
                 if (preW < 200 || preH < 200) { preW = 880; preH = 600; } // 布局未就绪兜底
+                /* 记住进气泡前的位置：气泡会 dock 到右下角，退出时必须把窗口放回这里，
+                   否则完全模式的大窗口仍钉在右下角，大半跑出屏幕只剩个圆角尖。 */
+                preX = stage.getX();
+                preY = stage.getY();
+                hasPrePos = true;
                 bubble = true;
+                /* 开居中宽限期：接下来约 1.5 秒内的每次 resizeBubble 都用目标尺寸
+                   把窗口摆到屏幕中央，覆盖前端 60ms + 150ms×2 的多轮尺寸校正。
+                   用户一旦手动拖动/拉伸，moveBy / bubbleResizeMove 会清掉它。 */
+                bubbleCenterUntil = System.currentTimeMillis() + 1500;
                 stage.setAlwaysOnTop(true);
             }
             /* 小胶囊态要能缩到一两行高 —— 完整模式的 300x120 最小尺寸必须先放开 */
@@ -3517,6 +3984,7 @@ public class FxApp extends Application {
 
         public void exitBubble() {
             bubble = false;
+            bubbleCenterUntil = 0;   // 离开气泡：作废进场居中宽限期
             stopBubbleWatch();
             stage.setAlwaysOnTop(false);
             stage.setMinWidth(300);   // 还原完整模式的最小尺寸
@@ -3524,6 +3992,14 @@ public class FxApp extends Application {
             if (preW >= 200 && preH >= 200) {
                 stage.setWidth(preW);
                 stage.setHeight(preH);
+            }
+            /* 尺寸和位置一起还原到进气泡前：气泡期间 dock 到右下角、还可能被拖动过，
+               若只还原尺寸，窗口会停在右下角/被拖走处，大窗大半出屏。回到原来的位置。 */
+            if (hasPrePos) {
+                stage.setX(preX);
+                stage.setY(preY);
+                hasPrePos = false;
+                log("exitBubble restore pos=" + (int) preX + "," + (int) preY);
             }
             try {
                 if (stage.isIconified()) stage.setIconified(false);
@@ -3613,8 +4089,25 @@ public class FxApp extends Application {
                来源是频繁重设窗口，这里合并掉小变化就是最有效的稳帧手段。 */
             double cw = stage.getWidth(), ch = stage.getHeight();
             if (Math.abs(cw - w) < 0.5 && Math.abs(ch - h) < 0.5) return;
-            stage.setWidth(w);
-            stage.setHeight(h);
+            /* ★ 进场居中（修"改完图标后进气泡偶发到边角"）：
+               宽限期内直接用目标尺寸 w/h 把窗口摆到主屏可视区中央——尺寸和位置
+               在同一次调用里用同一组数字算完，不依赖 stage.getWidth() 的异步旧值。
+               这样即便 centerWindow 抢在尺寸缩小前读到旧大窗尺寸也没关系，随后
+               真正改尺寸的这次 resizeBubble 会用最终尺寸重新摆正。 */
+            if (bubbleCenterUntil > 0 && System.currentTimeMillis() < bubbleCenterUntil) {
+                javafx.geometry.Rectangle2D vb = javafx.stage.Screen.getPrimary().getVisualBounds();
+                stage.setWidth(w);
+                stage.setHeight(h);
+                stage.setX(vb.getMinX() + Math.max(0, (vb.getWidth() - w) / 2));
+                stage.setY(vb.getMinY() + Math.max(0, (vb.getHeight() - h) / 2));
+            } else {
+                /* 宽限期外：以中心为锚点缩放，保持用户当前摆放位置 */
+                double cx = stage.getX() + cw / 2, cy = stage.getY() + ch / 2;
+                stage.setWidth(w);
+                stage.setHeight(h);
+                stage.setX(cx - w / 2);
+                stage.setY(cy - h / 2);
+            }
             /* 兜底 2：气泡拖到屏幕边缘后再缩放，可能整个窗口跑出可视区。
                保证至少 60px 留在屏幕内。 */
             try {

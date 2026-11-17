@@ -11,7 +11,7 @@ window.addEventListener('error', function(e) {
 });</script>
 </head>
 <body>
-<div id="app" style="position:relative">
+<div id="app" style="position:relative" @mousedown="bubbleFrameDown($event)">
   <!-- 气泡环绕元素画布（云朵/星星/自定义字符，跟随节奏律动） -->
   <canvas id="cloudcv" v-show="mode==='bubble'"></canvas>
 
@@ -20,7 +20,7 @@ window.addEventListener('error', function(e) {
     <!-- 标题栏是 flex：每个元素给固定 order，「外部网页」的 order 可拖动改，
          纯数据驱动不去动 DOM（Vue 重渲染会把手工挪走的节点还原）。 -->
     <img class="appicon" :src="iconUrl" @mousedown.stop style="order:1">
-    <span class="logo" style="order:2">闪写</span>
+    <span class="logo" style="order:2">{{appName}}</span>
     <button class="pill" :class="{on:showDocs}" @click="toggleDocs" @mousedown.stop
             style="order:10" :title="'文件（多文档）'">文件</button>
     <button class="pill" :class="{on:pinned}" @click="togglePin" @mousedown.stop
@@ -150,8 +150,16 @@ window.addEventListener('error', function(e) {
          @contextmenu.prevent="ctxOpen($event)"></div>
   </div>
 
-  <!-- ═══ 气泡边缘拉伸热区：拖边缘/角改窗口大小（松手即记住，并转为"自己定大小"） ═══ -->
+  <!-- ═══ 气泡边缘热区（v1.32）：
+       最外 5px 的 .rz = 拉伸改大小；其内侧的 padding 带（环绕元素区）= 拖动移动窗口。
+       两层分工、互不抢事件：.rz(z7) 盖在最外，.bdrag(z6) 贴在它内侧。
+       上边沿用 .dragstrip 移动窗口，不设 .bdrag-n。 ═══ -->
   <template v-if="mode==='bubble'">
+    <!-- 边框拖动带（移动位置）：最外 5px 拉伸线的内侧一整条 padding 区 -->
+    <div class="bdrag bdrag-w" @mousedown.stop.prevent="dragStart($event)"></div>
+    <div class="bdrag bdrag-e" @mousedown.stop.prevent="dragStart($event)"></div>
+    <div class="bdrag bdrag-s" @mousedown.stop.prevent="dragStart($event)"></div>
+    <!-- 边缘拉伸线（改大小）：保持最外 5px / 底角 12px -->
     <div class="rz rz-w"  @mousedown.stop.prevent="rszStart($event,'w')"></div>
     <div class="rz rz-e"  @mousedown.stop.prevent="rszStart($event,'e')"></div>
     <div class="rz rz-s"  @mousedown.stop.prevent="rszStart($event,'s')"></div>
@@ -1001,6 +1009,17 @@ window.addEventListener('error', function(e) {
       </div>
 
       <div class="sec">
+        <h4>应用名称</h4>
+        <div class="row">
+          <input type="text" v-model="appNameDraft" maxlength="24" placeholder="闪写"
+                 style="width:180px" @keyup.enter="applyAppName">
+          <button class="capture-btn" @click="applyAppName">应用</button>
+          <button class="capture-btn ghost" @click="resetAppName">恢复默认</button>
+        </div>
+        <div class="hint">改标题栏、任务栏、托盘和界面上显示的名字，输入即生效（exe 右键属性里的名称要重新打包才变）。</div>
+      </div>
+
+      <div class="sec">
         <h4>应用图标</h4>
         <div class="row">
           <img class="icon-prev" :src="customIcon || iconUrl">
@@ -1008,7 +1027,22 @@ window.addEventListener('error', function(e) {
           <button class="capture-btn" @click="pickExeIcon">用 exe 文件的图标</button>
           <button class="capture-btn ghost" @click="resetCustomIcon">恢复默认</button>
         </div>
-        <div class="hint">窗口、任务栏、托盘图标即时生效；桌面 exe 文件图标在重新打包时启用。</div>
+        <div class="hint">任务栏、托盘图标即时生效；桌面快捷方式与左上角图标保持原样，exe 文件本体图标在重新打包时启用。</div>
+      </div>
+
+      <div class="sec">
+        <h4>本地文件存储位置</h4>
+        <div class="row" style="flex-wrap:wrap">
+          <input type="text" v-model="dataDirDraft" readonly placeholder="程序旁的 data 目录"
+                 style="width:300px;flex:1;min-width:180px;font-size:11px">
+          <button class="capture-btn" @click="pickDataDir">更改位置</button>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+            <input type="checkbox" v-model="migrateData"> 同时把现有草稿 / 配置 / 寻回历史搬过去
+          </label>
+        </div>
+        <div class="hint">草稿、设置和文字寻回记录都存在这里。可放到网盘目录实现多设备同步；更改后需重启软件生效。</div>
       </div>
 
       <div class="sec">
@@ -1310,8 +1344,13 @@ var app = Vue.createApp({
       {id:'settings', name:'打开设置', def:'Ctrl+,'},
       {id:'pin', name:'窗口置顶', def:'Ctrl+Shift+T'},
       {id:'tag', name:'插入标签', def:'Ctrl+Shift+G'},
-      {id:'nav', name:'导航面板（标题/标签/目录）', def:'Ctrl+Shift+N'}
+      {id:'nav', name:'导航面板（标题/标签/目录）', def:'Ctrl+Shift+N'},
+      {id:'centerWin', name:'窗口回到屏幕中央', def:'Ctrl+Shift+C'}
     ],
+    appName: '闪写',
+    appNameDraft: '',
+    dataDirDraft: '',
+    migrateData: true,
     iconUrl: '',
     customIcon: '',
     wallpaper: '',
@@ -1704,6 +1743,9 @@ var app = Vue.createApp({
       this.autoStart = this.host('isAutoStart') === 'true';
       this.iconUrl = this.host('getIcon') || '';
       this.customIcon = this.host('getCustomIcon') || '';
+      this.appName = this.cfg.appName || '闪写';
+      this.appNameDraft = this.appName;
+      this.dataDirDraft = this.cfg.dataDir || '';
       this.wallpaper = this.host('getWallpaper') || '';
       this.fontFamily = this.cfg.fontName || '';
       this._fontData = this.host('getFontData') || '';
@@ -1906,6 +1948,19 @@ var app = Vue.createApp({
     },
 
     /* ---------- 窗口拖动 / 控制 ---------- */
+    /** 气泡四周透明边框：从任意方向按住都能拖动窗口（编辑器/按钮/弹层各有 .stop，
+     *  这里只认落在 #app  padding 边框上的按下；拖动条自己也冒泡上来，但它的 target
+     *  不是 #app，所以不会重复触发）。 */
+    bubbleFrameDown: function(e) {
+      if (this.mode !== 'bubble' || e.button !== 0) return;
+      if (e.target !== e.currentTarget) return;
+      this.dragStart(e);
+    },
+    /** 一键把窗口挪回屏幕中央 */
+    centerWindow: function() {
+      this.host('centerWindow');
+      this.toast('窗口已回到屏幕中央');
+    },
     dragStart: function(e) {
       if (e.button !== 0) return;
       var sx = e.screenX, sy = e.screenY, self = this;
@@ -1996,6 +2051,10 @@ var app = Vue.createApp({
         self.scrollCaretIntoView();
         self.applyBubbleSizeNow();
         self.queueCaretFix();      // 尺寸缩成一行高之后，光标行可能又被挤出去了
+        /* ★ 进气泡默认居中：先按结算后的尺寸摆到屏幕中央，之后自适应尺寸校正
+           走 resizeBubble 的中心锚点，气泡会一直居中，不会跑到左上/边角。
+           （不再 dock 右下、也不保留进入前的随意位置） */
+        self.host('centerWindow');
         if (ed) ed.focus();
       }, 60);
     },
@@ -5877,6 +5936,7 @@ var app = Vue.createApp({
         case 'bubble': this.mode === 'bubble' ? this.exitBubble() : this.enterBubble(); return true;
         case 'settings': if (this.showSettings) this.closeSettings(); else this.openSettings(); return true;
         case 'pin': this.togglePin(); return true;
+        case 'centerWin': this.centerWindow(); return true;
         case 'tag': this.markPop = (this.markPop === 'bg' ? '' : 'bg');
                     this.navShow = false; return true;   // 标签并入底纹取色面板
         case 'nav': this.toggleNav(); return true;
@@ -7268,18 +7328,42 @@ var app = Vue.createApp({
       img.src = dataUrl;
       this._decorEl = img;
     },
+    applyAppName: function() {
+      var n = (this.appNameDraft || '').trim();
+      if (!n) n = '闪写';
+      this.host('setAppName', n);
+      this.appName = this.host('getAppName') || n;
+      this.appNameDraft = this.appName;
+      this.toast('应用名已改为「' + this.appName + '」');
+    },
+    resetAppName: function() {
+      this.host('setAppName', '闪写');
+      this.appName = '闪写';
+      this.appNameDraft = '闪写';
+      this.toast('已恢复默认名称');
+    },
+    pickDataDir: function() {
+      var dir = this.host('pickDataDir');
+      if (!dir) { this.toast('未选择目录'); return; }
+      var migrate = !!this.migrateData;
+      var r = this.host('setDataDir', dir, migrate ? 'true' : 'false') || '';
+      if (r.indexOf('ERR:') === 0) { this.toast('更改失败：' + r.slice(4)); return; }
+      this.dataDirDraft = this.host('getDataDir') || dir;
+      this.toast('存储位置已更改，重启软件后生效');
+    },
     pickCustomIcon: function() {
       var d = this.host('pickCustomIcon');
-      if (d) { this.customIcon = d; this.iconUrl = d; this.toast('图标已更换（窗口/任务栏/托盘）'); }
+      /* 只更新设置面板的预览（customIcon）；左上角标题栏图标（iconUrl）保持默认不变。
+         真正生效的是任务栏/窗口图标（后端 setStageIcon），桌面快捷方式也不动。 */
+      if (d) { this.customIcon = d; this.toast('图标已更换（任务栏）'); }
     },
     pickExeIcon: function() {
       var d = this.host('pickExeIcon');
-      if (d) { this.customIcon = d; this.iconUrl = d; this.toast('图标已更换（窗口/任务栏/托盘）'); }
+      if (d) { this.customIcon = d; this.toast('图标已更换（任务栏）'); }
     },
     resetCustomIcon: function() {
       this.host('resetCustomIcon');
       this.customIcon = '';
-      this.iconUrl = this.host('getIcon') || '';
       this.toast('已恢复默认图标');
     },
 
@@ -8095,7 +8179,7 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
 #app.mode-bubble.intrude #cloudcv{z-index:6}
 /* 注意：这条得排除 .pop —— 弹层本来就要绝对定位，被改成 relative 后会掉进 flex 流里，
    词库面板就直接落到输入框下方（用户看到的"词库跑到框里/框下"）。 */
-#app.mode-bubble>*:not(#cloudcv):not(.dragstrip):not(.bctrl-wrap):not(.pop):not(.rz){
+#app.mode-bubble>*:not(#cloudcv):not(.dragstrip):not(.bctrl-wrap):not(.pop):not(.rz):not(.bdrag){
   position:relative;z-index:3}
 /* 气泡边缘拉伸热区：贴边 5px、底角 12px；z 低于控制钮(8)高于正文(3)，
    顶部不设（顶部留给拖动条移动窗口） */
@@ -8105,6 +8189,14 @@ input[type=color]{width:30px;height:26px;border:1px solid var(--line);border-rad
 .rz-s{left:0;right:0;bottom:0;height:5px;cursor:ns-resize}
 .rz-sw{left:0;bottom:0;width:12px;height:12px;cursor:nesw-resize}
 .rz-se{right:0;bottom:0;width:12px;height:12px;cursor:nwse-resize}
+/* 边框拖动带（v1.32）：贴在最外 5px 拉伸线 .rz 的内侧，覆盖整条 padding/环绕元素区，
+   拖动=移动窗口位置。z 低于 .rz(7)/控制钮(8)/弹层(50)，高于正文(3)/画布(2)。
+   宽度 = 气泡 padding(--bpad) 减去最外 5px 拉伸线；至少 4px 保证能点到。
+   上下各留 12px 给底角的拉伸热区，避免拖带盖住角落缩放。 */
+.bdrag{position:absolute;z-index:6}
+.bdrag-w{left:5px;top:12px;bottom:12px;width:max(4px,calc(var(--bpad,26px) - 5px));cursor:move}
+.bdrag-e{right:5px;top:12px;bottom:12px;width:max(4px,calc(var(--bpad,26px) - 5px));cursor:move}
+.bdrag-s{left:12px;right:12px;bottom:5px;height:max(4px,calc(var(--bpad,26px) - 5px));cursor:move}
 
 /* ═══════════════ 轻提示 ═══════════════ */
 .toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:99;

@@ -42,6 +42,43 @@
   ok('旧脏标记已删除', typeof app._dirty === 'undefined');
   ok('旧保存询问框已删除', typeof app.showSaveAsk === 'undefined');
 
+  /* 0.01) 窗口居中：删除了◎按钮，改成一个可配置的 centerWin 快捷键 action */
+  var cw = null;
+  for (var ai = 0; ai < (app.actions || []).length; ai++)
+    if (app.actions[ai].id === 'centerWin') cw = app.actions[ai];
+  ok('居中改为可配置快捷键 action（centerWin / Ctrl+Shift+C）',
+     !!cw && cw.def === 'Ctrl+Shift+C');
+  ok('居中按钮◎已删除（模板里没有"回到屏幕中央"按钮）',
+     (document.querySelector('button[title="回到屏幕中央"]') === null));
+  ok('居中分发方法 centerWindow 存在', typeof app.centerWindow === 'function');
+  /* 气泡进入居中 / 缩放保持中心：由后端 --postest 的 centered/centerKept 权威验证，
+     这里不再用 String(app.xxx) 检测函数体（Vue3 把 methods bind 过，toString 是 native code）。 */
+
+  /* 0.015) 换自定义图标只影响任务栏：左上角标题栏图标 iconUrl 不被覆盖。
+     用行为验证：调一次 resetCustomIcon（走完整前端逻辑，只是恢复默认），iconUrl 必须不变。
+     （源码字符串检测对 Vue3 绑定方法是假阳性，不可靠。） */
+  (function () {
+    var before = app.iconUrl;
+    try { app.resetCustomIcon(); } catch (e) {}
+    ok('换图标不动左上角标题栏图标（resetCustomIcon 后 iconUrl 不变）',
+       app.iconUrl === before);
+  })();
+  ok('换图标方法齐全（pickCustomIcon / pickExeIcon / resetCustomIcon）',
+     typeof app.pickCustomIcon === 'function' &&
+     typeof app.pickExeIcon === 'function' &&
+     typeof app.resetCustomIcon === 'function');
+
+  /* 0.02) 本地文件存储位置可设置 */
+  ok('数据目录方法齐全（pickDataDir / applyAppName / resetAppName）',
+     typeof app.pickDataDir === 'function' && typeof app.applyAppName === 'function' &&
+     typeof app.resetAppName === 'function');
+  ok('数据目录字段已初始化（dataDirDraft 有值）', typeof app.dataDirDraft === 'string');
+  ok('数据目录后端往返（getDataDir 返回绝对路径）',
+     (app.host('getDataDir') || '').length > 0);
+
+  /* 0.03) 应用名可改 */
+  ok('应用名后端往返（getAppName 有返回）', !!app.host('getAppName'));
+
   /* 0.05) v1.30 中文斜体：壳被转成 inline-block，不能继承段落的 2em 段首缩进，
      否则文字整体右推 32px，看上去像斜体前面凭空多了一块空白。 */
   try {
@@ -1671,6 +1708,15 @@
               setTimeout(function () {
             ok('气泡拉伸热区[n=' + document.querySelectorAll('.rz').length + ']',
                document.querySelectorAll('.rz').length === 5);
+            /* v1.32：左右下三边"边框拖动带"（移动位置），与 5px 拉伸线分工 */
+            ok('左右下边框拖动带齐全[n=' + document.querySelectorAll('.bdrag').length + ']',
+               document.querySelectorAll('.bdrag').length === 3 &&
+               !!document.querySelector('.bdrag-w') &&
+               !!document.querySelector('.bdrag-e') &&
+               !!document.querySelector('.bdrag-s'));
+            ok('边框拖动带为绝对定位且 dragStart 可用（移动窗口，非拉伸）',
+               typeof app.dragStart === 'function' &&
+               getComputedStyle(document.querySelector('.bdrag-s')).position === 'absolute');
             var strip = document.querySelector('.dragstrip');
             /* 真实命中测试：elementFromPoint 走浏览器实际命中逻辑，
                能抓出"被别的元素盖住导致真点击全废"（合成事件测不出来） */

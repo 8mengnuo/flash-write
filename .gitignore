@@ -34,6 +34,9 @@ Thumbs.db
 Desktop.ini
 *.lock
 
+# ---- 仅本地参考、不入库的开发文档 ----
+docs/闪写实现逻辑与选型参考.md
+
 # ---- 本机工作区状态与发行目录（.vscode/、.idea/ 静态配置入库共享）----
 dist/
 *.lnk

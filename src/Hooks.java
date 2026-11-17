@@ -72,6 +72,14 @@ public final class Hooks {
      *  "右键也能打开软件"。点托盘 = 只走 AWT 菜单 / 左键 toggle，不许全局钩子插手。 */
     private static volatile long trayClickUntil = 0;
 
+    /** 唤回位置过滤器：返回 false 表示这个坐标落在系统任务栏 / 托盘区，
+     *  不许触发右键唤回、三连击唤回，也不许计入手势序列。由 FxApp 注入
+     *  （用 JavaFX Screen 的 visualBounds 判断——visualBounds 已排除任务栏）。
+     *  真凶：全局鼠标钩子捕获屏幕任意位置的右键，窗口隐藏时在任务栏 /
+     *  别的软件图标上右键，600ms 后把我们的软件唤回冒出来。 */
+    public interface PointFilter { boolean allow(int x, int y); }
+    public static volatile PointFilter summonFilter;
+
     /** AWT TrayIcon 收到点击（左/右键都算）时调用：取消待执行的唤回，
      *  并在 1.2 秒内屏蔽全局钩子对这次点击的右键/三连击唤回。
      *  注意事件顺序不保证（JNativeHook 可能先于 AWT 也可能后于），
@@ -270,6 +278,12 @@ public final class Hooks {
      *  现在 2 和 3 都当右键（中键极少用，最多让序列多一个 R，不会误触发长序列）。 */
     private static void handleGesture(int btn, int x, int y) {
         if (capturing) return;
+        /* 任务栏 / 托盘区（visualBounds 之外）的点击一律不放行：
+           不唤回、不计三连击、不计手势。修「在三角标上方或任务栏任意位置右键，
+           软件就从任务栏冒出来」——那是全局钩子无差别捕获右键造成的误触。
+           注意要在 noteTrayClick 保护之前判断，托盘图标自身的右键由 AWT 菜单处理，
+           这里被挡掉正好（连保护窗口都不用等）。 */
+        if (summonFilter != null && !summonFilter.allow(x, y)) return;
         char b = 0;
         if (btn == 1) b = 'L';
         else if (btn == 2 || btn == 3) b = 'R';
