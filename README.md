@@ -6,7 +6,7 @@
 - **名称**：中文「闪写」，英文 **FlashWrite**（早期误用的 SnapWrite 已全部统一）
 - 形态：单体桌面应用，无服务端、无 HTTP、无 Node；Java 与网页通过 JavaFX LiveConnect 直接互调
 - 平台：Windows x64（免安装包自带 jlink 运行时，不需要装 JDK）
-- 版本：功能批次 **v1.32** · 文档更新 2026-11-17
+- 版本：**v1.33**（与 git tag、exe 文件版本 1.33.0 一致）· 文档更新 2026-11-18
 
 > 开发细节见 [docs/闪写开发手册.md](docs/闪写开发手册.md)：前后端桥接、打包流程、配置说明与 4 张结构图。
 
@@ -14,7 +14,7 @@
 
 ## 一、直接上手（零开发环境）
 
-去 [Gitee Releases](https://gitee.com/meng_nuo/flash-write/releases) 取 v1.30 免安装版压缩包，解压到任意文件夹，双击 `闪写.exe` 即可。
+去 [Gitee Releases](https://gitee.com/meng_nuo/flash-write/releases) 取 v1.33 免安装版压缩包，解压到任意文件夹，双击 `闪写.exe` 即可。
 
 ```
 解压目录/
@@ -55,8 +55,9 @@
 | v1.29–v1.30 | 格式按钮二次点击恢复默认（真拆壳，右键同步）；中文斜体生效；格式刷可复制全部格式 |
 | v1.31 | 老板键完全隐藏（连托盘图标一起消失）；应用名可改；自定义图标只影响任务栏 / 托盘；窗口一键居中改为可配置快捷键 `Ctrl+Shift+C`；气泡进入默认居中、缩放保持中心、退出回到原位；本地文件存储位置可自定义并迁移（新增 `--postest` / `--dirtest` 回归） |
 | v1.32 | 修复气泡偶发跑到边角（进场居中宽限期，尺寸校正用目标尺寸一次算完）；修复右键任务栏/托盘区误唤回软件（全局钩子加屏幕工作区过滤，`--traytest` 增 `areaGuard` 断言）；补齐气泡左右下三边的环绕带拖动（外线拉伸、内侧移动窗口）；排查确认老板键本身无误触 |
+| v1.33 | 版本规则收口：以 git tag 为版本权威来源，每次上传算一个版本；README / exe 文件版本 / git tag 统一到 v1.33，`build.ps1` 增加构建期一致性校验，杜绝版本号跑偏 |
 
-> `v1.xx` 是功能批次号；exe 右键属性里的文件版本由 `build/launch4j.xml` 的 `<fileVersion>` 单独控制（当前 `1.24.0.0`），两者不是一回事。该配置里的 `ProductName` 已统一为 `FlashWrite`，所以任务栏右键看到的是「闪写 FlashWrite」。
+> **版本规则**：以 **git tag 为权威来源** —— 每次上传 git 打一个 `vX.Y` tag 才算一个版本更新，内部反复修改不另起版本号；当前版本 **v1.33**。README 的 `vX.Y`、exe 右键属性文件版本（由 `build/launch4j.xml` 的 `<fileVersion>` 控制，当前 `1.33.0.0`）与 git tag 三者始终一致；`build.ps1` 每次构建都会校验 README 批次号与文件版本相同，不一致直接报错，防止跑偏。`ProductName` 为 `FlashWrite`，任务栏右键显示「闪写 FlashWrite」。
 
 ---
 

@@ -95,6 +95,23 @@ $desc = ([string]$cfg.launch4jConfig.errTitle) + ' ' + ([string]$cfg.launch4jCon
 $fileVer = [string]$cfg.launch4jConfig.versionInfo.txtFileVersion
 $prodVer = [string]$cfg.launch4jConfig.versionInfo.txtProductVersion
 
+# ---- version alignment guard: file version (X.Y.0) must match README batch (vX.Y) ----
+# Single source of truth: build/launch4j.xml holds the file version; README.md holds
+# the batch number. Every build checks they agree so the two can never drift apart.
+# Keep this block ASCII-only (PS 5.1 reads BOM-less UTF-8 as ANSI/GB2312).
+function Get-ReadmeBatch {
+    $text = [IO.File]::ReadAllText((Join-Path $root 'README.md'), [Text.Encoding]::UTF8)
+    $m = [regex]::Match($text, '\*\*v(\d+\.\d+)\*\*')
+    if (-not $m.Success) { throw 'README.md: batch number pattern **vX.Y** not found' }
+    return $m.Groups[1].Value
+}
+$batch = Get-ReadmeBatch
+$fileCore = ($fileVer -split '\.')[0..1] -join '.'
+if ($batch -ne $fileCore -or $fileVer -ne $prodVer) {
+    throw "VERSION MISMATCH: README batch=v$batch, launch4j file=$fileVer, product=$prodVer. Align all three (batch vX.Y <-> X.Y.0.0 / X.Y.0)."
+}
+Say ("version aligned: batch v" + $batch + " <-> exe " + $fileVer)
+
 # ---- 1. compile Java (never single-file: FxApp references FxMain fields) ----
 $needCompile = (-not $JarOnly) -or (Test-NeedCompile)
 if ($needCompile) {

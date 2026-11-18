@@ -40,6 +40,11 @@ docs/闪写实现逻辑与选型参考.md
 # ---- 本机工作区状态与发行目录（.vscode/、.idea/ 静态配置入库共享）----
 dist/
 *.lnk
+
+# ---- 发行压缩包（本地打包、由用户自行上传 Release，不入库）----
+# 压缩包实际生成在工作区上级目录，本就不在仓库内；此规则防止误拷入仓库被提交
+*.zip
+闪写 FlashWrite v*.zip
 .idea/workspace.xml
 .idea/shelf/
 .idea/httpRequests/
